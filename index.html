@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zen Notes - ADS</title>
+
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+    <script>
+        // 여기에 본인의 키를 정확히 입력하세요!
+        const CLIENT_ID = '765080058790-uhqk1gj2ko8a197f26ujnq0gb4nl97ha.apps.googleusercontent.com';
+        const API_KEY = 'AIzaSyD1Z5E5e8tRfmG9fDruBM72pliOt6ZkShw';
+        
+        const DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
+        const SCOPES = "https://www.googleapis.com/auth/drive.file";
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        // 구글 부품이 도착하면 실행될 명령어들을 미리 정의합니다.
+        function gapiLoaded() {
+            gapi.load('client', async () => {
+                try {
+                    await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
+                    gapiInited = true;
+                    console.log("구글 API 준비 완료!");
+                } catch (e) {
+                    console.error("GAPI 초기화 실패:", e);
+                }
+            });
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '', 
+            });
+            gisInited = true;
+            console.log("구글 인증 준비 완료!");
+        }
+    </script>
+
+    <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+	
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        /* ==========================================
+           1. Zen Theme Variables (Dark Mode)
+           ========================================== */
+        :root {
+            --bg: #131314;              
+            --surface: #1e1e20;         
+            --surface-hover: #262629;   
+            --border: #2a2a2c;          
+            --text-main: #e3e3e3;       
+            --text-muted: #c4c7c5;      
+            --accent: #78a9ff;          
+            --danger: #ff6b6b;          
+            --highlight: rgba(120, 169, 255, 0.25); 
+            --font-family: 'Pretendard', -apple-system, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg); color: var(--text-main);
+            font-family: var(--font-family); font-size: 15px;
+            display: flex; height: 100vh; overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        input {
+            background: transparent; border: none; outline: none;
+            color: var(--text-main); font-family: inherit; font-size: 14px;
+        }
+        input::placeholder { color: var(--text-muted); }
+
+        button {
+            background: transparent; border: none; outline: none; cursor: pointer;
+            color: var(--text-main); font-family: inherit; font-size: 14px;
+            transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;
+        }
+        button:hover { color: var(--text-main); }
+
+        /* ==========================================
+           2. Layout (3-Column)
+           ========================================== */
+        .col-left, .col-right {
+            transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, transform 0.3s ease;
+        }
+        
+        .col-left {
+            width: 285px; min-width: 285px; background: var(--surface);
+            display: flex; flex-direction: column;
+        }
+        .nav-header { padding: 24px 20px 16px; display: flex; flex-direction: column; gap: 16px; }
+        
+        .toggle-btn {
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            color: var(--text-muted); font-size: 16px;
+        }
+        .toggle-btn:hover { background: var(--surface-hover); color: var(--text-main); }
+
+        .col-left.collapsed { width: 60px; min-width: 60px; }
+        .col-left.collapsed .nav-header { padding: 24px 0 16px 0; align-items: center; }
+        .col-left.collapsed .search-bar,
+        .col-left.collapsed .memo-list,
+        .col-left.collapsed .btn-text { display: none !important; }
+        .col-left.collapsed .new-note-btn { justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; margin: 0 auto; }
+
+        .search-bar {
+            background: var(--bg); padding: 10px 12px; border-radius: 8px;
+            display: flex; align-items: center; gap: 8px; border: 1px solid var(--border);
+        }
+        .search-bar input { width: 100%; }
+
+        .memo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0 10px 20px; }
+        .memo-item {
+            padding: 12px 14px; margin-bottom: 4px; border-radius: 8px; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+            color: var(--text-main); transition: background 0.1s;
+            border-left: 3px solid transparent; 
+        }
+        .memo-item:hover { background: var(--surface-hover); color: var(--text-main); }
+        .memo-item.active { background: var(--surface-hover); color: var(--text-main); border-left: 3px solid var(--accent); border-radius: 4px 8px 8px 4px; }
+        .memo-info { overflow: hidden; display: flex; flex-direction: column; gap: 4px; }
+        .memo-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 400; }
+        .memo-date { font-size: 11px; color: var(--text-muted); opacity: 0.7; }
+        
+        .memo-actions { display: flex; align-items: center; gap: 4px; }
+
+        .btn-delete { opacity: 0; color: #fda4af; padding: 4px; font-size: 12px; transition: all 0.2s; cursor: pointer; }
+        .btn-delete:hover { color: #f43f5e; opacity: 1 !important; }
+
+        .btn-pin { opacity: 0; color: #94a3b8; padding: 4px; font-size: 12px; transition: all 0.2s; transform: rotate(-45deg); cursor: pointer; }
+        .btn-pin:hover { color: #60a5fa; opacity: 1 !important; }
+        
+        .btn-pin.is-pinned { transform: rotate(0deg); color: #3b82f6; opacity: 1 !important; }
+
+        .memo-item:hover .btn-delete,
+        .memo-item:hover .btn-pin { opacity: 0.6; }
+
+        .col-center { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--bg); min-height: 0; }
+        
+        /* PC 기본 여백: 24px 수직선 통일 */
+        .editor-header {
+            padding: 30px 24px 10px;
+            display: flex; justify-content: space-between; align-items: flex-end;
+            flex-shrink: 0;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        #memo-title-input { font-size: 28px; font-weight: 700; width: 60%; letter-spacing: -0.5px; }
+        
+        .editor-actions { display: flex; align-items: center; gap: 14px; }
+        
+        .status-container {
+            position: fixed; top: 34px; right: 70px; z-index: 999;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; transition: background-color 0.3s ease; }
+        .status-dot.saved { background-color: var(--accent); box-shadow: 0 0 6px rgba(120, 169, 255, 0.4); }
+        .status-dot.unsaved { background-color: var(--danger); box-shadow: 0 0 6px rgba(255, 107, 107, 0.4); }
+        .status-text { font-size: 11px; color: var(--text-muted); transition: opacity 0.3s; opacity: 0; font-weight: 500; }
+        
+        .print-hr { display: none; }
+
+        .quill-wrapper { flex: 1; display: flex; flex-direction: column; padding: 0; min-height: 0; }
+        
+        /* 툴바 24px 왼쪽 정렬 */
+        .ql-toolbar.ql-snow {
+            border: none !important; padding: 12px 24px !important; 
+            margin: 0 auto !important;
+            border-bottom: 1px solid var(--border) !important;
+            flex-shrink: 0; 
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .ql-container.ql-snow { 
+            border: none !important; font-size: 16px; font-family: var(--font-family); 
+            flex: 1; min-height: 0; overflow-y: auto !important; 
+        }
+        
+        .col-center::-webkit-scrollbar, .quill-wrapper::-webkit-scrollbar, .ql-container.ql-snow::-webkit-scrollbar, .ql-editor::-webkit-scrollbar { display: none; }
+        .col-center, .quill-wrapper, .ql-container.ql-snow, .ql-editor { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .ql-snow .ql-stroke { stroke: var(--text-muted) !important; }
+        .ql-snow .ql-fill { fill: var(--text-muted) !important; }
+        .ql-snow .ql-picker { color: var(--text-muted) !important; }
+
+        /* ==========================================
+           3. Quill 에디터 팝업/툴팁 테마 및 비율 복구
+           ========================================== */
+        
+        .ql-snow .ql-picker-options {
+            background-color: var(--surface) !important;
+            border: 1px solid var(--border) !important;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+            border-radius: 8px !important;
+            padding: 8px 0 !important;
+            z-index: 10000 !important;
+        }
+        
+        /* 사용자가 만족한 드롭다운 여백 (상하 6px, 좌우 12px) */
+        .ql-snow .ql-picker-item {
+            color: var(--text-main) !important;
+            padding: 6px 12px !important; 
+            transition: color 0.2s, background-color 0.2s !important;
+        }
+        .ql-snow .ql-picker-item:hover,
+        .ql-snow .ql-picker-item.ql-selected {
+            color: var(--accent) !important;
+            background-color: var(--surface-hover) !important;
+        }
+
+        .ql-snow .ql-picker-label { color: var(--text-muted) !important; }
+        .ql-snow .ql-picker-label:hover { color: var(--accent) !important; }
+        .ql-snow .ql-picker-label::before { color: inherit !important; }
+
+        /* [핵심] 하이퍼링크 팝업창 디자인 유지 & 뚱뚱해진 비율 원복 */
+        .ql-snow .ql-tooltip {
+            background-color: var(--surface) !important;
+            border: 1px solid var(--border) !important;
+            color: var(--text-main) !important;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+            border-radius: 12px !important;
+            padding: 12px 16px !important;
+            z-index: 10000 !important;
+        }
+        
+        .ql-snow .ql-tooltip.ql-hidden { display: none !important; }
+
+        .ql-snow .ql-tooltip input[type=text] {
+            background-color: var(--bg) !important;
+            color: var(--text-main) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 6px !important;
+            padding: 6px 10px !important;
+            font-family: inherit !important;
+            height: auto !important;
+            margin: 0 8px !important;
+        }
+        .ql-snow .ql-tooltip input[type=text]:focus { border-color: var(--accent) !important; }
+
+        .ql-snow .ql-tooltip::before { color: var(--text-muted) !important; }
+        .ql-snow .ql-tooltip a.ql-action::before { background-color: var(--accent) !important; color: #fff !important; padding: 6px 12px !important; border-radius: 6px !important; font-weight: 500 !important; transition: opacity 0.2s !important; }
+        .ql-snow .ql-tooltip a.ql-action:hover::before { opacity: 0.8 !important; }
+        .ql-snow .ql-tooltip a.ql-remove::before { color: var(--danger) !important; font-weight: 500 !important; margin-left: 8px !important; }
+
+        /* 본문 24px 왼쪽 정렬 */
+        .ql-editor { 
+            padding: 24px 24px;
+            line-height: 1.8 !important;
+            color: var(--text-main);
+            letter-spacing: -0.01em; 
+            font-weight: 400; font-size: 16px; max-width: 800px; margin: 0 auto; width: 100%;
+            position: relative;
+        }
+
+        .ql-editor hr { border: none; border-bottom: 1px solid var(--border); margin: 20px 0; opacity: 0.7; }
+        .ql-editor.ql-blank::before { color: #404040 !important; font-weight: 400 !important; position: absolute !important; left: 24px !important; top: 24px !important; pointer-events: none !important; opacity: 0.9; }
+
+        .col-right {
+            position: fixed; right: 0; top: 0; height: 100vh; z-index: 1001; border-left: 1px solid var(--border); 
+            width: 240px; min-width: 240px; background: var(--surface); padding: 24px 20px 30px 20px; display: flex; flex-direction: column; gap: 36px; overflow-y: auto; 
+        }
+
+        .col-right.is-closed { transform: translateX(100%); }
+        .memo-list::-webkit-scrollbar, .col-right::-webkit-scrollbar { display: none; }
+        .memo-list, .col-right { -ms-overflow-style: none; scrollbar-width: none; }
+        .col-right.collapsed { width: 60px; min-width: 60px; padding: 24px 10px 30px 10px; align-items: center; }
+        .col-right.collapsed .util-title, .col-right.collapsed .btn-text { display: none !important; }
+        .col-right.collapsed .util-btn { justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; margin: 0 auto; }
+        
+        .util-section { display: flex; flex-direction: column; gap: 12px; }
+        .util-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; margin-bottom: 4px; }
+        .util-btn { width: 100%; padding: 10px 12px; border-radius: 8px; display: flex; align-items: center; gap: 12px; font-weight: 500; }
+        .util-btn:hover { background: var(--surface-hover); }
+        .mt-auto { margin-top: auto; }
+
+        @media print {
+            body { background: white !important; color: black !important; display: block; }
+            .col-left, .col-right, .editor-actions, .ql-toolbar.ql-snow { display: none !important; }
+            .col-center { width: 100%; background: white !important; }
+            #memo-title-input { color: black !important; font-size: 32px !important; width: 100%; }
+            .print-hr { display: block !important; border-bottom: 1px solid #d4d4d4; margin: 0 16px 16px; }
+            .ql-editor { color: black !important; }
+        }
+
+    /* 외부 붙여넣기 교정 및 코드 박스 강화 */
+    .ql-editor * { background-color: transparent !important; }
+    .ql-editor pre.ql-syntax { background-color: #1E222A !important; border: 1px solid var(--border) !important; border-radius: 8px !important; padding: 1.25rem !important; color: #abb2bf !important; font-family: 'D2Coding', 'Consolas', monospace !important; font-size: 14px !important; line-height: 1.6 !important; margin: 1rem 0 !important; overflow-x: auto; }
+    .ql-editor code { background-color: rgba(120, 169, 255, 0.1) !important; color: var(--accent) !important; padding: 3px 6px !important; border-radius: 4px !important; font-size: 0.9em !important; font-family: inherit; }
+    .ql-editor pre.ql-syntax span { background-color: transparent !important; }
+    .ql-editor pre.ql-syntax span.hljs-keyword, .ql-editor pre.ql-syntax span.hljs-selector-tag { color: #c678dd !important; font-weight: 500; }
+    .ql-editor pre.ql-syntax span.hljs-function, .ql-editor pre.ql-syntax span.hljs-title { color: #61afef !important; }
+    .ql-editor pre.ql-syntax span.hljs-string { color: #98c379 !important; }
+    .ql-editor pre.ql-syntax span.hljs-comment { color: #5c6370 !important; font-style: italic; }
+    .ql-editor pre.ql-syntax span.hljs-params, .ql-editor pre.ql-syntax span.hljs-attribute { color: #d19a66 !important; }
+    .ql-editor pre.ql-syntax span.hljs-number, .ql-editor pre.ql-syntax span.hljs-literal { color: #d19a66 !important; }
+    .ql-editor pre.ql-syntax span.hljs-built_in, .ql-editor pre.ql-syntax span.hljs-name { color: #56b6c2 !important; }
+
+    .ql-editor ol, .ql-editor ul { padding-left: 1.5em !important; }
+    .ql-editor li:not(.ql-direction-rtl)::before { margin-left: -1.5em !important; margin-right: 0.5em !important; text-align: right !important; display: inline-block !important; width: 1em !important; }
+    .ql-editor .ql-indent-1:not(.ql-direction-rtl) { padding-left: 3em !important; }
+    .ql-editor .ql-indent-2:not(.ql-direction-rtl) { padding-left: 4.5em !important; }
+    .ql-editor .ql-indent-3:not(.ql-direction-rtl) { padding-left: 6em !important; }
+    .ql-editor .ql-indent-4:not(.ql-direction-rtl) { padding-left: 7.5em !important; }
+    .ql-editor .ql-indent-5:not(.ql-direction-rtl) { padding-left: 9em !important; } 
+
+        /* ==========================================
+           반응형 웹 (Mobile/Tablet UI) - 20px 수직선 통일
+           ========================================== */
+        .mobile-only { display: none !important; }
+        
+        .mobile-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px); z-index: 1001; opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+
+        @media screen and (max-width: 768px) {
+            .mobile-only { display: flex !important; }
+            .mobile-overlay { display: block; }
+            .mobile-overlay.is-active { opacity: 1; pointer-events: auto; }
+            .col-center { width: 100vw; min-width: 100vw; }
+            
+            /* 모든 요소의 왼쪽 여백을 20px로 칼각 통일! */
+            .editor-header { padding: 70px 20px 10px !important; flex-direction: column; align-items: flex-start !important; gap: 16px; }
+            #memo-title-input { width: 100% !important; font-size: 24px !important; }
+
+            .status-container { position: fixed; top: 34px; right: 70px; z-index: 999; }
+
+            .ql-toolbar.ql-snow {
+                overflow: visible !important; white-space: normal !important; display: flex !important; flex-wrap: wrap !important; gap: 8px;
+                padding: 12px 20px !important; /* 툴바 왼쪽 끝을 20px 라인에 맞춤 */
+            }
+            .ql-toolbar.ql-snow .ql-formats { display: flex !important; margin-right: 0 !important; margin-bottom: 4px !important; flex-wrap: wrap !important; }
+
+            /* 팝업창도 무조건 20px 라인에 칼각으로 붙도록 강제 설정 */
+            .ql-snow .ql-tooltip {
+                left: 20px !important;
+                transform: none !important; 
+            }
+
+            /* 본문 텍스트 왼쪽 끝도 20px에 맞춤 */
+            .ql-editor { padding: 16px 20px !important; font-size: 15px; }
+            .ql-editor.ql-blank::before { left: 20px !important; }
+
+            .col-left {
+                position: fixed; top: 0; left: 0; height: 100vh;
+                width: 285px !important; min-width: 285px !important; z-index: 1002; transform: translateX(-100%); box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+            }
+            .col-left.is-mobile-open { transform: translateX(0) !important; }
+            .col-left .nav-header > button.toggle-btn { display: none; }
+
+            .col-right { width: 280px !important; min-width: 280px !important; z-index: 1002; box-shadow: -2px 0 12px rgba(0,0,0,0.5); }
+            #global-menu-btn { z-index: 1000 !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <button id="mobile-left-menu-btn" class="toggle-btn mobile-only" style="position: fixed; top: 24px; left: 10px; z-index: 1000;" onclick="toggleLeftPaneMobile()">
+        <i class="fa-solid fa-bars"></i>
+    </button>
+    
+    <div id="mobile-overlay" class="mobile-overlay" onclick="closeAllPanelsMobile()"></div>
+
+    <button id="global-menu-btn" class="toggle-btn" style="position: fixed; top: 24px; right: 20px; z-index: 1000;" onclick="toggleRightPane()">
+        <i class="fa-solid fa-ellipsis-vertical"></i>
+    </button>
+
+    <div class="col-left" id="col-left">
+        <div class="nav-header">
+            <button class="toggle-btn" onclick="document.getElementById('col-left').classList.toggle('collapsed')">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <button class="new-note-btn" onclick="createNewMemo()" style="color: var(--text-main); font-weight: 600;">
+                <i class="fa-solid fa-pen-to-square"></i> <span class="btn-text">새 노트 작성</span>
+            </button>
+            <div class="search-bar">
+                <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
+                <input type="text" id="list-search-input" placeholder="노트 검색..." oninput="loadMemoList()">
+            </div>
+        </div>
+        <ul id="memo-list" class="memo-list"></ul>
+    </div>
+
+    <div class="col-center">
+        <div class="editor-header">
+            <input type="text" id="memo-title-input" placeholder="제목 없는 노트">
+            <div class="editor-actions">
+                <div class="status-container">
+                    <span id="status-text" class="status-text">저장됨</span>
+                    <div id="status-dot" class="status-dot saved"></div>
+                </div>
+            </div>
+        </div>
+        <hr class="print-hr">
+        <div class="quill-wrapper">
+            <div id="editor"></div>
+        </div>
+    </div>
+
+    <div class="col-right is-closed" id="col-right">
+        <div style="margin-bottom: -16px; display: flex; justify-content: space-between; align-items: center;">
+            <button class="toggle-btn" onclick="toggleRightPane()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            
+            <button class="toggle-btn" id="btn-auth">
+                <i class="fa-brands fa-google"></i>
+            </button>
+        </div>
+
+        <div class="util-section">
+            <div class="util-title">Export & Print</div>
+            
+            <button class="util-btn" id="btn-read-memo">
+                <i class="fa-solid fa-volume-high"></i> <span class="btn-text">음성으로 읽기</span>
+            </button>
+            
+            <button class="util-btn" onclick="exportHTML()"><i class="fa-brands fa-html5"></i> <span class="btn-text">HTML 저장</span></button>
+            <button class="util-btn" onclick="exportPDF()"><i class="fa-regular fa-file-pdf"></i> <span class="btn-text">PDF 저장</span></button>
+            <button class="util-btn" onclick="exportTXT()"><i class="fa-regular fa-file-lines"></i> <span class="btn-text">TXT 저장</span></button>
+            <button class="util-btn" onclick="exportJSON()"><i class="fa-solid fa-code"></i> <span class="btn-text">JSON 저장</span></button>
+            <button class="util-btn" onclick="window.print()"><i class="fa-solid fa-print"></i> <span class="btn-text">인쇄하기</span></button>
+        </div>
+
+        <div class="util-section mt-auto">
+            <div class="util-title">Data Management</div>
+            <button class="util-btn" onclick="document.getElementById('import-file').click()"><i class="fa-solid fa-file-import"></i> <span class="btn-text">파일 불러오기</span></button>
+            <button class="util-btn" onclick="backupAllData()"><i class="fa-solid fa-database"></i> <span class="btn-text">전체 백업</span></button>
+            <input type="file" id="import-file" accept=".json, .txt" style="display: none;" onchange="handleFileImport(event)">
+        </div>
+    </div>
+
+    <script>
+	
+        function toggleRightPane() {
+            const rightPane = document.getElementById('col-right');
+            const globalBtn = document.getElementById('global-menu-btn');
+            if (rightPane.classList.contains('is-closed')) {
+                rightPane.classList.remove('is-closed');
+                globalBtn.style.display = 'none'; 
+            } else {
+                rightPane.classList.add('is-closed');
+                globalBtn.style.display = 'flex'; 
+            }
+        }
+
+        document.addEventListener('click', function(event) {
+            const rightPane = document.getElementById('col-right');
+            const globalBtn = document.getElementById('global-menu-btn');
+            
+            if (!rightPane.classList.contains('is-closed')) {
+                const isClickInsideRightPane = rightPane.contains(event.target);
+                const isClickOnGlobalBtn = globalBtn.contains(event.target);
+                
+                if (!isClickInsideRightPane && !isClickOnGlobalBtn) {
+                    rightPane.classList.add('is-closed');
+                    globalBtn.style.display = 'flex'; 
+                }
+            }
+        });
+
+        hljs.configure({ languages:['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
+
+        const Link = Quill.import('formats/link');
+        class CustomLink extends Link {
+            static create(value) {
+                let url = value;
+                if (url && !/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) url = 'http://' + url;
+                return super.create(url);
+            }
+        }
+        Quill.register(CustomLink, true);
+
+        const BlockEmbed = Quill.import('blots/block/embed');
+        class DividerBlot extends BlockEmbed { }
+        DividerBlot.blotName = 'divider';
+        DividerBlot.tagName = 'hr';
+        Quill.register(DividerBlot);
+
+        const quill = new Quill('#editor', {
+            theme: 'snow',
+            // [핵심 해결] 팝업창의 행동반경을 '가운데 창(col-center)'으로 강제 제한!
+            // 절대 왼쪽 메뉴판 영역으로 넘어가지 못하고 오른쪽으로 튕겨 나옵니다.
+            bounds: '.col-center', 
+            placeholder: '여기에 지식을 기록하세요...',
+            modules: {
+                syntax: true,
+                toolbar: {
+                    container: [
+                        [{ 'header':[1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        ['blockquote', 'code-block', 'link', 'divider'], 
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }], 
+                        ['clean']
+                    ],
+                    handlers: {
+                        'divider': function() {
+                            const range = this.quill.getSelection(true);
+                            this.quill.insertText(range.index, '\n', Quill.sources.USER);
+                            this.quill.insertEmbed(range.index + 1, 'divider', true, Quill.sources.USER);
+                            this.quill.setSelection(range.index + 2, Quill.sources.SILENT);
+                        }
+                    }
+                }
+            }
+        });
+
+        const dividerButton = document.querySelector('.ql-divider');
+        if (dividerButton) {
+            dividerButton.innerHTML = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
+        }
+
+        document.querySelector('.col-center').addEventListener('click', function(e) {
+            if (!e.target.closest('.editor-header') && 
+                !e.target.closest('.ql-toolbar') && 
+                !e.target.closest('.ql-editor')) {
+                quill.focus();
+            }
+        });
+
+        let db;
+        let currentMemoId = null;
+        let saveTimer = null;
+        let isSaving = false;
+        let pendingSave = false;
+        let selectedMemos = new Set();
+        let displayedMemos =[];
+        let lastSelectedId = null;
+
+        const request = indexedDB.open("ZenMemoDB_Ultimate", 1);
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains('memos')) {
+                const store = db.createObjectStore('memos', { keyPath: 'id', autoIncrement: true });
+                store.createIndex('updatedAt', 'updatedAt', { unique: false });
+            }
+        };
+        request.onsuccess = (e) => { db = e.target.result; loadMemoList(); };
+
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        function updateUIState(state) {
+            if (state === 'typing') {
+                statusDot.className = 'status-dot unsaved';
+                statusText.innerText = '작성 중...';
+                statusText.style.opacity = '1';
+            } else if (state === 'saving') {
+                statusDot.className = 'status-dot unsaved'; 
+                statusText.innerText = '저장 중...';
+                statusText.style.opacity = '1';
+            } else if (state === 'saved') {
+                statusDot.className = 'status-dot saved';
+                statusText.innerText = '저장됨';
+                setTimeout(() => { if(!saveTimer && !isSaving) statusText.style.opacity = '0'; }, 2000);
+            }
+        }
+
+        function triggerAutoSave() {
+            updateUIState('typing');
+            if (saveTimer) clearTimeout(saveTimer);
+            saveTimer = setTimeout(executeSave, 1200);
+        }
+
+        quill.on('text-change', (delta, old, source) => { if(source === 'user') triggerAutoSave(); });
+        document.getElementById('memo-title-input').addEventListener('input', triggerAutoSave);
+
+        function executeSave() {
+            if (isSaving) { pendingSave = true; return; }
+            const title = document.getElementById('memo-title-input').value.trim() || '제목 없는 노트';
+            document.title = title;
+            const content = quill.root.innerHTML;
+            const plainText = quill.getText();
+            
+            if (!currentMemoId && !document.getElementById('memo-title-input').value && plainText.trim() === '') {
+                updateUIState('saved'); saveTimer = null; return;
+            }
+
+            isSaving = true;
+            updateUIState('saving');
+
+            const memoData = { title, content, plainText, updatedAt: Date.now() };
+            if (currentMemoId) {
+                memoData.id = currentMemoId;
+                const existingMemo = displayedMemos.find(m => m.id === currentMemoId);
+                if (existingMemo && existingMemo.pinnedAt) {
+                    memoData.pinnedAt = existingMemo.pinnedAt;
+                }
+            }
+
+            const tx = db.transaction(['memos'], 'readwrite');
+            const store = tx.objectStore('memos');
+            const req = currentMemoId ? store.put(memoData) : store.add(memoData);
+
+            req.onsuccess = (e) => { if (!currentMemoId) currentMemoId = e.target.result; };
+            tx.oncomplete = () => {
+                isSaving = false;
+                saveTimer = null;
+                updateUIState('saved');
+                loadMemoList(true);
+                
+                // [추가됨] 구글 드라이브 동기화 호출
+                if (gapiInited && gisInited && gapi.client.getToken() !== null) {
+                    db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = (e) => {
+                        syncToGoogleDrive({ type: 'ZenBackup', data: e.target.result });
+                    };
+                }
+
+                if (pendingSave) { pendingSave = false; executeSave(); }
+            };
+        }
+
+        function forceSaveImmediate() {
+            if (saveTimer) { clearTimeout(saveTimer); executeSave(); }
+        }
+
+        function createNewMemo() {
+            forceSaveImmediate();
+            currentMemoId = null;
+            selectedMemos.clear();
+            lastSelectedId = null;
+            document.getElementById('memo-title-input').value = '';
+            document.title = "새 노트";
+            quill.root.innerHTML = '';
+            updateUIState('saved');
+            statusText.style.opacity = '0';
+            loadMemoList();
+        }
+
+        function loadMemoList(queryDB = true) {
+            const query = document.getElementById('list-search-input').value.toLowerCase();
+            const list = document.getElementById('memo-list');
+            const savedScroll = list.scrollTop;
+
+            if (queryDB) {
+                const tx = db.transaction(['memos'], 'readonly');
+                const req = tx.objectStore('memos').index('updatedAt').openCursor(null, 'prev');
+                
+                let pinnedMemos = [];
+                let normalMemos =[];
+                
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        const m = cursor.value;
+                        if (m.title.toLowerCase().includes(query) || (m.plainText || "").toLowerCase().includes(query)) {
+                            if (m.pinnedAt) pinnedMemos.push(m);
+                            else normalMemos.push(m);
+                        }
+                        cursor.continue();
+                    }
+                };
+                
+                tx.oncomplete = () => { 
+                    pinnedMemos.sort((a, b) => a.pinnedAt - b.pinnedAt);
+                    
+                    displayedMemos = [...pinnedMemos, ...normalMemos];
+                    list.innerHTML = '';
+                    displayedMemos.forEach(m => list.appendChild(createMemoElement(m)));
+                    list.scrollTop = savedScroll; 
+                };
+            } else {
+                list.innerHTML = '';
+                displayedMemos.forEach(m => list.appendChild(createMemoElement(m)));
+                list.scrollTop = savedScroll;
+            }
+        }
+
+        function formatDateTime(timestamp) {
+            const d = new Date(timestamp);
+            const dateStr = d.toLocaleDateString(); 
+            const hours = d.getHours().toString().padStart(2, '0');
+            const minutes = d.getMinutes().toString().padStart(2, '0');
+            return `${dateStr} ${hours}:${minutes}`;
+        }
+
+        function createMemoElement(memo) {
+            const li = document.createElement('li');
+            const isActive = currentMemoId === memo.id;
+            li.className = `memo-item ${isActive || selectedMemos.has(memo.id) ? 'active' : ''}`;
+            
+            li.innerHTML = `
+                <div class="memo-info">
+                    <span class="memo-title">${memo.title}</span>
+                    <span class="memo-date">${formatDateTime(memo.updatedAt)}</span>
+                </div>
+                <div class="memo-actions">
+                    <i class="fa-solid fa-thumbtack btn-pin ${memo.pinnedAt ? 'is-pinned' : ''}" onclick="togglePin(${memo.id}, event)"></i>
+                    <i class="fa-solid fa-trash-can btn-delete" onclick="deleteMemo(${memo.id}, event)"></i>
+                </div>
+            `;
+            li.onclick = (e) => {
+                if (e.target.classList.contains('btn-delete') || e.target.classList.contains('btn-pin')) return;
+                forceSaveImmediate();
+                const isCtrl = e.ctrlKey || e.metaKey;
+                const isShift = e.shiftKey;
+
+                if (isShift && lastSelectedId !== null) {
+                    const currentIndex = displayedMemos.findIndex(m => m.id === memo.id);
+                    const lastIndex = displayedMemos.findIndex(m => m.id === lastSelectedId);
+                    if (currentIndex !== -1 && lastIndex !== -1) {
+                        const start = Math.min(currentIndex, lastIndex);
+                        const end = Math.max(currentIndex, lastIndex);
+                        if (!isCtrl) selectedMemos.clear();
+                        for (let i = start; i <= end; i++) selectedMemos.add(displayedMemos[i].id);
+                    }
+                    loadMemoList(false);
+                } else if (isCtrl) {
+                    if (selectedMemos.has(memo.id)) selectedMemos.delete(memo.id);
+                    else selectedMemos.add(memo.id);
+                    lastSelectedId = memo.id;
+                    loadMemoList(false);
+                } else {
+                    selectedMemos.clear();
+                    selectedMemos.add(memo.id);
+                    lastSelectedId = memo.id;
+                    loadMemo(memo.id);
+                }
+            };
+            return li;
+        }
+
+        function togglePin(id, e) {
+            e.stopPropagation(); 
+            forceSaveImmediate(); 
+            const tx = db.transaction(['memos'], 'readwrite');
+            const store = tx.objectStore('memos');
+            const req = store.get(id);
+            req.onsuccess = (event) => {
+                const memo = event.target.result;
+                if (memo) {
+                    if (memo.pinnedAt) delete memo.pinnedAt;
+                    else memo.pinnedAt = Date.now();
+                    store.put(memo);
+                }
+            };
+            tx.oncomplete = () => { loadMemoList(true); };
+        }
+
+        function loadMemo(id) {
+            db.transaction(['memos'], 'readonly').objectStore('memos').get(id).onsuccess = (e) => {
+                const m = e.target.result;
+                if (m) {
+                    currentMemoId = m.id;
+                    document.getElementById('memo-title-input').value = m.title;
+                    document.title = m.title; 
+                    quill.root.innerHTML = m.content;
+                    updateUIState('saved');
+                    statusText.style.opacity = '0';
+                    loadMemoList(false);
+                }
+            };
+        }
+
+        function deleteMemo(id, e) {
+            e.stopPropagation();
+            const targets = (selectedMemos.has(id) && selectedMemos.size > 1) ? Array.from(selectedMemos) : [id];
+            const msg = targets.length > 1 ? `선택한 ${targets.length}개의 노트를 삭제하시겠습니까?` : '이 노트를 삭제하시겠습니까?';
+            if (!confirm(msg)) return;
+            const tx = db.transaction(['memos'], 'readwrite');
+            const store = tx.objectStore('memos');
+            targets.forEach(targetId => store.delete(targetId));
+            tx.oncomplete = () => {
+                if (targets.includes(currentMemoId)) createNewMemo();
+                else loadMemoList();
+                targets.forEach(targetId => selectedMemos.delete(targetId));
+            };
+        }
+
+        const getTitle = () => document.getElementById('memo-title-input').value || 'Untitled';
+        function exportHTML() { 
+            const blob = new Blob([`<html><body><h1>${getTitle()}</h1><hr>${quill.root.innerHTML}</body></html>`], {type:'text/html'});
+            saveAs(blob, `${getTitle()}.html`);
+        }
+        function exportPDF() {
+            const printContainer = document.createElement('div');
+            const titleText = document.getElementById('memo-title-input').value || '제목 없는 노트';
+            const contentHTML = quill.root.innerHTML;
+            printContainer.innerHTML = `<div style="background: white; color: black; padding: 20px; font-family: 'Pretendard', -apple-system, sans-serif;"><div style="max-width: 800px; margin: 0 auto;"><div style="font-size: 32px; font-weight: 700; color: black; margin-bottom: 20px; letter-spacing: -0.5px;">${titleText}</div><hr style="border: none; border-bottom: 1px solid #d4d4d4; margin: 0 0 20px 0;"><div class="ql-snow"><div class="ql-editor" style="padding: 0; color: black; overflow: visible; height: auto;">${contentHTML}</div></div></div></div>`;
+            const opt = { margin: 10, filename: `${getTitle()}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+            html2pdf().set(opt).from(printContainer).save();
+        }
+        function exportTXT() { saveAs(new Blob([quill.getText()], {type:'text/plain'}), `${getTitle()}.txt`); }
+        function exportJSON() {
+            const data = { type: 'ZenMemo', title: getTitle(), content: quill.root.innerHTML, plainText: quill.getText(), updatedAt: Date.now() };
+            saveAs(new Blob([JSON.stringify(data)], {type:'application/json'}), `${getTitle()}.json`);
+        }
+        function backupAllData() {
+            db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = (e) => {
+                saveAs(new Blob([JSON.stringify({type:'ZenBackup', data:e.target.result})], {type:'application/json'}), `Zen_Backup_${Date.now()}.json`);
+            };
+        }
+        function handleFileImport(e) {
+            const file = e.target.files[0]; 
+            if(!file) return;
+            const reader = new FileReader();
+            const isTxt = file.name.toLowerCase().endsWith('.txt');
+            reader.onload = (ev) => {
+                const fileContent = ev.target.result;
+                if (isTxt) {
+                    createNewMemo();
+                    document.getElementById('memo-title-input').value = file.name.replace(/\.[^/.]+$/, "");
+                    quill.setText(fileContent);
+                    triggerAutoSave();
+                    e.target.value = ''; return;
+                }
+                try {
+                    const parsed = JSON.parse(fileContent);
+                    if (parsed.type === 'ZenBackup') {
+                        db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = (getAllEvent) => {
+                            const existingMemos = getAllEvent.target.result;
+                            const existingSet = new Set(existingMemos.map(m => m.title + '|||' + (m.plainText || '').trim()));
+                            const tx = db.transaction(['memos'], 'readwrite');
+                            const store = tx.objectStore('memos');
+                            let importedCount = 0; let skippedCount = 0;
+                            parsed.data.forEach(m => {
+                                const sig = m.title + '|||' + (m.plainText || '').trim();
+                                if (!existingSet.has(sig)) { delete m.id; store.add(m); existingSet.add(sig); importedCount++; }
+                                else skippedCount++;
+                            });
+                            tx.oncomplete = () => { loadMemoList(); alert(`백업 복원 완료!\n- 추가된 노트: ${importedCount}개\n- 중복 제외된 노트: ${skippedCount}개`); };
+                        };
+                    } else if (parsed.type === 'ZenMemo' || (parsed.title !== undefined && parsed.content !== undefined)) {
+                        createNewMemo();
+                        document.getElementById('memo-title-input').value = parsed.title || 'Untitled';
+                        quill.root.innerHTML = parsed.content || '';
+                        triggerAutoSave();
+                    }
+                } catch(err) { alert('파일 읽기 오류'); }
+                e.target.value = ''; 
+            };
+            reader.readAsText(file);
+        }
+
+        function toggleLeftPaneMobile() {
+            const leftPane = document.getElementById('col-left');
+            const overlay = document.getElementById('mobile-overlay');
+            leftPane.classList.toggle('is-mobile-open');
+            
+            if (leftPane.classList.contains('is-mobile-open')) {
+                overlay.classList.add('is-active');
+                document.getElementById('col-right').classList.add('is-closed');
+                document.getElementById('global-menu-btn').style.display = 'flex';
+            } else {
+                overlay.classList.remove('is-active');
+            }
+        }
+
+        function closeAllPanelsMobile() {
+            if (window.innerWidth <= 768) {
+                document.getElementById('col-left').classList.remove('is-mobile-open');
+                document.getElementById('col-right').classList.add('is-closed');
+                document.getElementById('mobile-overlay').classList.remove('is-active');
+                document.getElementById('global-menu-btn').style.display = 'flex';
+            }
+        }
+
+        const originalToggleRightPane = toggleRightPane;
+        toggleRightPane = function() {
+            originalToggleRightPane(); 
+            if (window.innerWidth <= 768) {
+                const rightPane = document.getElementById('col-right');
+                const overlay = document.getElementById('mobile-overlay');
+                
+                if (!rightPane.classList.contains('is-closed')) {
+                    overlay.classList.add('is-active');
+                    document.getElementById('col-left').classList.remove('is-mobile-open');
+                } else {
+                    overlay.classList.remove('is-active');
+                }
+            }
+        };
+
+        const originalLoadMemoMobile = loadMemo;
+        loadMemo = function(id) {
+            originalLoadMemoMobile(id);
+            closeAllPanelsMobile();
+        };
+
+        const originalCreateNewMemoMobile = createNewMemo;
+        createNewMemo = function() {
+            originalCreateNewMemoMobile();
+            closeAllPanelsMobile();
+        };
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                document.getElementById('col-left').classList.remove('is-mobile-open');
+                document.getElementById('mobile-overlay').classList.remove('is-active');
+                if(document.getElementById('col-right').classList.contains('is-closed')) {
+                    document.getElementById('global-menu-btn').style.display = 'flex';
+                }
+            }
+        });
+
+	// ==========================================
+        //  TTS (Text-to-Speech) 음성 읽기 기능
+        // ==========================================
+        let isReading = false;
+
+        document.getElementById('btn-read-memo').addEventListener('click', function() {
+            const synth = window.speechSynthesis;
+            const btnIcon = this.querySelector('i');
+            const btnText = this.querySelector('.btn-text');
+
+            // 1. 토글 동작: 이미 읽고 있다면 중지
+            if (isReading || synth.speaking) {
+                synth.cancel(); 
+                isReading = false;
+                
+                // 버튼 UI 원상 복구 (색상 변경 없이 기본 클래스만 복원)
+                btnIcon.className = 'fa-solid fa-volume-high';
+                btnText.innerText = '음성으로 읽기';
+                return;
+            }
+
+            // 2. 텍스트 추출
+            const textToRead = quill.getText().trim();
+            
+            if (!textToRead) {
+                alert('읽을 내용이 없습니다.');
+                return;
+            }
+
+            // 3. 언어 자동 감지 (첫 50자 기준)
+            const sampleText = textToRead.substring(0, 50);
+            const hasKorean = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(sampleText);
+            const detectedLang = hasKorean ? 'ko-KR' : 'en-US';
+
+            // 4. 음성 객체 생성 및 설정
+            const utterance = new SpeechSynthesisUtterance(textToRead);
+            utterance.lang = detectedLang;
+            utterance.rate = 1.0; 
+
+            // 5. 이벤트 처리: 다 읽었을 때 버튼 UI 원래대로 복구
+            utterance.onend = function() {
+                isReading = false;
+                btnIcon.className = 'fa-solid fa-volume-high';
+                btnText.innerText = '음성으로 읽기';
+            };
+
+            // 에러나 예기치 못한 중단 시 복구
+            utterance.onerror = function() {
+                console.warn('음성 읽기가 중단되었거나 오류가 발생했습니다.');
+                isReading = false;
+                btnIcon.className = 'fa-solid fa-volume-high';
+                btnText.innerText = '음성으로 읽기';
+            };
+
+            // 6. 읽기 시작
+            synth.cancel(); 
+            synth.speak(utterance);
+            isReading = true;
+            
+            // 버튼 UI를 '정지'로 변경 (색상 조작 없이 모양과 텍스트만)
+            btnIcon.className = 'fa-solid fa-stop';
+            btnText.innerText = '읽기 중지';
+        });
+
+	// ==========================================
+        // 구글 로그인 및 드라이브 동기화 엔진 (수정 버전)
+        // ==========================================
+                
+        // 로그인 버튼(#btn-auth) 클릭 이벤트
+        document.getElementById('btn-auth').addEventListener('click', () => {
+            if (!gapiInited || !gisInited) {
+                alert('구글 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
+
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) { throw (resp); }
+                
+                alert('구글 로그인 성공! 이제부터 메모가 드라이브에 자동 백업됩니다.');
+                const authBtnIcon = document.querySelector('#btn-auth i');
+                authBtnIcon.style.color = 'var(--accent)';
+                
+                db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = (e) => {
+                    syncToGoogleDrive({ type: 'ZenBackup', data: e.target.result });
+                };
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } else {
+                tokenClient.requestAccessToken({ prompt: '' });
+            }
+        });
+
+        // 실제 구글 드라이브 업로드 로직 (기존과 동일)
+        async function syncToGoogleDrive(contentJSON) {
+            try {
+                const response = await gapi.client.drive.files.list({
+                    q: "name = 'ZenNotes_Backup.json' and trashed = false",
+                    fields: 'files(id, name)',
+                });
+                const file = response.result.files[0];
+                const metadata = { name: 'ZenNotes_Backup.json', mimeType: 'application/json' };
+                const blob = new Blob([JSON.stringify(contentJSON)], { type: 'application/json' });
+
+                if (file) {
+                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${file.id}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: { 'Authorization': `Bearer ${gapi.client.getToken().access_token}` },
+                        body: blob
+                    });
+                } else {
+                    await gapi.client.drive.files.create({ 
+                        resource: metadata, 
+                        media: { mimeType: 'application/json', body: blob } 
+                    });
+                }
+                console.log("구글 드라이브 동기화 성공!");
+            } catch (err) {
+                console.error("동기화 중 오류 발생:", err);
+            }
+        }
+	
+    </script>
+</body>
+</html>
