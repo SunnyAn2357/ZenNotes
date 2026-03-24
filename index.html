@@ -982,28 +982,58 @@
         });
 
 	// ==========================================
-        // 구글 로그인 및 드라이브 동기화 엔진 (수정 버전)
+        // 구글 로그인 및 드라이브 동기화 엔진 (로그인/로그아웃/유지 기능 추가)
         // ==========================================
                 
-        // 로그인 버튼(#btn-auth) 클릭 이벤트
+        // [추가됨] 1. 페이지가 켜질 때 로그인 상태를 기억해서 아이콘 파란색으로 유지
+        window.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('zen_logged_in') === 'true') {
+                const authBtnIcon = document.querySelector('#btn-auth i');
+                if (authBtnIcon) authBtnIcon.style.color = 'var(--accent)';
+            }
+        });
+
+        // [수정됨] 2. 로그인 버튼(#btn-auth) 클릭 이벤트 (로그인 & 로그아웃 토글)
         document.getElementById('btn-auth').addEventListener('click', () => {
             if (!gapiInited || !gisInited) {
                 alert('구글 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
                 return;
             }
 
+            const authBtnIcon = document.querySelector('#btn-auth i');
+
+            // A. 이미 로그인 상태라면? -> 로그아웃 진행
+            if (gapi.client.getToken() !== null || localStorage.getItem('zen_logged_in') === 'true') {
+                if (confirm('구글 계정에서 로그아웃 하시겠습니까?')) {
+                    const token = gapi.client.getToken();
+                    if (token !== null) {
+                        google.accounts.oauth2.revokeToken(token.access_token);
+                        gapi.client.setToken(null);
+                    }
+                    localStorage.removeItem('zen_logged_in'); 
+                    authBtnIcon.style.color = ''; // 아이콘을 원래 회색으로 복구
+                    alert('로그아웃 되었습니다. 자동 백업이 중지됩니다.');
+                }
+                return; // 여기서 함수 종료
+            }
+
+            // B. 로그인이 안 된 상태라면? -> 로그인 진행
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) { throw (resp); }
                 
-                alert('구글 로그인 성공! 이제부터 메모가 드라이브에 자동 백업됩니다.');
-                const authBtnIcon = document.querySelector('#btn-auth i');
-                authBtnIcon.style.color = 'var(--accent)';
+                // 로그인 성공 기록 저장
+                localStorage.setItem('zen_logged_in', 'true');
+                authBtnIcon.style.color = 'var(--accent)'; // 아이콘을 파란색으로 변경
                 
+                alert('구글 로그인 성공! 이제부터 메모가 드라이브에 자동 백업됩니다.');
+                
+                // 로그인 직후 즉시 1회 백업
                 db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = (e) => {
                     syncToGoogleDrive({ type: 'ZenBackup', data: e.target.result });
                 };
             };
 
+            // 로그인 팝업 띄우기
             if (gapi.client.getToken() === null) {
                 tokenClient.requestAccessToken({ prompt: 'consent' });
             } else {
@@ -1011,7 +1041,7 @@
             }
         });
 
-        // 실제 구글 드라이브 업로드 로직 (기존과 동일)
+        // 3. 실제 구글 드라이브 업로드 로직 (기존과 동일)
         async function syncToGoogleDrive(contentJSON) {
             try {
                 const response = await gapi.client.drive.files.list({
@@ -1038,8 +1068,7 @@
             } catch (err) {
                 console.error("동기화 중 오류 발생:", err);
             }
-        }
-	
+        }	
     </script>
 </body>
 </html>
