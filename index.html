@@ -19,7 +19,8 @@
         const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
         let tokenClient, gapiInited = false, gisInited = false;
-        let hasLoadedFromCloud = false; // [핵심] 클라우드 데이터를 가져오기 전에 로컬이 덮어쓰는 것을 막는 보호장치
+        // [추가] 클라우드 덮어쓰기 방지용 전역 변수
+        let hasLoadedFromCloud = false; 
 
         function gapiLoaded() {
             gapi.load('client', async () => {
@@ -729,7 +730,7 @@
         let tokenRefreshTimer = null;
         let idleSyncTimer = null; 
 
-        // [수정: 팝업 에러 방지]
+        // [수정1] 팝업 에러 방지를 위해 조용한 백그라운드 갱신만 시도
         function checkAndSilentLogin() {
             console.log(">>> 팝업 차단 방지를 위해 자동 로그인 시도 생략");
         }
@@ -885,7 +886,7 @@
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
 
-        // [수정: 정직한 UI, 가짜 파란불 사기 근절]
+        // [수정2] UI 팩트 체크 (가짜 파란불 없앰)
         function updateUIState(state) {
             const hasToken = gapiInited && gapi.client && gapi.client.getToken() !== null;
 
@@ -909,13 +910,12 @@
                         statusText.style.opacity = '1';
                     } else {
                         statusDot.className = 'status-dot logged-out';
-                        statusText.style.opacity = '0'; // 로그인 안됐으면 깔끔하게 회색불만
+                        statusText.style.opacity = '0';
                     }
                     
                     if (idleSyncTimer) clearTimeout(idleSyncTimer);
                     idleSyncTimer = setTimeout(() => {
                         if (!saveTimer && !isSaving && hasToken) {
-                            console.log(">>> [3단계] 조용한 유휴 백업 실행");
                             syncDataToCloud();
                         }
                     }, 5000);
@@ -1003,64 +1003,73 @@
             }
         }
 
-        // [수정: 전송 트럭 결함 수정 & 데이터 덮어쓰기 보호장치]
-        // [수정: 눈에 확실히 보이는 곳(root)에 파일 생성]
-        function syncDataToCloud() {
-            const hasToken = gapiInited && gapi.client && gapi.client.getToken() !== null;
-            if (!hasToken) return;
+        // [수정3 핵심!] 유령 파일 방지 (Multipart Upload 적용) & 덮어쓰기 보호장치
+        async function syncDataToCloud() {
+            if (!gapiInited || !gapi.client || gapi.client.getToken() === null) return;
 
             db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = async e => {
-                let allData = e.target.result;
+                const allData = e.target.result;
                 
-                // [보호장치 작동]
+                // 데이터 우선 복구 (덮어쓰기 방지)
                 if (allData.length === 0 && !hasLoadedFromCloud) {
-                    console.warn(">>> [보호장치 작동] 로컬 데이터가 비어있어 클라우드를 덮어쓰지 않습니다.");
+                    console.warn(">>> [보호장치] 로컬이 비어있어 클라우드에 빈 파일을 올리지 않습니다.");
                     return;
                 }
 
-                let cloudOptimizedData = allData.map(m => {
+                const cloudOptimizedData = allData.map(m => {
                     let clone = Object.assign({}, m);
-                    if (clone.content) {
-                        clone.content = clone.content.replace(/src="data:image[^"]+"/gi, 'src="" data-local-image="true"');
-                    }
+                    if (clone.content) clone.content = clone.content.replace(/src="data:image[^"]+"/gi, 'src="" data-local-image="true"');
                     return clone;
                 });
-                
+
                 try {
-                    const token = gapi.client.getToken();
-                    const response = await gapi.client.drive.files.list({
+                    const token = gapi.client.getToken().access_token;
+                    const res = await gapi.client.drive.files.list({
                         q: "name = 'ZenNotes_Backup.json' and trashed = false",
-                        fields: 'files(id, name)'
+                        fields: 'files(id)'
                     });
-                    
-                    const file = response.result.files[0];
-                    const blob = new Blob([JSON.stringify({ type: 'ZenBackup', data: cloudOptimizedData })], { type: 'application/json' });
-                    
+
+                    const file = res.result.files[0];
+                    const content = JSON.stringify({ type: 'ZenBackup', data: cloudOptimizedData });
+
                     document.getElementById('status-dot').className = 'status-dot unsaved pulse-fast';
-                    
+
                     if (file) {
+                        // 기존 파일이 있으면 업데이트(PATCH)
                         await fetch(`https://www.googleapis.com/upload/drive/v3/files/${file.id}?uploadType=media`, {
                             method: 'PATCH',
-                            headers: { 'Authorization': `Bearer ${token.access_token}` },
-                            body: blob,
-                            keepalive: true
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: content
                         });
                     } else {
-                        // 👇 [가장 중요한 수정] 파일 생성 시 '내 드라이브(root)'에 보이도록 강제 지정!
-                        await gapi.client.drive.files.create({
-                            resource: { 
-                                name: 'ZenNotes_Backup.json', 
-                                mimeType: 'application/json',
-                                parents: ['root'] 
+                        // [핵심] 파일이 없으면 Multipart를 써서 무조건 root(내 드라이브)에 보이게 생성
+                        const metadata = { name: 'ZenNotes_Backup.json', mimeType: 'application/json', parents: ['root'] };
+                        const boundary = '-------314159265358979323846';
+                        const delimiter = `\r\n--${boundary}\r\n`;
+                        const close_delim = `\r\n--${boundary}--`;
+
+                        const body = delimiter +
+                            'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+                            JSON.stringify(metadata) +
+                            delimiter +
+                            'Content-Type: application/json\r\n\r\n' +
+                            content +
+                            close_delim;
+
+                        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': `multipart/related; boundary=${boundary}`
                             },
-                            media: { mimeType: 'application/json', body: blob }
+                            body: body
                         });
                     }
-                    console.log("✅ 클라우드 동기화 성공");
-                    checkAuthState(); 
+                    console.log("✅ 클라우드 동기화 완료 (이제 확실히 보입니다)");
+                    checkAuthState();
                 } catch (err) {
-                    console.error("❌ 클라우드 저장 실패:", err);
-                    document.getElementById('status-dot').className = 'status-dot unsaved'; 
+                    console.error("❌ 전송 실패:", err);
+                    document.getElementById('status-dot').className = 'status-dot unsaved';
                 }
             };
         }
@@ -1532,7 +1541,7 @@
             btnText.innerText = '읽기 중지';
         });
 
-        // [수정: 오직 진짜 토큰만 체크하는 정직한 상태 관리]
+        // [수정4] 가짜 상태 팩트 체크
         function checkAuthState() {
             const hasToken = gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null;
             const authBtnIcon = document.querySelector('#btn-auth i');
@@ -1552,12 +1561,11 @@
         
         window.addEventListener('DOMContentLoaded', () => checkAuthState());
 
-        // [수정: 가짜 로그아웃 묻는 에러 방지]
+        // [수정5] 에러 나는 가짜 로그아웃 방지 & 로그인 처리
         document.getElementById('btn-auth').addEventListener('click', () => {
             if (!gapiInited || !gisInited) return;
             closeAllPanelsMobile(); 
             
-            // 오직 '진짜 열쇠(토큰)'가 있을 때만 로그아웃으로 동작
             if (gapi.client.getToken() !== null) {
                 if (confirm('구글 계정에서 로그아웃 하시겠습니까?')) {
                     const token = gapi.client.getToken();
@@ -1570,7 +1578,6 @@
                 return; 
             }
             
-            // 토큰이 없으면 무조건 로그인 진행
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
                     console.warn(">>> 로그인 실패/취소됨", resp.error);
@@ -1595,7 +1602,7 @@
             tokenClient.requestAccessToken({ prompt: 'consent' });
         });
 
-        // [수정: 데이터 덮어쓰기 완전 방지 처리 포함]
+        // [수정6] 앱 켜질 때 초기 로딩 (가짜 데이터 안 덮어쓰게 방어)
         async function smartSync() {
             if (!gapi.client.getToken() || !db) return;
             console.log(">>> [데이터 우선 복구] 클라우드 확인 시작...");
@@ -1607,7 +1614,7 @@
 
                 if (!res.result.files || res.result.files.length === 0) {
                     console.warn(">>> 클라우드에 백업 파일이 없습니다. 로컬 데이터를 업로드합니다.");
-                    hasLoadedFromCloud = true; // 파일이 없음을 확인했으니 업로드 허용
+                    hasLoadedFromCloud = true;
                     syncDataToCloud(); 
                     return;
                 }
@@ -1670,7 +1677,7 @@
 
                     tx.oncomplete = () => {
                         console.log(">>> [동기화 병합 완료] 클라우드 로드 성공");
-                        hasLoadedFromCloud = true; // 안전하게 합쳤으니 업로드 허용
+                        hasLoadedFromCloud = true;
                         if (needUIUpdate) loadMemoList();
                         checkAuthState();
                         syncDataToCloud(); 
@@ -1678,7 +1685,7 @@
                 };
             } catch (err) { 
                 console.error(">>> [스마트 동기화 오류] 통신 실패:", err); 
-                document.getElementById('status-dot').className = 'status-dot unsaved'; // 에러 나면 즉각 빨간불
+                document.getElementById('status-dot').className = 'status-dot unsaved';
             }
         }
     </script>
