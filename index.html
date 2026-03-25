@@ -20,6 +20,7 @@
 
         let tokenClient, gapiInited = false, gisInited = false;
         let hasLoadedFromCloud = false; 
+        let backupFolderId = null; // ZenNotesBackup 폴더 ID 캐싱
 
         function gapiLoaded() {
             gapi.load('client', async () => {
@@ -27,7 +28,6 @@
                     await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
                     gapiInited = true;
                     console.log("구글 API 준비 완료!");
-                    if (typeof checkAndSilentLogin === 'function') checkAndSilentLogin();
                 } catch (e) {
                     console.error("GAPI 초기화 실패:", e);
                 }
@@ -42,7 +42,6 @@
             });
             gisInited = true;
             console.log("구글 인증 준비 완료!");
-            if (typeof checkAndSilentLogin === 'function') checkAndSilentLogin();
         }
     </script>
 
@@ -729,13 +728,8 @@
         let tokenRefreshTimer = null;
         let idleSyncTimer = null; 
 
-        function checkAndSilentLogin() {
-            console.log(">>> 팝업 차단 방지를 위해 자동 로그인 시도 생략");
-        }
-
         function silentTokenRefresh() {
             if (localStorage.getItem('zen_logged_in') === 'true' && tokenClient) {
-                console.log(">>> [3단계] 토큰 만료 임박(45분): 백그라운드 갱신 시도");
                 tokenClient.requestAccessToken({ prompt: '' });
             }
         }
@@ -867,17 +861,49 @@
             loadMemoList();
         };
 
+        // 삭제 클라우드 연동 헬퍼 함수
+        async function deleteFromCloud(syncIdList) {
+            if (!gapiInited || !gapi.client || gapi.client.getToken() === null || !backupFolderId) return;
+            try {
+                const token = gapi.client.getToken().access_token;
+                for (let syncId of syncIdList) {
+                    if(!syncId) continue;
+                    const fileName = `Note_${syncId}.json`;
+                    const qFiles = `name='${fileName}' and '${backupFolderId}' in parents and trashed=false`;
+                    const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+                    if (resFiles.files && resFiles.files.length > 0) {
+                        await fetch(`https://www.googleapis.com/drive/v3/files/${resFiles.files[0].id}`, {
+                            method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        console.log(`🗑️ 클라우드 삭제 완료: ${fileName}`);
+                    }
+                }
+            } catch (err) { console.error("❌ 삭제 실패:", err); }
+        }
+
         function runAutoPurge() {
-            const tx = db.transaction(['memos'], 'readwrite');
-            const store = tx.objectStore('memos');
-            store.getAll().onsuccess = e => {
+            const txRead = db.transaction(['memos'], 'readonly');
+            const storeRead = txRead.objectStore('memos');
+            storeRead.getAll().onsuccess = e => {
                 const now = Date.now();
                 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+                const idsToDelete = [];
+                const syncIdsToDelete = [];
+                
                 e.target.result.forEach(m => {
                     if (m.isDeleted && m.deletedAt && (now - m.deletedAt > THIRTY_DAYS)) {
-                        store.delete(m.id);
+                        idsToDelete.push(m.id);
+                        if(m.syncId) syncIdsToDelete.push(m.syncId);
                     }
                 });
+
+                if (idsToDelete.length > 0) {
+                    const txWrite = db.transaction(['memos'], 'readwrite');
+                    idsToDelete.forEach(id => txWrite.objectStore('memos').delete(id));
+                    txWrite.oncomplete = () => {
+                        deleteFromCloud(syncIdsToDelete);
+                    };
+                }
             };
         }
 
@@ -913,7 +939,7 @@
                     if (idleSyncTimer) clearTimeout(idleSyncTimer);
                     idleSyncTimer = setTimeout(() => {
                         if (!saveTimer && !isSaving && hasToken) {
-                            syncDataToCloud();
+                            syncDataToCloud(); 
                         }
                     }, 5000);
                     
@@ -986,6 +1012,7 @@
                 saveTimer = null;
                 updateUIState('saved');
                 loadMemoList(true);
+                syncDataToCloud(memoData); // 개별 저장 후 동기화 트리거
                 if (pendingSave) {
                     pendingSave = false;
                     executeSave();
@@ -1000,71 +1027,80 @@
             }
         }
 
-        async function syncDataToCloud() {
+        async function syncDataToCloud(memoObj = null) {
             if (!gapiInited || !gapi.client || gapi.client.getToken() === null) return;
 
-            db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = async e => {
-                const allData = e.target.result;
-                
-                if (allData.length === 0 && !hasLoadedFromCloud) {
-                    console.warn(">>> [보호장치] 로컬이 비어있어 클라우드에 빈 파일을 올리지 않습니다.");
-                    return;
-                }
-
-                const cloudOptimizedData = allData.map(m => {
-                    let clone = Object.assign({}, m);
-                    if (clone.content) clone.content = clone.content.replace(/src="data:image[^"]+"/gi, 'src="" data-local-image="true"');
-                    return clone;
+            let memoToSync = memoObj;
+            if (!memoToSync && currentMemoId) {
+                memoToSync = await new Promise(resolve => {
+                    const tx = db.transaction(['memos'], 'readonly');
+                    tx.objectStore('memos').get(currentMemoId).onsuccess = e => resolve(e.target.result);
                 });
+            }
+            
+            if (!memoToSync) return;
 
-                try {
-                    const token = gapi.client.getToken().access_token;
-                    const res = await gapi.client.drive.files.list({
-                        q: "name = 'ZenNotes_Backup.json' and trashed = false",
-                        fields: 'files(id)'
-                    });
-
-                    const file = res.result.files[0];
-                    const content = JSON.stringify({ type: 'ZenBackup', data: cloudOptimizedData });
-
-                    document.getElementById('status-dot').className = 'status-dot unsaved pulse-fast';
-
-                    if (file) {
-                        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${file.id}?uploadType=media`, {
-                            method: 'PATCH',
-                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                            body: content
-                        });
+            try {
+                const token = gapi.client.getToken().access_token;
+                
+                if (!backupFolderId) {
+                    const qFolder = "name='ZenNotesBackup' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+                    const resFolder = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFolder)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+                    
+                    if (resFolder.files && resFolder.files.length > 0) {
+                        backupFolderId = resFolder.files[0].id;
                     } else {
-                        const metadata = { name: 'ZenNotes_Backup.json', mimeType: 'application/json', parents: ['root'] };
-                        const boundary = '-------314159265358979323846';
-                        const delimiter = `\r\n--${boundary}\r\n`;
-                        const close_delim = `\r\n--${boundary}--`;
-
-                        const body = delimiter +
-                            'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-                            JSON.stringify(metadata) +
-                            delimiter +
-                            'Content-Type: application/json\r\n\r\n' +
-                            content +
-                            close_delim;
-
-                        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': `multipart/related; boundary=${boundary}`
-                            },
-                            body: body
-                        });
+                        const meta = { name: 'ZenNotesBackup', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
+                        const created = await fetch('https://www.googleapis.com/drive/v3/files', {
+                            method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
+                        }).then(r => r.json());
+                        backupFolderId = created.id;
                     }
-                    console.log("✅ 클라우드 동기화 완료 (이제 확실히 보입니다)");
-                    checkAuthState();
-                } catch (err) {
-                    console.error("❌ 전송 실패:", err);
-                    document.getElementById('status-dot').className = 'status-dot unsaved';
                 }
-            };
+
+                const content = JSON.stringify({ type: 'ZenMemo', data: memoToSync });
+                const fileName = `Note_${memoToSync.syncId}.json`;
+                
+                const qFiles = `name='${fileName}' and '${backupFolderId}' in parents and trashed=false`;
+                const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+
+                document.getElementById('status-dot').className = 'status-dot unsaved pulse-fast';
+
+                if (resFiles.files && resFiles.files.length > 0) {
+                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${resFiles.files[0].id}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: content
+                    });
+                } else {
+                    const metadata = { name: fileName, mimeType: 'application/json', parents: [backupFolderId] };
+                    const boundary = '-------314159265358979323846';
+                    const delimiter = `\r\n--${boundary}\r\n`;
+                    const close_delim = `\r\n--${boundary}--`;
+
+                    const body = delimiter +
+                        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+                        JSON.stringify(metadata) +
+                        delimiter +
+                        'Content-Type: application/json\r\n\r\n' +
+                        content +
+                        close_delim;
+
+                    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': `multipart/related; boundary=${boundary}`
+                        },
+                        body: body
+                    });
+                }
+                console.log(`✅ 클라우드 동기화 완료: ${fileName}`);
+                checkAuthState();
+            } catch (err) {
+                console.error("❌ 전송 실패:", err);
+                document.getElementById('status-dot').className = 'status-dot unsaved';
+            }
         }
 
         window.addEventListener('beforeunload', () => {
@@ -1074,7 +1110,6 @@
 
         function createNewMemo() {
             forceSaveImmediate();
-            syncDataToCloud();
             currentMemoId = null;
             selectedMemos.clear();
             lastSelectedId = null;
@@ -1170,7 +1205,6 @@
             li.onclick = e => {
                 if (e.target.classList.contains('btn-delete') || e.target.classList.contains('btn-pin')) return;
                 forceSaveImmediate();
-                syncDataToCloud(); 
                 
                 const isCtrl = e.ctrlKey || e.metaKey;
                 const isShift = e.shiftKey;
@@ -1259,6 +1293,7 @@
                     if (memo.pinnedAt) delete memo.pinnedAt;
                     else memo.pinnedAt = Date.now();
                     store.put(memo);
+                    syncDataToCloud(memo); // 핀 상태 변경 후 동기화
                 }
             };
             
@@ -1308,7 +1343,12 @@
                 else loadMemoList();
                 
                 targets.forEach(targetId => selectedMemos.delete(targetId));
-                syncDataToCloud(); 
+                
+                // 휴지통으로 간 상태 클라우드에 업데이트
+                targets.forEach(async targetId => {
+                    const m = await new Promise(res => db.transaction(['memos'], 'readonly').objectStore('memos').get(targetId).onsuccess = ev => res(ev.target.result));
+                    if(m) syncDataToCloud(m);
+                });
             };
         }
 
@@ -1334,7 +1374,12 @@
                 targets.forEach(targetId => selectedTrashMemos.delete(targetId));
                 loadTrashList();
                 loadMemoList();
-                syncDataToCloud();
+                
+                // 복구된 상태 클라우드에 업데이트
+                targets.forEach(async targetId => {
+                    const m = await new Promise(res => db.transaction(['memos'], 'readonly').objectStore('memos').get(targetId).onsuccess = ev => res(ev.target.result));
+                    if(m) syncDataToCloud(m);
+                });
             };
         }
 
@@ -1343,13 +1388,23 @@
             const targets = (selectedTrashMemos.has(id) && selectedTrashMemos.size > 1) ? Array.from(selectedTrashMemos) : [id];
             if (!confirm(targets.length > 1 ? `선택한 ${targets.length}개의 노트를 영구 삭제하시겠습니까?` : '이 노트를 영구 삭제하시겠습니까? (복구 불가)')) return;
             
-            const tx = db.transaction(['memos'], 'readwrite');
-            targets.forEach(targetId => tx.objectStore('memos').delete(targetId));
-            
-            tx.oncomplete = () => {
-                targets.forEach(targetId => selectedTrashMemos.delete(targetId));
-                loadTrashList();
-                syncDataToCloud();
+            const syncIdsToDelete = [];
+            const txRead = db.transaction(['memos'], 'readonly');
+            targets.forEach(targetId => {
+                txRead.objectStore('memos').get(targetId).onsuccess = ev => {
+                    if(ev.target.result && ev.target.result.syncId) syncIdsToDelete.push(ev.target.result.syncId);
+                };
+            });
+
+            txRead.oncomplete = () => {
+                const tx = db.transaction(['memos'], 'readwrite');
+                targets.forEach(targetId => tx.objectStore('memos').delete(targetId));
+                
+                tx.oncomplete = () => {
+                    targets.forEach(targetId => selectedTrashMemos.delete(targetId));
+                    loadTrashList();
+                    deleteFromCloud(syncIdsToDelete);
+                };
             };
         }
 
@@ -1357,6 +1412,7 @@
             if (displayedTrashMemos.length === 0) { alert('휴지통이 이미 비어있습니다.'); return; }
             if (!confirm('휴지통의 모든 메모를 영구 삭제합니다. 계속하시겠습니까?')) return;
             
+            const syncIdsToDelete = displayedTrashMemos.map(m => m.syncId).filter(id => id);
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
             displayedTrashMemos.forEach(memo => store.delete(memo.id));
@@ -1364,7 +1420,7 @@
             tx.oncomplete = () => {
                 selectedTrashMemos.clear();
                 loadTrashList();
-                syncDataToCloud();
+                deleteFromCloud(syncIdsToDelete);
             };
         }
 
@@ -1419,7 +1475,6 @@
             };
         }
 
-        // [수정: 단일 메모(ZenMemo) 복구 로직 완벽 추가]
         function handleFileImport(e) {
             const file = e.target.files[0];
             if(!file) return;
@@ -1441,7 +1496,6 @@
                     const parsed = JSON.parse(fileContent);
                     
                     if (parsed.type === 'ZenBackup') {
-                        // 전체 백업 복구
                         const tx = db.transaction(['memos'], 'readwrite');
                         parsed.data.forEach(m => {
                             delete m.id;
@@ -1450,10 +1504,8 @@
                         });
                         tx.oncomplete = () => {
                             loadMemoList();
-                            syncDataToCloud();
                         };
                     } else if (parsed.type === 'ZenMemo') {
-                        // 단일 메모 복구
                         createNewMemo();
                         document.getElementById('memo-title-input').value = parsed.title || file.name.replace(/\.[^/.]+$/, "");
                         quill.root.innerHTML = parsed.content || '';
@@ -1595,9 +1647,6 @@
                 icon.classList.add('blink-active');
                 setTimeout(() => icon.classList.remove('blink-active'), 1500);
                 
-                if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-                tokenRefreshTimer = setTimeout(silentTokenRefresh, 45 * 60 * 1000);
-                
                 smartSync(); 
             };
             
@@ -1608,30 +1657,42 @@
             if (!gapi.client.getToken() || !db) return;
             console.log(">>> [데이터 우선 복구] 클라우드 확인 시작...");
             try {
-                const res = await gapi.client.drive.files.list({
-                    q: "name = 'ZenNotes_Backup.json' and trashed = false",
-                    fields: 'files(id, name)'
-                });
+                const token = gapi.client.getToken().access_token;
+                
+                let qFolder = "name='ZenNotesBackup' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+                let resFolder = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFolder)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
 
-                if (!res.result.files || res.result.files.length === 0) {
-                    console.warn(">>> 클라우드에 백업 파일이 없습니다. 로컬 데이터를 업로드합니다.");
+                if (resFolder.files && resFolder.files.length > 0) {
+                    backupFolderId = resFolder.files[0].id;
+                } else {
+                    const meta = { name: 'ZenNotesBackup', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
+                    const created = await fetch('https://www.googleapis.com/drive/v3/files', {
+                        method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
+                    }).then(r => r.json());
+                    backupFolderId = created.id;
+                    
+                    console.log(">>> 새 백업 폴더 생성 완료. 로컬 데이터를 업로드합니다.");
                     hasLoadedFromCloud = true;
-                    syncDataToCloud(); 
+                    // 폴더를 갓 만들었으니 로컬 데이터를 전부 업로드
+                    db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = ev => {
+                        ev.target.result.forEach(m => syncDataToCloud(m));
+                    };
                     return;
                 }
 
-                const fileId = res.result.files[0].id;
-                const fileRes = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
+                const qFiles = `'${backupFolderId}' in parents and trashed=false`;
+                const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}&fields=files(id,name)`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
                 
-                let cloudData = fileRes.result;
-                if (typeof cloudData === 'string') {
-                    try { 
-                        cloudData = JSON.parse(cloudData).data || []; 
-                    } catch(e) { 
-                        cloudData = []; 
+                let cloudDataList = [];
+                if (resFiles.files && resFiles.files.length > 0) {
+                    for (let f of resFiles.files) {
+                        try {
+                            const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+                            if (fileRes.type === 'ZenMemo' && fileRes.data) {
+                                cloudDataList.push(fileRes.data);
+                            }
+                        } catch(err) { console.error("파일 다운로드 실패:", f.name); }
                     }
-                } else {
-                    cloudData = cloudData.data || [];
                 }
 
                 const tx = db.transaction(['memos'], 'readwrite');
@@ -1642,8 +1703,10 @@
                     let needUIUpdate = false;
                     const localMap = new Map(localData.map(m => [m.syncId || m.id.toString(), m]));
 
-                    cloudData.forEach(cloudMemo => {
-                        const syncKey = cloudMemo.syncId || cloudMemo.id.toString();
+                    cloudDataList.forEach(cloudMemo => {
+                        const syncKey = cloudMemo.syncId || cloudMemo.id?.toString();
+                        if (!syncKey) return;
+                        
                         const localMemo = localMap.get(syncKey);
 
                         if (!localMemo) {
@@ -1652,23 +1715,6 @@
                             store.add(cloudMemo); 
                             needUIUpdate = true;
                         } else if (cloudMemo.updatedAt > localMemo.updatedAt) {
-                            let mergedContent = cloudMemo.content;
-                            if (localMemo.content) {
-                                const localSrcs = [];
-                                localMemo.content.replace(/<img[^>]+src="(data:image[^"]+)"/gi, (match, src) => {
-                                    localSrcs.push(src);
-                                });
-                                let imgIndex = 0;
-                                mergedContent = mergedContent.replace(/<img[^>]+data-local-image="true"[^>]*>/gi, (match) => {
-                                    if (imgIndex < localSrcs.length) {
-                                        let restored = match.replace(/src=""/i, `src="${localSrcs[imgIndex]}"`).replace(/ data-local-image="true"/i, '');
-                                        imgIndex++;
-                                        return restored;
-                                    }
-                                    return match.replace(/src=""/i, 'src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjEyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBhbGlnbm1lbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI2FhYSI+WDwvdGV4dD48L3N2Zz4="');
-                                });
-                            }
-                            cloudMemo.content = mergedContent;
                             cloudMemo.id = localMemo.id; 
                             cloudMemo.syncId = syncKey;
                             store.put(cloudMemo); 
@@ -1681,7 +1727,7 @@
                         hasLoadedFromCloud = true;
                         if (needUIUpdate) loadMemoList();
                         checkAuthState();
-                        syncDataToCloud(); 
+                        syncDataToCloud(); // 활성 메모 업데이트 보장
                     };
                 };
             } catch (err) { 
