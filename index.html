@@ -1042,33 +1042,49 @@
         });
 
         // 3. 실제 구글 드라이브 업로드 로직 (기존과 동일)
-        async function syncToGoogleDrive(contentJSON) {
-            try {
-                const response = await gapi.client.drive.files.list({
-                    q: "name = 'ZenNotes_Backup.json' and trashed = false",
-                    fields: 'files(id, name)',
-                });
-                const file = response.result.files[0];
-                const metadata = { name: 'ZenNotes_Backup.json', mimeType: 'application/json' };
-                const blob = new Blob([JSON.stringify(contentJSON)], { type: 'application/json' });
 
-                if (file) {
-                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${file.id}?uploadType=media`, {
-                        method: 'PATCH',
-                        headers: { 'Authorization': `Bearer ${gapi.client.getToken().access_token}` },
-                        body: blob
-                    });
-                } else {
-                    await gapi.client.drive.files.create({ 
-                        resource: metadata, 
-                        media: { mimeType: 'application/json', body: blob } 
-                    });
-                }
-                console.log("구글 드라이브 동기화 성공!");
-            } catch (err) {
-                console.error("동기화 중 오류 발생:", err);
-            }
-        }	
+	// [진단용] 구글 드라이브 업로드 로직
+	async function syncToGoogleDrive(contentJSON) {
+	    console.log(">>> [1] 동기화 함수 진입함"); // 청진기 1
+    
+	    try {
+	        const token = gapi.client.getToken();
+	        if (!token) {
+	            console.error(">>> [에러] 로그인은 됐는데 권한 토큰이 없습니다!");
+	            return;
+	        }
+	        console.log(">>> [2] 토큰 확인됨:", token.access_token.substring(0, 10) + "...");
+
+	        // 1. 기존 백업 파일 찾기
+	        const response = await gapi.client.drive.files.list({
+	            q: "name = 'ZenNotes_Backup.json' and trashed = false",
+	            fields: 'files(id, name)',
+	        });
+        
+	        const file = response.result.files[0];
+	        const metadata = { name: 'ZenNotes_Backup.json', mimeType: 'application/json' };
+	        const blob = new Blob([JSON.stringify(contentJSON)], { type: 'application/json' });
+
+	        if (file) {
+	            console.log(">>> [3] 기존 파일 발견! 업데이트(PATCH) 시도함 (ID: " + file.id + ")");
+	            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${file.id}?uploadType=media`, {
+	                method: 'PATCH',
+	                headers: { 'Authorization': `Bearer ${token.access_token}` },
+	                body: blob
+	            });
+	        } else {
+	            console.log(">>> [3] 기존 파일 없음! 새로 생성(POST) 시도함");
+	            await gapi.client.drive.files.create({ 
+	                resource: metadata, 
+	                media: { mimeType: 'application/json', body: blob } 
+	            });
+	        }
+	        console.log("✅ [4] 구글 드라이브 동기화 최종 성공!");
+	    } catch (err) {
+	        console.error("❌ [에러] 동기화 중 사고 발생:", err);
+	    }
+	}
+
     </script>
 </body>
 </html>
