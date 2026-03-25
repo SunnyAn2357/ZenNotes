@@ -20,7 +20,7 @@
 
         let tokenClient, gapiInited = false, gisInited = false;
         let hasLoadedFromCloud = false; 
-        let backupFolderId = null; // ZenNotesBackup 폴더 ID 캐싱
+        let backupFolderId = null; 
 
         function gapiLoaded() {
             gapi.load('client', async () => {
@@ -426,6 +426,7 @@
             right: 0;
             top: 0;
             height: 100vh;
+            height: 100dvh; /* [모바일 높이 대응 추가] */
             z-index: 1001;
             border-left: none;
             width: 285px;
@@ -445,6 +446,7 @@
             right: 0;
             top: 0;
             height: 100vh;
+            height: 100dvh; /* [모바일 높이 대응 추가] */
             z-index: 1003;
             border-left: none;
             width: 285px;
@@ -477,6 +479,8 @@
             font-weight: 500;
         }
         .util-btn:hover { background: var(--surface-hover); }
+        
+        /* mt-auto 클래스는 HTML 쪽에서 제거했으므로, CSS에 찌꺼기만 남은 상태입니다. (기존 유지 원칙) */
         .mt-auto { margin-top: auto; }
 
         @media print {
@@ -589,6 +593,7 @@
                 position: fixed !important;
                 top: 0; left: 0;
                 height: 100vh;
+                height: 100dvh; /* [모바일 높이 대응 추가] */
                 width: 285px !important;
                 min-width: 285px !important;
                 z-index: 1002;
@@ -687,7 +692,7 @@
             </button>
         </div>
 
-        <div class="util-section mt-auto">
+        <div class="util-section">
             <div class="util-title">Data Management</div>
             <button class="util-btn" onclick="document.getElementById('import-file').click(); closeAllPanelsMobile();">
                 <i class="fa-solid fa-file-import"></i> <span class="btn-text">파일 불러오기</span>
@@ -808,7 +813,7 @@
                     container: [
                         [{ 'header':[1, 2, 3, false] }],
                         ['bold', 'italic', 'underline', 'strike'],
-                        ['blockquote', 'code-block', 'link', 'divider'],
+                        ['blockquote', 'code-block', 'link', 'image', 'divider'],
                         [{ 'list': 'ordered'}, { 'list': 'bullet' }],
                         ['clean']
                     ],
@@ -822,6 +827,48 @@
                     }
                 }
             }
+        });
+
+        quill.root.addEventListener('paste', (e) => {
+            const clipboardData = e.clipboardData || window.clipboardData;
+            if (!clipboardData || !clipboardData.items) return;
+            
+            for (let i = 0; i < clipboardData.items.length; i++) {
+                const item = clipboardData.items[i];
+                if (item.type.indexOf('image') === 0) {
+                    e.preventDefault(); 
+                    const file = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        const range = quill.getSelection(true) || { index: quill.getLength() };
+                        quill.insertEmbed(range.index, 'image', ev.target.result, Quill.sources.USER);
+                        quill.setSelection(range.index + 1, Quill.sources.SILENT);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+
+        quill.root.addEventListener('drop', (e) => {
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                for (let i = 0; i < e.dataTransfer.files.length; i++) {
+                    const file = e.dataTransfer.files[i];
+                    if (file.type.indexOf('image') === 0) {
+                        e.preventDefault();
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            const range = quill.getSelection(true) || { index: quill.getLength() };
+                            quill.insertEmbed(range.index, 'image', ev.target.result, Quill.sources.USER);
+                            quill.setSelection(range.index + 1, Quill.sources.SILENT);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                }
+            }
+        });
+
+        quill.root.addEventListener('dragover', (e) => {
+            e.preventDefault(); 
         });
 
         document.getElementById('memo-title-input').addEventListener('keydown', e => {
@@ -861,7 +908,6 @@
             loadMemoList();
         };
 
-        // 삭제 클라우드 연동 헬퍼 함수
         async function deleteFromCloud(syncIdList) {
             if (!gapiInited || !gapi.client || gapi.client.getToken() === null || !backupFolderId) return;
             try {
@@ -1012,7 +1058,7 @@
                 saveTimer = null;
                 updateUIState('saved');
                 loadMemoList(true);
-                syncDataToCloud(memoData); // 개별 저장 후 동기화 트리거
+                syncDataToCloud(memoData); 
                 if (pendingSave) {
                     pendingSave = false;
                     executeSave();
@@ -1293,7 +1339,7 @@
                     if (memo.pinnedAt) delete memo.pinnedAt;
                     else memo.pinnedAt = Date.now();
                     store.put(memo);
-                    syncDataToCloud(memo); // 핀 상태 변경 후 동기화
+                    syncDataToCloud(memo); 
                 }
             };
             
@@ -1344,7 +1390,6 @@
                 
                 targets.forEach(targetId => selectedMemos.delete(targetId));
                 
-                // 휴지통으로 간 상태 클라우드에 업데이트
                 targets.forEach(async targetId => {
                     const m = await new Promise(res => db.transaction(['memos'], 'readonly').objectStore('memos').get(targetId).onsuccess = ev => res(ev.target.result));
                     if(m) syncDataToCloud(m);
@@ -1375,7 +1420,6 @@
                 loadTrashList();
                 loadMemoList();
                 
-                // 복구된 상태 클라우드에 업데이트
                 targets.forEach(async targetId => {
                     const m = await new Promise(res => db.transaction(['memos'], 'readonly').objectStore('memos').get(targetId).onsuccess = ev => res(ev.target.result));
                     if(m) syncDataToCloud(m);
@@ -1673,7 +1717,7 @@
                     
                     console.log(">>> 새 백업 폴더 생성 완료. 로컬 데이터를 업로드합니다.");
                     hasLoadedFromCloud = true;
-                    // 폴더를 갓 만들었으니 로컬 데이터를 전부 업로드
+                    
                     db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = ev => {
                         ev.target.result.forEach(m => syncDataToCloud(m));
                     };
@@ -1727,7 +1771,7 @@
                         hasLoadedFromCloud = true;
                         if (needUIUpdate) loadMemoList();
                         checkAuthState();
-                        syncDataToCloud(); // 활성 메모 업데이트 보장
+                        syncDataToCloud(); 
                     };
                 };
             } catch (err) { 
