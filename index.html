@@ -333,15 +333,10 @@
         let tokenRefreshTimer = null;
         let idleSyncTimer = null; 
 
-        // [수정] 무분별한 팝업 방지를 위해 조용한 백그라운드 갱신만 시도
-        function checkAndSilentLogin() {
-            if (gapiInited && gisInited && localStorage.getItem('zen_logged_in') === 'true') {
-                if (gapi.client.getToken() === null) {
-                    console.log(">>> [3단계] 페이지 로드 감지: 백그라운드 토큰 복구 시도");
-                    tokenClient.requestAccessToken({ prompt: '' });
-                }
-            }
-        }
+        // 👇 이렇게 바꿉니다 (자동 복구 시도를 뺍니다. 어차피 팝업 막혀서 안 됩니다.)
+	function checkAndSilentLogin() {
+	    console.log(">>> 자동 로그인 시도 생략 (팝업 차단 이슈)");
+	}
 
         function silentTokenRefresh() {
             if (localStorage.getItem('zen_logged_in') === 'true' && tokenClient) {
@@ -764,19 +759,17 @@
             if (!gapiInited || !gisInited) return;
             closeAllPanelsMobile(); 
             
-            if (gapi.client.getToken() !== null || localStorage.getItem('zen_logged_in') === 'true') {
-                if (confirm('구글 계정에서 로그아웃 하시겠습니까?')) {
-                    const token = gapi.client.getToken();
-                    if (token !== null) {
-                        google.accounts.oauth2.revokeToken(token.access_token);
-                        gapi.client.setToken(null);
-                    }
-                    localStorage.removeItem('zen_logged_in');
-                    if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-                    checkAuthState(); 
-                }
-                return; 
-            }
+            if (gapi.client.getToken() !== null) { 
+   		 if (confirm('구글 계정에서 로그아웃 하시겠습니까?')) {
+       		     const token = gapi.client.getToken();
+        	    google.accounts.oauth2.revokeToken(token.access_token);
+        	    gapi.client.setToken(null);
+        	    localStorage.removeItem('zen_logged_in');
+        	    if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
+        	    checkAuthState(); 
+    		}
+    		return; 
+	    }
             
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
