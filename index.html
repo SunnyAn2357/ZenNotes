@@ -13,10 +13,8 @@
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 
     <script>
-
         const CLIENT_ID = '765080058790-uhqk1gj2ko8a197f26ujnq0gb4nl97ha.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyD1Z5E5e8tRfmG9fDruBM72pliOt6ZkShw';
-
         const DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
         const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
@@ -262,10 +260,9 @@
             gap: 6px;
         }
 
-        /* 상태 점(Dot) 크기 축소 (6px -> 4px) */
         .status-dot {
-            width: 4px;
-            height: 4px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s ease;
             opacity: 0;
@@ -293,7 +290,6 @@
             min-height: 0;
         }
 
-        /* 툴바 고정 간격 및 좌측 정렬 */
         .ql-toolbar.ql-snow {
             border: none !important;
             padding: 12px 24px !important;
@@ -302,21 +298,6 @@
             flex-shrink: 0;
             max-width: 800px;
             width: 100%;
-            display: flex !important;
-            flex-wrap: wrap !important;
-            justify-content: flex-start !important;
-            gap: 0px !important; /* 툴 간격 고정 */
-        }
-        
-        .ql-toolbar.ql-snow .ql-formats {
-            display: flex !important;
-            margin: 0 !important; /* 기존 그룹 우측 15px 여백 제거 */
-            gap: 0px !important; /* 그룹 내 툴 간격 고정 */
-        }
-        
-        .ql-toolbar.ql-snow .ql-formats button,
-        .ql-toolbar.ql-snow .ql-formats .ql-picker {
-            margin: 0 !important; /* 툴별 기본 여백 완전 제거 */
         }
 
         .ql-container.ql-snow {
@@ -445,13 +426,12 @@
             right: 0;
             top: 0;
             height: 100vh;
-            height: 100svh;
             z-index: 1001;
             border-left: none;
             width: 285px;
             min-width: 285px;
             background: var(--surface);
-            padding: 24px 20px calc(30px + env(safe-area-inset-bottom)) 20px;
+            padding: 24px 20px 30px 20px;
             display: flex;
             flex-direction: column;
             gap: 36px;
@@ -465,7 +445,6 @@
             right: 0;
             top: 0;
             height: 100vh;
-            height: 100dvh;
             z-index: 1003;
             border-left: none;
             width: 285px;
@@ -587,13 +566,19 @@
             #memo-title-input { width: 100% !important; font-size: 24px !important; }
             .status-container { position: fixed; top: 34px; right: 70px; z-index: 999; }
             
-            /* 모바일에서도 고정 간격 유지되도록 설정 */
             .ql-toolbar.ql-snow {
+                overflow: visible !important;
+                white-space: normal !important;
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 8px;
                 padding: 12px 20px !important;
-                gap: 0px !important; /* 모바일은 간격 6px로 살짝 줄임 */
             }
             .ql-toolbar.ql-snow .ql-formats {
-                gap: 0px !important;
+                display: flex !important;
+                margin-right: 0 !important;
+                margin-bottom: 4px !important;
+                flex-wrap: wrap !important;
             }
             .ql-snow .ql-tooltip { left: 20px !important; transform: none !important; }
             
@@ -604,7 +589,6 @@
                 position: fixed !important;
                 top: 0; left: 0;
                 height: 100vh;
-                height: 100svh;
                 width: 285px !important;
                 min-width: 285px !important;
                 z-index: 1002;
@@ -616,8 +600,6 @@
             .col-left .nav-header > button.toggle-btn { display: none; }
             
             .col-right, .trash-pane {
-                height: 100vh;
-                height: 100svh;
                 width: 285px !important;
                 min-width: 285px !important;
                 z-index: 1002;
@@ -662,7 +644,7 @@
             <input type="text" id="memo-title-input" placeholder="제목 없는 노트">
             <div class="editor-actions">
                 <div class="status-container">
-                    <span id="status-text" class="status-text">disconnected</span>
+                    <span id="status-text" class="status-text">offline</span>
                     <div id="status-dot" class="status-dot logged-out"></div>
                 </div>
             </div>
@@ -744,62 +726,7 @@
         }
 
         let tokenRefreshTimer = null;
-        let db, currentMemoId = null, saveTimer = null;
-        let selectedMemos = new Set(), displayedMemos = [], lastSelectedId = null;
-        let selectedTrashMemos = new Set(), displayedTrashMemos = [], lastSelectedTrashId = null;
-
-        // [핵심] Zen 스타일 상태 점(Dot) UI 큐 관리 (최소 2초 유지)
-        let uiStatusQueue = [];
-        let isStatusAnimating = false;
-
-        function setStatusUI(state) {
-            if (uiStatusQueue.length > 0 && uiStatusQueue[uiStatusQueue.length - 1] === state) return;
-            uiStatusQueue.push(state);
-            processUIStatus();
-        }
-
-        function processUIStatus() {
-            if (isStatusAnimating || uiStatusQueue.length === 0) return;
-            isStatusAnimating = true;
-
-            const state = uiStatusQueue.shift();
-            const dot = document.getElementById('status-dot');
-            const txt = document.getElementById('status-text');
-
-            txt.style.opacity = '1';
-
-            if (state === 'saving') {
-                dot.className = 'status-dot unsaved pulse-fast'; // Red
-                txt.innerText = 'saving...';
-            } else if (state === 'loading') {
-                dot.className = 'status-dot logged-out pulse-fast'; // Gray Pulse
-                txt.innerText = 'loading...';
-            } else if (state === 'saved') {
-                dot.className = 'status-dot saved pulse-slow'; // Blue
-                txt.innerText = 'saved';
-            } else if (state === 'disconnected') {
-                dot.className = 'status-dot logged-out'; // Gray
-                txt.innerText = 'disconnected';
-            }
-
-            // 0.1초만에 끝나는 작업도 무조건 최소 2초간 사용자에게 보여줍니다.
-            setTimeout(() => {
-                isStatusAnimating = false;
-                
-                if (uiStatusQueue.length > 0) {
-                    processUIStatus(); 
-                } else {
-                    // 작업 큐가 비었다면, 최종 상태에 따라 텍스트만 조용히 숨깁니다.
-                    if (state === 'saved') {
-                        txt.style.opacity = '0';
-                        dot.classList.remove('pulse-slow');
-                    } else if (state === 'disconnected') {
-                        txt.style.opacity = '0';
-                    }
-                    // saving, loading은 다음 상태가 올 때까지 무한정 유지됩니다.
-                }
-            }, 2000);
-        }
+        let idleSyncTimer = null; 
 
         function silentTokenRefresh() {
             if (localStorage.getItem('zen_logged_in') === 'true' && tokenClient) {
@@ -810,6 +737,7 @@
         function toggleRightPane() {
             const rp = document.getElementById('col-right');
             const gb = document.getElementById('global-menu-btn');
+            
             document.getElementById('trash-pane').classList.remove('is-open');
 
             if (rp.classList.contains('is-closed')) {
@@ -896,6 +824,7 @@
             }
         });
 
+        // 👇 [신규 추가] 이미지 복사/붙여넣기 완벽 지원
         quill.root.addEventListener('paste', (e) => {
             const clipboardData = e.clipboardData || window.clipboardData;
             if (!clipboardData || !clipboardData.items) return;
@@ -916,6 +845,7 @@
             }
         });
 
+        // 👇 [신규 추가] 이미지 드래그 앤 드롭 완벽 지원
         quill.root.addEventListener('drop', (e) => {
             if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
                 for (let i = 0; i < e.dataTransfer.files.length; i++) {
@@ -934,7 +864,10 @@
             }
         });
 
-        quill.root.addEventListener('dragover', (e) => { e.preventDefault(); });
+        // 드롭을 허용하기 위한 필수 이벤트
+        quill.root.addEventListener('dragover', (e) => {
+            e.preventDefault(); 
+        });
 
         document.getElementById('memo-title-input').addEventListener('keydown', e => {
             if (e.key === 'Tab') {
@@ -944,7 +877,9 @@
         });
 
         const dividerBtn = document.querySelector('.ql-divider');
-        if (dividerBtn) dividerBtn.innerHTML = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
+        if (dividerBtn) {
+            dividerBtn.innerHTML = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
+        }
 
         document.querySelector('.col-center').addEventListener('click', e => {
             if (!e.target.closest('.editor-header') && !e.target.closest('.ql-toolbar') && !e.target.closest('.ql-editor')) {
@@ -952,61 +887,12 @@
             }
         });
 
-        // ==========================================
-        // [핵심] 백그라운드 큐(Queue) 시스템 구현부
-        // ==========================================
-        let syncQueue = [];
-        let isProcessingQueue = false;
+        let db, currentMemoId = null, saveTimer = null, isSaving = false, pendingSave = false;
+        let selectedMemos = new Set(), displayedMemos = [], lastSelectedId = null, isLoading = false, typingStartTime = 0;
+        
+        let selectedTrashMemos = new Set(), displayedTrashMemos = [], lastSelectedTrashId = null;
 
-        function addToQueue(task) {
-            if (task.type === 'UPDATE_INDEX' && syncQueue.some(t => t.type === 'UPDATE_INDEX')) return;
-            if (task.type === 'FETCH_NOTE' && syncQueue.some(t => t.type === 'FETCH_NOTE' && t.syncId === task.syncId)) return;
-            if (task.type === 'UPLOAD_NOTE') {
-                syncQueue = syncQueue.filter(t => !(t.type === 'UPLOAD_NOTE' && t.syncId === task.syncId));
-            }
-            
-            syncQueue.push(task);
-            processQueue();
-        }
-
-        async function processQueue() {
-            if (isProcessingQueue) return;
-            isProcessingQueue = true;
-
-            while (syncQueue.length > 0) {
-                if (!gapi.client.getToken()) {
-                    setStatusUI('disconnected');
-                    break;
-                }
-
-                const task = syncQueue.shift();
-                try {
-                    if (task.type === 'FETCH_NOTE') setStatusUI('loading');
-                    else setStatusUI('saving');
-
-                    if (task.type === 'UPLOAD_NOTE') {
-                        await uploadNoteToCloud(task.syncId);
-                    } else if (task.type === 'DELETE_NOTE') {
-                        await deleteFromCloud([task.syncId]);
-                    } else if (task.type === 'FETCH_NOTE') {
-                        await processFetchNoteQueue(task.syncId);
-                    } else if (task.type === 'UPDATE_INDEX') {
-                        await updateCloudIndex();
-                    }
-                } catch (e) {
-                    console.error("Queue task failed", task, e);
-                }
-            }
-
-            isProcessingQueue = false;
-            if (gapi.client.getToken()) setStatusUI('saved');
-            else setStatusUI('disconnected');
-        }
-
-        // ==========================================
-        // 데이터베이스 초기화
-        // ==========================================
-        const request = indexedDB.open("ZenMemoDB_Ultimate", 2);
+        const request = indexedDB.open("ZenMemoDB_Ultimate", 1);
         request.onupgradeneeded = e => {
             db = e.target.result;
             if (!db.objectStoreNames.contains('memos')) {
@@ -1019,6 +905,25 @@
             runAutoPurge(); 
             loadMemoList();
         };
+
+        async function deleteFromCloud(syncIdList) {
+            if (!gapiInited || !gapi.client || gapi.client.getToken() === null || !backupFolderId) return;
+            try {
+                const token = gapi.client.getToken().access_token;
+                for (let syncId of syncIdList) {
+                    if(!syncId) continue;
+                    const fileName = `Note_${syncId}.json`;
+                    const qFiles = `name='${fileName}' and '${backupFolderId}' in parents and trashed=false`;
+                    const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+                    if (resFiles.files && resFiles.files.length > 0) {
+                        await fetch(`https://www.googleapis.com/drive/v3/files/${resFiles.files[0].id}`, {
+                            method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        console.log(`🗑️ 클라우드 삭제 완료: ${fileName}`);
+                    }
+                }
+            } catch (err) { console.error("❌ 삭제 실패:", err); }
+        }
 
         function runAutoPurge() {
             const txRead = db.transaction(['memos'], 'readonly');
@@ -1040,20 +945,66 @@
                     const txWrite = db.transaction(['memos'], 'readwrite');
                     idsToDelete.forEach(id => txWrite.objectStore('memos').delete(id));
                     txWrite.oncomplete = () => {
-                        syncIdsToDelete.forEach(syncId => addToQueue({ type: 'DELETE_NOTE', syncId: syncId }));
+                        deleteFromCloud(syncIdsToDelete);
                     };
                 }
             };
         }
 
-        function triggerAutoSave() {
-            if (currentMemoId) {
-                const existing = displayedMemos.find(m => m.id === currentMemoId);
-                if (existing && existing.contentLoaded === false) {
-                    existing.contentLoaded = true;
-                }
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        function updateUIState(state) {
+            const hasToken = gapiInited && gapi.client && gapi.client.getToken() !== null;
+
+            if (state === 'typing' || state === 'saving') {
+                if (typingStartTime === 0) typingStartTime = Date.now();
+                statusDot.className = 'status-dot unsaved pulse-fast'; 
+                statusText.innerText = 'ing...';
+                statusText.style.opacity = '1';
+                if (idleSyncTimer) clearTimeout(idleSyncTimer); 
+            } else if (state === 'saved') {
+                const elapsed = Date.now() - typingStartTime;
+                const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
+                
+                setTimeout(() => {
+                    if (saveTimer || isSaving) return;
+                    typingStartTime = 0; 
+                    
+                    if (hasToken) {
+                        statusDot.className = 'status-dot saved pulse-slow'; 
+                        statusText.innerText = 'saved';
+                        statusText.style.opacity = '1';
+                    } else {
+                        statusDot.className = 'status-dot logged-out';
+                        statusText.style.opacity = '0';
+                    }
+                    
+                    if (idleSyncTimer) clearTimeout(idleSyncTimer);
+                    idleSyncTimer = setTimeout(() => {
+                        if (!saveTimer && !isSaving && hasToken) {
+                            syncDataToCloud(); 
+                        }
+                    }, 5000);
+                    
+                    setTimeout(() => { 
+                        if (!saveTimer && !isSaving) {
+                            statusText.style.opacity = '0';
+                            if (hasToken) statusDot.className = 'status-dot saved';
+                            else statusDot.className = 'status-dot logged-out';
+                        }
+                    }, 2000);
+                }, remain);
+            } else if (state === 'offline-idle') {
+                statusDot.className = 'status-dot logged-out';
+                statusText.style.opacity = '0';
+                typingStartTime = 0;
             }
-            setStatusUI('saving');
+        }
+
+        function triggerAutoSave() {
+            if (isLoading) return;
+            updateUIState('typing');
             if (saveTimer) clearTimeout(saveTimer);
             saveTimer = setTimeout(executeSave, 1200);
         }
@@ -1065,19 +1016,24 @@
         document.getElementById('memo-title-input').addEventListener('input', triggerAutoSave);
 
         function executeSave() {
+            if (isSaving || isLoading) {
+                pendingSave = true;
+                return;
+            } 
             const title = document.getElementById('memo-title-input').value.trim() || '제목 없는 노트';
             document.title = title;
             const content = quill.root.innerHTML, plainText = quill.getText();
             
             if (!currentMemoId && !document.getElementById('memo-title-input').value && plainText.trim() === '') {
-                setStatusUI('saved');
+                updateUIState('saved');
                 saveTimer = null;
                 return;
             }
             
-            setStatusUI('saving');
+            isSaving = true;
+            updateUIState('saving');
             
-            const memoData = { title, content, plainText, updatedAt: Date.now(), isDeleted: false, contentLoaded: true };
+            const memoData = { title, content, plainText, updatedAt: Date.now(), isDeleted: false };
             
             if (currentMemoId) {
                 memoData.id = currentMemoId;
@@ -1096,11 +1052,15 @@
             };
             
             tx.oncomplete = () => {
+                isSaving = false;
                 saveTimer = null;
+                updateUIState('saved');
                 loadMemoList(true);
-                addToQueue({ type: 'UPLOAD_NOTE', syncId: memoData.syncId });
-                addToQueue({ type: 'UPDATE_INDEX' });
-                setStatusUI('saved');
+                syncDataToCloud(memoData); 
+                if (pendingSave) {
+                    pendingSave = false;
+                    executeSave();
+                }
             };
         }
 
@@ -1111,180 +1071,87 @@
             }
         }
 
-        // ==========================================
-        // 클라우드 API 관련 함수들
-        // ==========================================
-        async function getBackupFolderId() {
-            if (backupFolderId) return backupFolderId;
-            const token = gapi.client.getToken()?.access_token;
-            if(!token) throw new Error('No token');
-            
-            const q = "name='ZenNotesBackup' and mimeType='application/vnd.google-apps.folder' and trashed=false";
-            const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json());
-            
-            if (res.files && res.files.length > 0) {
-                backupFolderId = res.files[0].id;
-                return backupFolderId;
-            }
-            
-            const meta = { name: 'ZenNotesBackup', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
-            const created = await fetch('https://www.googleapis.com/drive/v3/files', {
-                method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
-            }).then(r=>r.json());
-            backupFolderId = created.id;
-            return backupFolderId;
-        }
+        async function syncDataToCloud(memoObj = null) {
+            if (!gapiInited || !gapi.client || gapi.client.getToken() === null) return;
 
-        async function updateCloudIndex() {
-            const folderId = await getBackupFolderId();
-            const token = gapi.client.getToken()?.access_token;
-            
-            const memos = await new Promise(res => db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = e => res(e.target.result));
-            
-            const indexData = memos.map(m => ({
-                syncId: m.syncId, title: m.title, updatedAt: m.updatedAt, isDeleted: m.isDeleted, pinnedAt: m.pinnedAt
-            }));
-
-            const content = JSON.stringify({ type: 'ZenIndex', data: indexData });
-            const qFiles = `name='ZenNotes_Index.json' and '${folderId}' in parents and trashed=false`;
-            const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json());
-
-            if (resFiles.files && resFiles.files.length > 0) {
-                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${resFiles.files[0].id}?uploadType=media`, {
-                    method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: content
-                });
-            } else {
-                const metadata = { name: 'ZenNotes_Index.json', mimeType: 'application/json', parents: [folderId] };
-                const boundary = '-------314159265358979323846';
-                const body = `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
-                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` }, body: body
+            let memoToSync = memoObj;
+            if (!memoToSync && currentMemoId) {
+                memoToSync = await new Promise(resolve => {
+                    const tx = db.transaction(['memos'], 'readonly');
+                    tx.objectStore('memos').get(currentMemoId).onsuccess = e => resolve(e.target.result);
                 });
             }
-        }
-
-        async function uploadNoteToCloud(syncId) {
-            const folderId = await getBackupFolderId();
-            const token = gapi.client.getToken()?.access_token;
             
-            const memo = await new Promise(res => {
-                const tx = db.transaction(['memos'], 'readonly');
-                tx.objectStore('memos').getAll().onsuccess = e => res(e.target.result.find(m => m.syncId === syncId));
-            });
-            if(!memo || memo.contentLoaded === false) return; 
+            if (!memoToSync) return;
 
-            const content = JSON.stringify({ type: 'ZenMemo', data: memo });
-            const fileName = `Note_${syncId}.json`;
-            const qFiles = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
-            const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json());
+            try {
+                const token = gapi.client.getToken().access_token;
+                
+                if (!backupFolderId) {
+                    const qFolder = "name='ZenNotesBackup' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+                    const resFolder = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFolder)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+                    
+                    if (resFolder.files && resFolder.files.length > 0) {
+                        backupFolderId = resFolder.files[0].id;
+                    } else {
+                        const meta = { name: 'ZenNotesBackup', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
+                        const created = await fetch('https://www.googleapis.com/drive/v3/files', {
+                            method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
+                        }).then(r => r.json());
+                        backupFolderId = created.id;
+                    }
+                }
 
-            if (resFiles.files && resFiles.files.length > 0) {
-                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${resFiles.files[0].id}?uploadType=media`, {
-                    method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: content
-                });
-            } else {
-                const metadata = { name: fileName, mimeType: 'application/json', parents: [folderId] };
-                const boundary = '-------314159265358979323846';
-                const body = `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
-                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` }, body: body
-                });
-            }
-        }
-
-        async function deleteFromCloud(syncIdList) {
-            const folderId = await getBackupFolderId();
-            const token = gapi.client.getToken()?.access_token;
-            for (let syncId of syncIdList) {
-                if(!syncId) continue;
-                const fileName = `Note_${syncId}.json`;
-                const qFiles = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
+                const content = JSON.stringify({ type: 'ZenMemo', data: memoToSync });
+                const fileName = `Note_${memoToSync.syncId}.json`;
+                
+                const qFiles = `name='${fileName}' and '${backupFolderId}' in parents and trashed=false`;
                 const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+
+                document.getElementById('status-dot').className = 'status-dot unsaved pulse-fast';
+
                 if (resFiles.files && resFiles.files.length > 0) {
-                    await fetch(`https://www.googleapis.com/drive/v3/files/${resFiles.files[0].id}`, {
-                        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${resFiles.files[0].id}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: content
+                    });
+                } else {
+                    const metadata = { name: fileName, mimeType: 'application/json', parents: [backupFolderId] };
+                    const boundary = '-------314159265358979323846';
+                    const delimiter = `\r\n--${boundary}\r\n`;
+                    const close_delim = `\r\n--${boundary}--`;
+
+                    const body = delimiter +
+                        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+                        JSON.stringify(metadata) +
+                        delimiter +
+                        'Content-Type: application/json\r\n\r\n' +
+                        content +
+                        close_delim;
+
+                    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': `multipart/related; boundary=${boundary}`
+                        },
+                        body: body
                     });
                 }
+                console.log(`✅ 클라우드 동기화 완료: ${fileName}`);
+                checkAuthState();
+            } catch (err) {
+                console.error("❌ 전송 실패:", err);
+                document.getElementById('status-dot').className = 'status-dot unsaved';
             }
         }
 
-        // 구글에서 단일 노트 다운로드 핵심 함수 (VIP 및 백그라운드 공용)
-        async function downloadNoteFromCloudDirect(syncId) {
-            const folderId = await getBackupFolderId();
-            const token = gapi.client.getToken()?.access_token;
-            if(!token) throw new Error("Offline");
+        window.addEventListener('beforeunload', () => {
+            forceSaveImmediate();
+            syncDataToCloud();
+        });
 
-            const fileName = `Note_${syncId}.json`;
-            const qFiles = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
-            const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json());
-
-            if (resFiles.files && resFiles.files.length > 0) {
-                const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${resFiles.files[0].id}?alt=media`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json());
-                if (fileRes.type === 'ZenMemo' && fileRes.data) {
-                    return fileRes.data;
-                }
-            }
-            throw new Error("Not found");
-        }
-
-        // 백그라운드 큐 전용 다운로드 처리
-        async function processFetchNoteQueue(syncId) {
-            const fetched = await downloadNoteFromCloudDirect(syncId);
-            if (fetched) {
-                const txWrite = db.transaction(['memos'], 'readwrite');
-                const store = txWrite.objectStore('memos');
-                store.getAll().onsuccess = e => {
-                    const localMemo = e.target.result.find(m => m.syncId === syncId);
-                    if (localMemo && localMemo.contentLoaded === false) {
-                        localMemo.content = fetched.content || '';
-                        localMemo.plainText = fetched.plainText || '';
-                        localMemo.contentLoaded = true; // 다운로드 완료!
-                        localMemo.updatedAt = fetched.updatedAt;
-                        store.put(localMemo);
-                        
-                        if (currentMemoId === localMemo.id) {
-                            quill.root.innerHTML = localMemo.content;
-                        }
-                    }
-                };
-            }
-        }
-
-        // [핵심] VIP 새치기 기능 (즉시 로딩)
-        async function fetchNoteFromCloudVIP(syncId, localId) {
-            setStatusUI('loading');
-            try {
-                syncQueue = syncQueue.filter(t => !(t.type === 'FETCH_NOTE' && t.syncId === syncId));
-
-                const fetched = await downloadNoteFromCloudDirect(syncId);
-                if (fetched) {
-                    const txWrite = db.transaction(['memos'], 'readwrite');
-                    const store = txWrite.objectStore('memos');
-                    
-                    const m = await new Promise(res => store.get(localId).onsuccess = ev => res(ev.target.result));
-                    if (m) {
-                        m.content = fetched.content || '';
-                        m.plainText = fetched.plainText || '';
-                        m.contentLoaded = true;
-                        m.updatedAt = fetched.updatedAt;
-                        
-                        store.put(m).onsuccess = () => {
-                            if (currentMemoId === m.id) {
-                                quill.root.innerHTML = m.content;
-                            }
-                            setStatusUI('saved');
-                        };
-                    }
-                }
-            } catch (e) {
-                alert("현재 오프라인 상태라 클라우드에서 내용을 불러오지 못했습니다. 연결되면 다시 시도합니다.");
-                setStatusUI('disconnected');
-            }
-        }
-
-        // ==========================================
-        // UI 조작 및 목록 렌더링
-        // ==========================================
         function createNewMemo() {
             forceSaveImmediate();
             currentMemoId = null;
@@ -1293,7 +1160,7 @@
             document.getElementById('memo-title-input').value = '';
             document.title = "새 노트";
             quill.root.innerHTML = '';
-            setStatusUI('saved');
+            updateUIState('saved');
             loadMemoList();
             closeAllPanelsMobile();
         }
@@ -1389,6 +1256,7 @@
                 if (isShift && lastSelectedId !== null) {
                     const cIdx = displayedMemos.findIndex(m => m.id === memo.id);
                     const lIdx = displayedMemos.findIndex(m => m.id === lastSelectedId);
+                    
                     if (cIdx !== -1 && lIdx !== -1) {
                         const start = Math.min(cIdx, lIdx);
                         const end = Math.max(cIdx, lIdx);
@@ -1405,7 +1273,7 @@
                     selectedMemos.clear();
                     selectedMemos.add(memo.id);
                     lastSelectedId = memo.id;
-                    loadMemo(memo.id); 
+                    loadMemo(memo.id);
                 }
             };
             return li;
@@ -1433,6 +1301,7 @@
                 if (isShift && lastSelectedTrashId !== null) {
                     const cIdx = displayedTrashMemos.findIndex(m => m.id === memo.id);
                     const lIdx = displayedTrashMemos.findIndex(m => m.id === lastSelectedTrashId);
+                    
                     if (cIdx !== -1 && lIdx !== -1) {
                         const start = Math.min(cIdx, lIdx);
                         const end = Math.max(cIdx, lIdx);
@@ -1468,28 +1337,25 @@
                     if (memo.pinnedAt) delete memo.pinnedAt;
                     else memo.pinnedAt = Date.now();
                     store.put(memo);
-                    addToQueue({ type: 'UPDATE_INDEX' }); 
+                    syncDataToCloud(memo); 
                 }
             };
+            
             tx.oncomplete = () => loadMemoList(true);
         }
 
         function loadMemo(id) {
+            isLoading = true; 
             db.transaction(['memos'], 'readonly').objectStore('memos').get(id).onsuccess = e => {
                 const m = e.target.result;
                 if (m) {
                     currentMemoId = m.id;
                     document.getElementById('memo-title-input').value = m.title;
                     document.title = m.title; 
-                    
-                    if (m.contentLoaded === false) {
-                        quill.root.innerHTML = '';
-                        fetchNoteFromCloudVIP(m.syncId, m.id); 
-                    } else {
-                        quill.root.innerHTML = m.content || '';
-                        setStatusUI('saved');
-                    }
+                    quill.root.innerHTML = m.content;
+                    updateUIState('saved');
                     loadMemoList(false);
+                    setTimeout(() => { isLoading = false; }, 1000);
                 }
             };
             closeAllPanelsMobile();
@@ -1498,6 +1364,7 @@
         function deleteMemo(id, e) {
             e.stopPropagation();
             const targets = (selectedMemos.has(id) && selectedMemos.size > 1) ? Array.from(selectedMemos) : [id];
+            
             if (!confirm(targets.length > 1 ? `선택한 ${targets.length}개의 노트를 휴지통으로 보냅니다.` : '휴지통으로 보내시겠습니까?')) return;
             
             const tx = db.transaction(['memos'], 'readwrite');
@@ -1520,7 +1387,11 @@
                 else loadMemoList();
                 
                 targets.forEach(targetId => selectedMemos.delete(targetId));
-                addToQueue({ type: 'UPDATE_INDEX' }); 
+                
+                targets.forEach(async targetId => {
+                    const m = await new Promise(res => db.transaction(['memos'], 'readonly').objectStore('memos').get(targetId).onsuccess = ev => res(ev.target.result));
+                    if(m) syncDataToCloud(m);
+                });
             };
         }
 
@@ -1546,7 +1417,11 @@
                 targets.forEach(targetId => selectedTrashMemos.delete(targetId));
                 loadTrashList();
                 loadMemoList();
-                addToQueue({ type: 'UPDATE_INDEX' }); 
+                
+                targets.forEach(async targetId => {
+                    const m = await new Promise(res => db.transaction(['memos'], 'readonly').objectStore('memos').get(targetId).onsuccess = ev => res(ev.target.result));
+                    if(m) syncDataToCloud(m);
+                });
             };
         }
 
@@ -1570,8 +1445,7 @@
                 tx.oncomplete = () => {
                     targets.forEach(targetId => selectedTrashMemos.delete(targetId));
                     loadTrashList();
-                    syncIdsToDelete.forEach(sId => addToQueue({ type: 'DELETE_NOTE', syncId: sId }));
-                    addToQueue({ type: 'UPDATE_INDEX' });
+                    deleteFromCloud(syncIdsToDelete);
                 };
             };
         }
@@ -1588,39 +1462,65 @@
             tx.oncomplete = () => {
                 selectedTrashMemos.clear();
                 loadTrashList();
-                syncIdsToDelete.forEach(sId => addToQueue({ type: 'DELETE_NOTE', syncId: sId }));
-                addToQueue({ type: 'UPDATE_INDEX' });
+                deleteFromCloud(syncIdsToDelete);
             };
         }
 
-        // ==========================================
-        // 가져오기 및 내보내기
-        // ==========================================
         const getTitle = () => document.getElementById('memo-title-input').value || 'Untitled';
 
-        function exportHTML() { saveAs(new Blob([`<html><body><h1>${getTitle()}</h1><hr>${quill.root.innerHTML}</body></html>`], {type:'text/html'}), `${getTitle()}.html`); }
-        function exportTXT() { saveAs(new Blob([quill.getText()], {type:'text/plain'}), `${getTitle()}.txt`); }
-        function exportJSON() {
-            saveAs(new Blob([JSON.stringify({ type: 'ZenMemo', title: getTitle(), content: quill.root.innerHTML, plainText: quill.getText(), updatedAt: Date.now() })], {type:'application/json'}), `${getTitle()}.json`);
+        function exportHTML() {
+            saveAs(new Blob([`<html><body><h1>${getTitle()}</h1><hr>${quill.root.innerHTML}</body></html>`], {type:'text/html'}), `${getTitle()}.html`);
         }
+
         function exportPDF() {
             const printContainer = document.createElement('div');
             const t = document.getElementById('memo-title-input').value || '제목 없는 노트';
             const c = quill.root.innerHTML;
-            printContainer.innerHTML = `<div style="background: white; color: black; padding: 20px; font-family: 'Pretendard', -apple-system, sans-serif;"><div style="max-width: 800px; margin: 0 auto;"><div style="font-size: 32px; font-weight: 700; color: black; margin-bottom: 20px; letter-spacing: -0.5px;">${t}</div><hr style="border: none; border-bottom: 1px solid #d4d4d4; margin: 0 0 20px 0;"><div class="ql-snow"><div class="ql-editor" style="padding: 0; color: black; overflow: visible; height: auto;">${c}</div></div></div></div>`;
-            html2pdf().set({ margin: 10, filename: `${getTitle()}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(printContainer).save();
+            
+            printContainer.innerHTML = `
+                <div style="background: white; color: black; padding: 20px; font-family: 'Pretendard', -apple-system, sans-serif;">
+                    <div style="max-width: 800px; margin: 0 auto;">
+                        <div style="font-size: 32px; font-weight: 700; color: black; margin-bottom: 20px; letter-spacing: -0.5px;">${t}</div>
+                        <hr style="border: none; border-bottom: 1px solid #d4d4d4; margin: 0 0 20px 0;">
+                        <div class="ql-snow">
+                            <div class="ql-editor" style="padding: 0; color: black; overflow: visible; height: auto;">${c}</div>
+                        </div>
+                    </div>
+                </div>`;
+                
+            html2pdf().set({
+                margin: 10,
+                filename: `${getTitle()}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(printContainer).save();
+        }
+
+        function exportTXT() {
+            saveAs(new Blob([quill.getText()], {type:'text/plain'}), `${getTitle()}.txt`);
+        }
+
+        function exportJSON() {
+            saveAs(new Blob([JSON.stringify({
+                type: 'ZenMemo',
+                title: getTitle(),
+                content: quill.root.innerHTML,
+                plainText: quill.getText(),
+                updatedAt: Date.now()
+            })], {type:'application/json'}), `${getTitle()}.json`);
         }
 
         function backupAllData() {
             db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = e => {
-                const activeData = e.target.result.filter(m => !m.isDeleted);
-                saveAs(new Blob([JSON.stringify({type:'ZenBackup', data:activeData})], {type:'application/json'}), `Zen_Backup_${Date.now()}.json`);
+                saveAs(new Blob([JSON.stringify({type:'ZenBackup', data:e.target.result})], {type:'application/json'}), `Zen_Backup_${Date.now()}.json`);
             };
         }
 
         function handleFileImport(e) {
             const file = e.target.files[0];
             if(!file) return;
+            
             const reader = new FileReader();
             const isTxt = file.name.toLowerCase().endsWith('.txt');
             
@@ -1631,61 +1531,131 @@
                     document.getElementById('memo-title-input').value = file.name.replace(/\.[^/.]+$/, "");
                     quill.setText(fileContent);
                     triggerAutoSave();
-                    e.target.value = ''; return;
+                    e.target.value = '';
+                    return;
                 }
                 try {
                     const parsed = JSON.parse(fileContent);
+                    
                     if (parsed.type === 'ZenBackup') {
-                        const readTx = db.transaction(['memos'], 'readonly');
-                        readTx.objectStore('memos').getAll().onsuccess = (evGetAll) => {
-                            const existingMemos = evGetAll.target.result;
-                            const activeSyncIds = new Set(existingMemos.filter(m => !m.isDeleted).map(m => m.syncId).filter(id => id));
-                            
-                            const writeTx = db.transaction(['memos'], 'readwrite');
-                            const store = writeTx.objectStore('memos');
-                            
-                            parsed.data.forEach(m => {
-                                if (!m.syncId || !activeSyncIds.has(m.syncId)) {
-                                    const isInTrash = existingMemos.some(ex => ex.syncId === m.syncId && ex.isDeleted);
-                                    delete m.id;
-                                    if (!m.syncId || isInTrash) m.syncId = generateSyncId();
-                                    
-                                    m.isDeleted = false; 
-                                    m.contentLoaded = true; 
-                                    store.add(m);
-                                    activeSyncIds.add(m.syncId);
-                                    
-                                    addToQueue({ type: 'UPLOAD_NOTE', syncId: m.syncId });
-                                }
-                            });
-                            writeTx.oncomplete = () => {
-                                loadMemoList();
-                                addToQueue({ type: 'UPDATE_INDEX' }); 
-                            };
+                        const tx = db.transaction(['memos'], 'readwrite');
+                        parsed.data.forEach(m => {
+                            delete m.id;
+                            if(!m.syncId) m.syncId = generateSyncId();
+                            tx.objectStore('memos').add(m);
+                        });
+                        tx.oncomplete = () => {
+                            loadMemoList();
                         };
                     } else if (parsed.type === 'ZenMemo') {
                         createNewMemo();
                         document.getElementById('memo-title-input').value = parsed.title || file.name.replace(/\.[^/.]+$/, "");
-                        quill.root.innerHTML = parsed.content || parsed.plainText || '';
+                        quill.root.innerHTML = parsed.content || '';
                         triggerAutoSave();
-                    } else { alert('지원하지 않는 JSON 형식입니다.'); }
-                } catch(err) { alert('파일 읽기 오류'); }
+                    } else {
+                        alert('지원하지 않는 JSON 형식입니다.');
+                    }
+                } catch(err) {
+                    alert('파일 읽기 오류');
+                }
                 e.target.value = ''; 
             };
             reader.readAsText(file);
         }
 
+        function toggleLeftPaneMobile() {
+            const lp = document.getElementById('col-left');
+            const ov = document.getElementById('mobile-overlay');
+            lp.classList.toggle('is-mobile-open');
+            if (lp.classList.contains('is-mobile-open')) {
+                ov.classList.add('is-active');
+                document.getElementById('col-right').classList.add('is-closed');
+                document.getElementById('trash-pane').classList.remove('is-open');
+                document.getElementById('global-menu-btn').style.display = 'flex';
+            } else {
+                ov.classList.remove('is-active');
+            }
+        }
+
+        function closeAllPanelsMobile() {
+            if (window.innerWidth <= 768) {
+                document.getElementById('col-left').classList.remove('is-mobile-open');
+                document.getElementById('col-right').classList.add('is-closed');
+                document.getElementById('trash-pane').classList.remove('is-open');
+                document.getElementById('mobile-overlay').classList.remove('is-active');
+                document.getElementById('global-menu-btn').style.display = 'flex';
+            }
+        }
+        
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                document.getElementById('col-left').classList.remove('is-mobile-open');
+                document.getElementById('mobile-overlay').classList.remove('is-active');
+                if(document.getElementById('col-right').classList.contains('is-closed') && !document.getElementById('trash-pane').classList.contains('is-open')) {
+                    document.getElementById('global-menu-btn').style.display = 'flex';
+                }
+            }
+        });
+
+        let isReading = false;
+        document.getElementById('btn-read-memo').addEventListener('click', function() {
+            closeAllPanelsMobile(); 
+            const synth = window.speechSynthesis;
+            const btnIcon = this.querySelector('i');
+            const btnText = this.querySelector('.btn-text');
+            
+            if (isReading || synth.speaking) {
+                synth.cancel();
+                isReading = false;
+                btnIcon.className = 'fa-solid fa-volume-high';
+                btnText.innerText = '음성으로 읽기';
+                return;
+            }
+            
+            const textToRead = quill.getText().trim();
+            if (!textToRead) return;
+            
+            const utterance = new SpeechSynthesisUtterance(textToRead);
+            utterance.lang = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(textToRead.substring(0, 50)) ? 'ko-KR' : 'en-US';
+            utterance.rate = 1.0; 
+            
+            utterance.onend = function() {
+                isReading = false;
+                btnIcon.className = 'fa-solid fa-volume-high';
+                btnText.innerText = '음성으로 읽기';
+            };
+            
+            utterance.onerror = function() {
+                console.warn('음성 읽기 중단');
+                isReading = false;
+                btnIcon.className = 'fa-solid fa-volume-high';
+                btnText.innerText = '음성으로 읽기';
+            };
+            
+            synth.cancel();
+            synth.speak(utterance);
+            isReading = true;
+            btnIcon.className = 'fa-solid fa-stop';
+            btnText.innerText = '읽기 중지';
+        });
+
         function checkAuthState() {
             const hasToken = gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null;
             const authBtnIcon = document.querySelector('#btn-auth i');
+            
             if (authBtnIcon) authBtnIcon.style.color = hasToken ? 'var(--accent)' : '';
             
-            if (!hasToken) {
-                setStatusUI('disconnected');
-            } else if (uiStatusQueue.length === 0) {
-                setStatusUI('saved');
+            if (hasToken) {
+                if (!isSaving && !saveTimer) {
+                    document.getElementById('status-text').style.opacity = '0';
+                    document.getElementById('status-dot').className = 'status-dot saved';
+                }
+            } else {
+                document.getElementById('status-dot').className = 'status-dot logged-out';
+                document.getElementById('status-text').style.opacity = '0'; 
             }
         }
+        
         window.addEventListener('DOMContentLoaded', () => checkAuthState());
 
         document.getElementById('btn-auth').addEventListener('click', () => {
@@ -1698,6 +1668,7 @@
                     google.accounts.oauth2.revokeToken(token.access_token);
                     gapi.client.setToken(null);
                     localStorage.removeItem('zen_logged_in');
+                    if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
                     checkAuthState(); 
                 }
                 return; 
@@ -1705,9 +1676,12 @@
             
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
+                    console.warn(">>> 로그인 실패/취소됨", resp.error);
                     localStorage.removeItem('zen_logged_in');
-                    checkAuthState(); return;
+                    checkAuthState();
+                    return;
                 }
+                
                 localStorage.setItem('zen_logged_in', 'true');
                 checkAuthState(); 
                 
@@ -1717,88 +1691,90 @@
                 
                 smartSync(); 
             };
+            
             tokenClient.requestAccessToken({ prompt: 'consent' });
         });
 
-        // ==========================================
-        // [핵심] 인덱스(Index) 우선 로딩 및 껍데기 생성 시스템
-        // ==========================================
         async function smartSync() {
             if (!gapi.client.getToken() || !db) return;
-            setStatusUI('loading');
-            
+            console.log(">>> [데이터 우선 복구] 클라우드 확인 시작...");
             try {
-                const folderId = await getBackupFolderId();
                 const token = gapi.client.getToken().access_token;
                 
-                const qFiles = `name='ZenNotes_Index.json' and '${folderId}' in parents and trashed=false`;
-                const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json());
+                let qFolder = "name='ZenNotesBackup' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+                let resFolder = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFolder)}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
 
-                const txRead = db.transaction(['memos'], 'readonly');
-                const localData = await new Promise(res => txRead.objectStore('memos').getAll().onsuccess = e => res(e.target.result));
-                const localMap = new Map(localData.map(m => [m.syncId || m.id.toString(), m]));
-
-                let cloudIndex = [];
-
-                if (resFiles.files && resFiles.files.length > 0) {
-                    const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${resFiles.files[0].id}?alt=media`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json());
-                    if (fileRes.type === 'ZenIndex' && fileRes.data) cloudIndex = fileRes.data;
+                if (resFolder.files && resFolder.files.length > 0) {
+                    backupFolderId = resFolder.files[0].id;
                 } else {
-                    localData.forEach(m => {
-                        if (m.contentLoaded === undefined) m.contentLoaded = true; 
-                        addToQueue({ type: 'UPLOAD_NOTE', syncId: m.syncId });
-                    });
-                    addToQueue({ type: 'UPDATE_INDEX' });
-                    setStatusUI('saved');
+                    const meta = { name: 'ZenNotesBackup', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
+                    const created = await fetch('https://www.googleapis.com/drive/v3/files', {
+                        method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
+                    }).then(r => r.json());
+                    backupFolderId = created.id;
+                    
+                    console.log(">>> 새 백업 폴더 생성 완료. 로컬 데이터를 업로드합니다.");
+                    hasLoadedFromCloud = true;
+                    
+                    db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = ev => {
+                        ev.target.result.forEach(m => syncDataToCloud(m));
+                    };
                     return;
                 }
 
-                let needUIUpdate = false;
-                const txWrite = db.transaction(['memos'], 'readwrite');
-                const store = txWrite.objectStore('memos');
-
-                cloudIndex.forEach(cloudItem => {
-                    const localMemo = localMap.get(cloudItem.syncId);
-                    
-                    if (!localMemo) {
-                        store.add({
-                            syncId: cloudItem.syncId, title: cloudItem.title, updatedAt: cloudItem.updatedAt, isDeleted: cloudItem.isDeleted, pinnedAt: cloudItem.pinnedAt,
-                            content: '', plainText: '', contentLoaded: false 
-                        });
-                        needUIUpdate = true;
-                        addToQueue({ type: 'FETCH_NOTE', syncId: cloudItem.syncId });
-                    } else if (cloudItem.updatedAt > localMemo.updatedAt) {
-                        localMemo.title = cloudItem.title;
-                        localMemo.isDeleted = cloudItem.isDeleted;
-                        localMemo.pinnedAt = cloudItem.pinnedAt;
-                        localMemo.updatedAt = cloudItem.updatedAt;
-                        localMemo.contentLoaded = false;
-                        store.put(localMemo);
-                        needUIUpdate = true;
-                        addToQueue({ type: 'FETCH_NOTE', syncId: cloudItem.syncId });
-                    }
-                });
-
-                localData.forEach(localMemo => {
-                    if (localMemo.contentLoaded !== false) {
-                        const inCloud = cloudIndex.find(c => c.syncId === localMemo.syncId);
-                        if (!inCloud || localMemo.updatedAt > inCloud.updatedAt) {
-                            addToQueue({ type: 'UPLOAD_NOTE', syncId: localMemo.syncId });
-                        }
-                    }
-                });
+                const qFiles = `'${backupFolderId}' in parents and trashed=false`;
+                const resFiles = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qFiles)}&fields=files(id,name)`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
                 
-                addToQueue({ type: 'UPDATE_INDEX' });
+                let cloudDataList = [];
+                if (resFiles.files && resFiles.files.length > 0) {
+                    for (let f of resFiles.files) {
+                        try {
+                            const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+                            if (fileRes.type === 'ZenMemo' && fileRes.data) {
+                                cloudDataList.push(fileRes.data);
+                            }
+                        } catch(err) { console.error("파일 다운로드 실패:", f.name); }
+                    }
+                }
 
-                txWrite.oncomplete = () => {
-                    hasLoadedFromCloud = true;
-                    if (needUIUpdate) loadMemoList();
-                    setStatusUI('saved'); 
+                const tx = db.transaction(['memos'], 'readwrite');
+                const store = tx.objectStore('memos');
+                
+                store.getAll().onsuccess = (e) => {
+                    const localData = e.target.result;
+                    let needUIUpdate = false;
+                    const localMap = new Map(localData.map(m => [m.syncId || m.id.toString(), m]));
+
+                    cloudDataList.forEach(cloudMemo => {
+                        const syncKey = cloudMemo.syncId || cloudMemo.id?.toString();
+                        if (!syncKey) return;
+                        
+                        const localMemo = localMap.get(syncKey);
+
+                        if (!localMemo) {
+                            delete cloudMemo.id; 
+                            cloudMemo.syncId = syncKey;
+                            store.add(cloudMemo); 
+                            needUIUpdate = true;
+                        } else if (cloudMemo.updatedAt > localMemo.updatedAt) {
+                            cloudMemo.id = localMemo.id; 
+                            cloudMemo.syncId = syncKey;
+                            store.put(cloudMemo); 
+                            needUIUpdate = true;
+                        }
+                    });
+
+                    tx.oncomplete = () => {
+                        console.log(">>> [동기화 병합 완료] 클라우드 로드 성공");
+                        hasLoadedFromCloud = true;
+                        if (needUIUpdate) loadMemoList();
+                        checkAuthState();
+                        syncDataToCloud(); 
+                    };
                 };
-
-            } catch (err) {
-                console.error(">>> Sync Error:", err);
-                setStatusUI('disconnected');
+            } catch (err) { 
+                console.error(">>> [스마트 동기화 오류] 통신 실패:", err); 
+                document.getElementById('status-dot').className = 'status-dot unsaved';
             }
         }
     </script>
