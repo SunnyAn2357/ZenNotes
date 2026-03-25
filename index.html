@@ -19,7 +19,6 @@
         const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
         let tokenClient, gapiInited = false, gisInited = false;
-        // [추가] 클라우드 덮어쓰기 방지용 전역 변수
         let hasLoadedFromCloud = false; 
 
         function gapiLoaded() {
@@ -730,7 +729,6 @@
         let tokenRefreshTimer = null;
         let idleSyncTimer = null; 
 
-        // [수정1] 팝업 에러 방지를 위해 조용한 백그라운드 갱신만 시도
         function checkAndSilentLogin() {
             console.log(">>> 팝업 차단 방지를 위해 자동 로그인 시도 생략");
         }
@@ -886,7 +884,6 @@
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
 
-        // [수정2] UI 팩트 체크 (가짜 파란불 없앰)
         function updateUIState(state) {
             const hasToken = gapiInited && gapi.client && gapi.client.getToken() !== null;
 
@@ -1003,14 +1000,12 @@
             }
         }
 
-        // [수정3 핵심!] 유령 파일 방지 (Multipart Upload 적용) & 덮어쓰기 보호장치
         async function syncDataToCloud() {
             if (!gapiInited || !gapi.client || gapi.client.getToken() === null) return;
 
             db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = async e => {
                 const allData = e.target.result;
                 
-                // 데이터 우선 복구 (덮어쓰기 방지)
                 if (allData.length === 0 && !hasLoadedFromCloud) {
                     console.warn(">>> [보호장치] 로컬이 비어있어 클라우드에 빈 파일을 올리지 않습니다.");
                     return;
@@ -1035,14 +1030,12 @@
                     document.getElementById('status-dot').className = 'status-dot unsaved pulse-fast';
 
                     if (file) {
-                        // 기존 파일이 있으면 업데이트(PATCH)
                         await fetch(`https://www.googleapis.com/upload/drive/v3/files/${file.id}?uploadType=media`, {
                             method: 'PATCH',
                             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                             body: content
                         });
                     } else {
-                        // [핵심] 파일이 없으면 Multipart를 써서 무조건 root(내 드라이브)에 보이게 생성
                         const metadata = { name: 'ZenNotes_Backup.json', mimeType: 'application/json', parents: ['root'] };
                         const boundary = '-------314159265358979323846';
                         const delimiter = `\r\n--${boundary}\r\n`;
@@ -1426,6 +1419,7 @@
             };
         }
 
+        // [수정: 단일 메모(ZenMemo) 복구 로직 완벽 추가]
         function handleFileImport(e) {
             const file = e.target.files[0];
             if(!file) return;
@@ -1445,7 +1439,9 @@
                 }
                 try {
                     const parsed = JSON.parse(fileContent);
+                    
                     if (parsed.type === 'ZenBackup') {
+                        // 전체 백업 복구
                         const tx = db.transaction(['memos'], 'readwrite');
                         parsed.data.forEach(m => {
                             delete m.id;
@@ -1456,6 +1452,14 @@
                             loadMemoList();
                             syncDataToCloud();
                         };
+                    } else if (parsed.type === 'ZenMemo') {
+                        // 단일 메모 복구
+                        createNewMemo();
+                        document.getElementById('memo-title-input').value = parsed.title || file.name.replace(/\.[^/.]+$/, "");
+                        quill.root.innerHTML = parsed.content || '';
+                        triggerAutoSave();
+                    } else {
+                        alert('지원하지 않는 JSON 형식입니다.');
                     }
                 } catch(err) {
                     alert('파일 읽기 오류');
@@ -1541,7 +1545,6 @@
             btnText.innerText = '읽기 중지';
         });
 
-        // [수정4] 가짜 상태 팩트 체크
         function checkAuthState() {
             const hasToken = gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null;
             const authBtnIcon = document.querySelector('#btn-auth i');
@@ -1561,7 +1564,6 @@
         
         window.addEventListener('DOMContentLoaded', () => checkAuthState());
 
-        // [수정5] 에러 나는 가짜 로그아웃 방지 & 로그인 처리
         document.getElementById('btn-auth').addEventListener('click', () => {
             if (!gapiInited || !gisInited) return;
             closeAllPanelsMobile(); 
@@ -1602,7 +1604,6 @@
             tokenClient.requestAccessToken({ prompt: 'consent' });
         });
 
-        // [수정6] 앱 켜질 때 초기 로딩 (가짜 데이터 안 덮어쓰게 방어)
         async function smartSync() {
             if (!gapi.client.getToken() || !db) return;
             console.log(">>> [데이터 우선 복구] 클라우드 확인 시작...");
