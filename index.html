@@ -1004,6 +1004,7 @@
         }
 
         // [수정: 전송 트럭 결함 수정 & 데이터 덮어쓰기 보호장치]
+        // [수정: 눈에 확실히 보이는 곳(root)에 파일 생성]
         function syncDataToCloud() {
             const hasToken = gapiInited && gapi.client && gapi.client.getToken() !== null;
             if (!hasToken) return;
@@ -1045,16 +1046,21 @@
                             keepalive: true
                         });
                     } else {
+                        // 👇 [가장 중요한 수정] 파일 생성 시 '내 드라이브(root)'에 보이도록 강제 지정!
                         await gapi.client.drive.files.create({
-                            resource: { name: 'ZenNotes_Backup.json', mimeType: 'application/json' },
+                            resource: { 
+                                name: 'ZenNotes_Backup.json', 
+                                mimeType: 'application/json',
+                                parents: ['root'] 
+                            },
                             media: { mimeType: 'application/json', body: blob }
                         });
                     }
                     console.log("✅ 클라우드 동기화 성공");
-                    checkAuthState(); // 성공 시에만 정직하게 파란불 켜짐
+                    checkAuthState(); 
                 } catch (err) {
                     console.error("❌ 클라우드 저장 실패:", err);
-                    document.getElementById('status-dot').className = 'status-dot unsaved'; // 에러 나면 가차없이 빨간불
+                    document.getElementById('status-dot').className = 'status-dot unsaved'; 
                 }
             };
         }
