@@ -552,6 +552,24 @@
             pointer-events: none;
         }
 
+	/* [PC] 툴바 그룹(포맷) 간의 간격 */
+	.ql-toolbar.ql-snow .ql-formats {
+	    margin-right: 0px !important; /* 그룹과 그룹 사이의 오른쪽 여백 */
+	    margin-bottom: 0px !important;  /* 줄바꿈 시 위아래 여백 */
+	}
+
+	/* [PC] 그룹 내 개별 버튼/선택창 간의 간격 */
+	.ql-toolbar.ql-snow .ql-formats button,
+	.ql-toolbar.ql-snow .ql-formats .ql-picker {
+	    margin-right: 0px !important;  /* 버튼과 버튼 사이 여백 */
+	}
+
+	/* 마지막 요소는 여백 제거 (깔끔한 정렬을 위해) */
+	.ql-toolbar.ql-snow .ql-formats:last-child,
+	.ql-toolbar.ql-snow .ql-formats button:last-child {
+	    margin-right: 0 !important;
+	}
+
         @media screen and (max-width: 768px) {
             .mobile-only { display: flex !important; }
             .mobile-overlay { display: block; }
@@ -573,14 +591,15 @@
                 white-space: normal !important;
                 display: flex !important;
                 flex-wrap: wrap !important;
-                gap: 8px;
-                padding: 12px 20px !important;
+                gap: 0px;	/* 👈 [그룹 간 간격] */
+                padding: 10px 16px !important;
             }
             .ql-toolbar.ql-snow .ql-formats {
                 display: flex !important;
                 margin-right: 0 !important;
-                margin-bottom: 4px !important;
+                margin-bottom: 2px !important;	/* 👈 [줄바꿈 시 상하 간격] */
                 flex-wrap: wrap !important;
+		gap: 0px;	/* 👈 툴들 간의 간격을 */
             }
             .ql-snow .ql-tooltip { left: 20px !important; transform: none !important; }
             
