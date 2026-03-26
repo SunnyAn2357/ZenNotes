@@ -14,8 +14,8 @@
 
     <script>
 
-        const CLIENT_ID = '디버그용';
-        const API_KEY = '디버그용';
+        const CLIENT_ID = '765080058790-uhqk1gj2ko8a197f26ujnq0gb4nl97ha.apps.googleusercontent.com';
+        const API_KEY = 'AIzaSyD1Z5E5e8tRfmG9fDruBM72pliOt6ZkShw';
 
         const DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
         const SCOPES = "https://www.googleapis.com/auth/drive.file";
@@ -76,6 +76,7 @@
         }
 
         body {
+	    overscroll-behavior-y: none; /* 당겨서 새로고침 완벽 차단 */
             background-color: var(--bg);
             color: var(--text-main);
             font-family: var(--font-family);
@@ -950,18 +951,22 @@
             }
         }
 
-        function toggleRightPane() {
+	function toggleRightPane() {
             const rp = document.getElementById('col-right');
             const gb = document.getElementById('global-menu-btn');
-            
+
             document.getElementById('trash-pane').classList.remove('is-open');
 
             if (rp.classList.contains('is-closed')) {
                 rp.classList.remove('is-closed');
                 gb.style.display = 'none';
+                // [수정된 부분] 모바일에서 우측 패널 열 때 투명 방어막(오버레이) 켜기
+                if (window.innerWidth <= 768) document.getElementById('mobile-overlay').classList.add('is-active');
             } else {
                 rp.classList.add('is-closed');
                 gb.style.display = 'flex';
+                // [수정된 부분] 모바일에서 우측 패널 닫을 때 방어막 끄기
+                if (window.innerWidth <= 768) document.getElementById('mobile-overlay').classList.remove('is-active');
             }
         }
 
@@ -988,13 +993,19 @@
             });
         }
 
-        function toggleTrashPane() {
+	function toggleTrashPane() {
             const tp = document.getElementById('trash-pane');
             if (tp.classList.contains('is-open')) {
                 tp.classList.remove('is-open');
+                // [수정된 부분] 휴지통만 닫았는데 우측 패널마저 닫혀있다면 방어막 끄기
+                if (window.innerWidth <= 768 && document.getElementById('col-right').classList.contains('is-closed')) {
+                    document.getElementById('mobile-overlay').classList.remove('is-active');
+                }
             } else {
                 tp.classList.add('is-open');
                 loadTrashList(); 
+                // [수정된 부분] 모바일에서 휴지통 열 때 투명 방어막(오버레이) 켜기
+                if (window.innerWidth <= 768) document.getElementById('mobile-overlay').classList.add('is-active');
             }
         }
 
@@ -1095,7 +1106,8 @@
             }
         });
 
-        // [3] 이미지 파일 처리 함수
+
+	// [3] 이미지 파일 처리 함수 (퍼센트 대신 픽셀로 계산하여 충돌 해결)
         const handleImageFiles = (files) => {
             Array.from(files).forEach(file => {
                 if (file.type.startsWith('image/')) {
@@ -1103,6 +1115,29 @@
                     reader.onload = (e) => {
                         const range = quill.getSelection(true);
                         quill.insertEmbed(range.index, 'image', e.target.result);
+                        
+                        setTimeout(() => {
+                            const imgs = quill.root.querySelectorAll('img[src="' + e.target.result + '"]');
+                            imgs.forEach(img => {
+                                if (!img.dataset.sized) {
+                                    // 1. 에디터 본문의 실제 너비(픽셀)를 측정합니다.
+                                    const editorWidth = quill.root.clientWidth;
+                                    // 2. 측정된 너비의 90%를 계산하여 정수 픽셀(px)로 만듭니다.
+                                    const targetWidth = Math.floor(editorWidth * 0.9);
+
+                                    // 3. '%' 대신 'px' 고정값을 부여하여 크기 조절 모듈과 충돌하지 않게 합니다.
+                                    img.setAttribute('width', targetWidth);
+                                    img.style.width = ''; // 기존 인라인 너비 스타일 초기화
+                                    
+                                    // 4. 가운데 정렬은 그대로 유지합니다.
+                                    img.style.display = 'block';
+                                    img.style.margin = 'auto';
+                                    
+                                    img.dataset.sized = 'true';
+                                }
+                            });
+                        }, 10);
+
                         quill.setSelection(range.index + 1);
                     };
                     reader.readAsDataURL(file);
@@ -2012,7 +2047,15 @@
             }
         }
         
-        window.addEventListener('DOMContentLoaded', () => checkAuthState());
+	window.addEventListener('DOMContentLoaded', () => {
+            checkAuthState(); // 기존 로그인 상태 확인 유지
+            
+            // [추가] 모바일 화면(너비 768px 이하)일 때 시작하자마자 왼쪽 목록창 열기
+            if (window.innerWidth <= 768) {
+                document.getElementById('col-left').classList.add('is-mobile-open');
+                document.getElementById('mobile-overlay').classList.add('is-active');
+            }
+        });
 
         document.getElementById('btn-auth').addEventListener('click', () => {
             if (!gapiInited || !gisInited) return;
