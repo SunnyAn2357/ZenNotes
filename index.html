@@ -27,7 +27,6 @@
                     await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
                     gapiInited = true;
                     console.log("구글 API 준비 완료!");
-                    if (typeof checkAndSilentLogin === 'function') checkAndSilentLogin();
                 } catch (e) {
                     console.error("GAPI 초기화 실패:", e);
                 }
@@ -42,7 +41,6 @@
             });
             gisInited = true;
             console.log("구글 인증 준비 완료!");
-            if (typeof checkAndSilentLogin === 'function') checkAndSilentLogin();
         }
     </script>
 
@@ -732,10 +730,6 @@
 
         let tokenRefreshTimer = null;
         let idleSyncTimer = null; 
-
-        function checkAndSilentLogin() {
-            console.log(">>> 팝업 차단 방지를 위해 자동 로그인 시도 생략");
-        }
 
         function silentTokenRefresh() {
             if (localStorage.getItem('zen_logged_in') === 'true' && tokenClient) {
