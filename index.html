@@ -61,7 +61,7 @@
             --bg: #131314;
             --surface: #1e1e20;
             --surface-hover: #262629;
-            --border: #2a2a2c;
+            --border: #444746;
             --text-main: #e3e3e3;
             --text-muted: #c4c7c5;
             --accent: #78a9ff;
@@ -266,15 +266,15 @@
         }
 
         .status-dot {
-            width: 4px;
-            height: 4px;
+            width: 5px;
+            height: 5px;
             border-radius: 50%;
             transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s ease;
             opacity: 0;
         }
 
-	.status-dot.saved { background-color: var(--accent); box-shadow: 0 0 4px rgba(120, 169, 255, 0.4); opacity: 1; }
-        .status-dot.unsaved { background-color: var(--danger); box-shadow: 0 0 4px rgba(255, 107, 107, 0.4); opacity: 1; }
+	.status-dot.saved { background-color: var(--accent); box-shadow: 0 0 6px rgba(120, 169, 255, 0.4); opacity: 1; }
+        .status-dot.unsaved { background-color: var(--danger); box-shadow: 0 0 6px rgba(255, 107, 107, 0.4); opacity: 1; }
         .status-dot.logged-out { background-color: var(--text-muted); box-shadow: none; opacity: 1; }
 
         .status-text {
@@ -415,7 +415,7 @@
             border: none;
             border-bottom: 1px solid var(--border);
             margin: 20px 0;
-            opacity: 0.7;
+            opacity: 1;
         }
         .ql-editor.ql-blank::before {
             color: #404040 !important;
@@ -1107,8 +1107,7 @@
             }
         });
 
-
-	// [3] 이미지 파일 처리 함수 (퍼센트 대신 픽셀로 계산하여 충돌 해결)
+        // [3] 이미지 파일 처리 함수
         const handleImageFiles = (files) => {
             Array.from(files).forEach(file => {
                 if (file.type.startsWith('image/')) {
@@ -1116,30 +1115,6 @@
                     reader.onload = (e) => {
                         const range = quill.getSelection(true);
                         quill.insertEmbed(range.index, 'image', e.target.result);
-                        
-                        setTimeout(() => {
-                            const imgs = quill.root.querySelectorAll('img[src="' + e.target.result + '"]');
-                            imgs.forEach(img => {
-                                if (!img.dataset.sized) {
-                                    // 1. 에디터 본문의 실제 너비(픽셀)를 측정합니다.
-                                    const editorWidth = quill.root.clientWidth;
-
-                                    // 2. 측정된 너비의 90%를 계산하여 정수 픽셀(px)로 만듭니다.
-                                    const targetWidth = Math.floor(editorWidth * 0.9);
-
-                                    // 3. '%' 대신 'px' 고정값을 부여하여 크기 조절 모듈과 충돌하지 않게 합니다.
-                                    img.setAttribute('width', targetWidth);
-                                    img.style.width = ''; // 기존 인라인 너비 스타일 초기화
-                                    
-                                    // 4. 가운데 정렬은 그대로 유지합니다.
-                                    img.style.display = 'block';
-                                    img.style.margin = 'auto';
-                                    
-                                    img.dataset.sized = 'true';
-                                }
-                            });
-                        }, 10);
-
                         quill.setSelection(range.index + 1);
                     };
                     reader.readAsDataURL(file);
@@ -2072,14 +2047,19 @@
             }
         });
 
-        document.getElementById('btn-auth').addEventListener('click', () => {
+	document.getElementById('btn-auth').addEventListener('click', () => {
             if (!gapiInited || !gisInited) return;
             closeAllPanelsMobile(); 
             
             if (gapi.client.getToken() !== null) {
                 if (confirm('구글 계정에서 로그아웃 하시겠습니까?')) {
                     const token = gapi.client.getToken();
-                    google.accounts.oauth2.revokeToken(token.access_token);
+                    
+                    // [수정] revokeToken을 revoke로 변경하고 콜백을 추가합니다.
+                    google.accounts.oauth2.revoke(token.access_token, () => {
+                        console.log('>>> 구글 토큰 회수 완료');
+                    });
+                    
                     gapi.client.setToken(null);
                     localStorage.removeItem('zen_logged_in');
                     if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
@@ -2087,6 +2067,8 @@
                 }
                 return; 
             }
+            
+            // ... (이후 로그인 로직은 그대로 유지)
             
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
