@@ -266,14 +266,15 @@
         }
 
         .status-dot {
-            width: 6px;
-            height: 6px;
+            width: 4px;
+            height: 4px;
             border-radius: 50%;
             transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s ease;
             opacity: 0;
         }
-        .status-dot.saved { background-color: var(--accent); box-shadow: 0 0 6px rgba(120, 169, 255, 0.4); opacity: 1; }
-        .status-dot.unsaved { background-color: var(--danger); box-shadow: 0 0 6px rgba(255, 107, 107, 0.4); opacity: 1; }
+
+	.status-dot.saved { background-color: var(--accent); box-shadow: 0 0 4px rgba(120, 169, 255, 0.4); opacity: 1; }
+        .status-dot.unsaved { background-color: var(--danger); box-shadow: 0 0 4px rgba(255, 107, 107, 0.4); opacity: 1; }
         .status-dot.logged-out { background-color: var(--text-muted); box-shadow: none; opacity: 1; }
 
         .status-text {
@@ -1122,6 +1123,7 @@
                                 if (!img.dataset.sized) {
                                     // 1. 에디터 본문의 실제 너비(픽셀)를 측정합니다.
                                     const editorWidth = quill.root.clientWidth;
+
                                     // 2. 측정된 너비의 90%를 계산하여 정수 픽셀(px)로 만듭니다.
                                     const targetWidth = Math.floor(editorWidth * 0.9);
 
@@ -1280,13 +1282,13 @@
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
 
-        function updateUIState(state) {
+	function updateUIState(state) {
             const hasToken = gapiInited && gapi.client && gapi.client.getToken() !== null;
 
             if (state === 'typing' || state === 'saving') {
                 if (typingStartTime === 0) typingStartTime = Date.now();
                 statusDot.className = 'status-dot unsaved pulse-fast'; 
-                statusText.innerText = 'ing...';
+                statusText.innerText = 'saving...';
                 statusText.style.opacity = '1';
                 if (idleSyncTimer) clearTimeout(idleSyncTimer); 
             } else if (state === 'saved') {
@@ -1302,8 +1304,10 @@
                         statusText.innerText = 'saved';
                         statusText.style.opacity = '1';
                     } else {
+                        // [수정됨] 저장 직후 오프라인 상태 표시
                         statusDot.className = 'status-dot logged-out';
-                        statusText.style.opacity = '0';
+                        statusText.innerText = 'offline';
+                        statusText.style.opacity = '1';
                     }
                     
                     if (idleSyncTimer) clearTimeout(idleSyncTimer);
@@ -1315,15 +1319,24 @@
                     
                     setTimeout(() => { 
                         if (!saveTimer && !isSaving) {
-                            statusText.style.opacity = '0';
-                            if (hasToken) statusDot.className = 'status-dot saved';
-                            else statusDot.className = 'status-dot logged-out';
+                            if (hasToken) {
+                                // [수정됨] 온라인일 때만 2초 후 텍스트 숨김
+                                statusText.style.opacity = '0';
+                                statusDot.className = 'status-dot saved';
+                            } else {
+                                // [수정됨] 오프라인일 때는 2초 후에도 계속 'offline' 표시
+                                statusText.innerText = 'offline';
+                                statusText.style.opacity = '1';
+                                statusDot.className = 'status-dot logged-out';
+                            }
                         }
                     }, 2000);
                 }, remain);
             } else if (state === 'offline-idle') {
+                // [수정됨] 대기 상태에서도 오프라인 유지
                 statusDot.className = 'status-dot logged-out';
-                statusText.style.opacity = '0';
+                statusText.innerText = 'offline';
+                statusText.style.opacity = '1';
                 typingStartTime = 0;
             }
         }
@@ -2030,7 +2043,7 @@
             btnText.innerText = '읽기 중지';
         });
 
-        function checkAuthState() {
+	function checkAuthState() {
             const hasToken = gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null;
             const authBtnIcon = document.querySelector('#btn-auth i');
             
@@ -2042,8 +2055,10 @@
                     document.getElementById('status-dot').className = 'status-dot saved';
                 }
             } else {
+                // [수정됨] 오프라인일 때 회색 구슬과 'offline' 텍스트를 영구 표시
                 document.getElementById('status-dot').className = 'status-dot logged-out';
-                document.getElementById('status-text').style.opacity = '0'; 
+                document.getElementById('status-text').innerText = 'offline';
+                document.getElementById('status-text').style.opacity = '1'; 
             }
         }
         
