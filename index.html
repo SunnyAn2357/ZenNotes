@@ -1263,7 +1263,7 @@
             if (state === 'typing' || state === 'saving') {
                 if (typingStartTime === 0) typingStartTime = Date.now();
                 statusDot.className = 'status-dot unsaved pulse-fast'; 
-                statusText.innerText = 'saving...';
+                statusText.innerText = 'saving';
                 statusText.style.opacity = '1';
                 if (idleSyncTimer) clearTimeout(idleSyncTimer); 
             } else if (state === 'saved') {
