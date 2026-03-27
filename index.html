@@ -2396,11 +2396,6 @@
         
         window.addEventListener('DOMContentLoaded', () => {
             checkAuthState(); 
-            
-            if (window.innerWidth <= 768) {
-                document.getElementById('col-left').classList.add('is-mobile-open');
-                document.getElementById('mobile-overlay').classList.add('is-active');
-            }
         });
 
         document.getElementById('btn-auth').addEventListener('click', () => {
@@ -2540,10 +2535,7 @@
 
         window.addEventListener('load', () => {
 			if (window.innerWidth <= 768) {
-				// 1. 현재 접속한 진짜 첫 화면을 '바탕화면(main)'으로 확실하게 도장 찍습니다.
-				history.replaceState({ page: 'main' }, ''); 
-				// 2. 그리고 브라우저 몰래 '왼쪽 창 열림(panel: left)'이라는 가짜 기록을 그 위에 얹습니다!
-				history.pushState({ panel: 'left' }, ''); 
+				history.pushState({ page: 'main' }, ''); 
 			}
 		});
 
