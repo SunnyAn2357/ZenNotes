@@ -1576,18 +1576,16 @@
                 return; // ★ 방패 작동: 창 닫힘 방지
             }
 
-            // [3순위] 패널 닫기 (휴지통 -> 우측/좌측)
+	    // [3순위] 패널 닫기 (휴지통 -> 우측/좌측)
             if (trashPane.classList.contains('is-open')) {
                 trashPane.classList.remove('is-open');
                 if (rightPane.classList.contains('is-closed')) {
                     document.getElementById('mobile-overlay').classList.remove('is-active');
                 }
-                history.pushState({ page: 'main' }, '');
                 return;
             }
             if (!rightPane.classList.contains('is-closed') || leftPane.classList.contains('is-mobile-open')) {
                 closeAllPanelsMobile();
-                history.pushState({ page: 'main' }, '');
                 return;
             }
 
