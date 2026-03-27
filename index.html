@@ -796,6 +796,35 @@
 	    height: 10px !important;
 	}
 
+	/* 1. 우측 상단 삼점 메뉴 터치 영역 상하좌우 2배 확대 (투명 방어막) */
+        #global-menu-btn {
+            position: relative;
+        }
+        #global-menu-btn::after {
+            content: '';
+            position: absolute;
+            top: -15px; bottom: -15px; left: -15px; right: -15px;
+            background: transparent;
+        }
+
+        /* 2. 모바일 툴바 드롭다운 잘림 해결 (버튼 바로 밑 원래 자리에 매달리기) */
+        @media screen and (max-width: 768px) {
+            .ql-snow .ql-picker-options {
+                /* 툴바의 가로 스크롤 감옥에서 탈출시킵니다 */
+                position: fixed !important; 
+                
+                /* 상단 65px(가림막) + 툴바 높이(약 40px)를 계산해 딱 툴바 밑단에 맞춥니다 */
+                top: 105px !important; 
+                
+                /* 핵심: left 값을 안 주면 원래 누른 버튼 X좌표에 알아서 달라붙습니다! */
+                
+                max-height: 50vh !important;
+                overflow-y: auto !important;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.8) !important;
+                z-index: 10000 !important; /* 편집창(본문)보다 무조건 위로 끌어올림 */
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -952,22 +981,164 @@
             }
         }
 
-	function toggleRightPane() {
+	// ==========================================
+        // 🚀 스마트폰 뒤로가기 & ESC 키 제어 시스템
+        // ==========================================
+        let currentHash = window.location.hash || '#home';
+        let lastSelection = null; // 사용자의 마지막 블록(드래그) 상태 기억
+
+        // 에디터의 블록(드래그) 상태가 변할 때마다 몰래 기억해 둡니다.
+        quill.on('selection-change', (range) => {
+            if (range) lastSelection = range;
+        });
+
+        // [모바일] 스마트폰 뒤로가기 버튼 감지
+        window.addEventListener('hashchange', () => {
+            if (window.innerWidth > 768) return; 
+
+            const tooltip = document.querySelector('.ql-tooltip');
+            let handledPopup = false;
+            
+            // 1. 하이퍼링크 등 팝업창이 열려있다면?
+            if (tooltip && !tooltip.classList.contains('ql-hidden')) {
+                quill.theme.tooltip.hide(); // 팝업만 닫기
+                if (lastSelection) quill.setSelection(lastSelection.index, lastSelection.length); // 블록 복구
+                handledPopup = true;
+            } 
+            // 2. 이미지가 선택(리사이즈 조절점 표시)되어 있다면?
+            else if (lastSelection && lastSelection.length === 1) {
+                const [leaf] = quill.getLeaf(lastSelection.index);
+                if (leaf && leaf.domNode && leaf.domNode.tagName === 'IMG') {
+                    quill.setSelection(lastSelection.index + 1, 0); // 커서를 사진 뒤로 빼서 사진 선택만 해제
+                    handledPopup = true;
+                }
+            }
+
+            // 팝업이나 이미지 해제를 처리했다면 창 닫기를 취소하고 이전 상태 유지!
+            if (handledPopup) {
+                history.pushState(null, null, currentHash);
+                return; 
+            }
+
+            currentHash = window.location.hash;
+
+            const lp = document.getElementById('col-left');
             const rp = document.getElementById('col-right');
+            const tp = document.getElementById('trash-pane');
+            const ov = document.getElementById('mobile-overlay');
             const gb = document.getElementById('global-menu-btn');
 
-            document.getElementById('trash-pane').classList.remove('is-open');
+            lp.classList.remove('is-mobile-open');
+            rp.classList.add('is-closed');
+            tp.classList.remove('is-open');
+            ov.classList.remove('is-active');
+            gb.style.display = 'flex';
+            closeAllMemoMenus();
 
-            if (rp.classList.contains('is-closed')) {
-                rp.classList.remove('is-closed');
+            // 해시 상태에 따른 모바일 패널 순차 닫힘 처리
+            if (currentHash === '#trash') {
+                rp.classList.remove('is-closed'); 
+                tp.classList.add('is-open');
+                ov.classList.add('is-active');
                 gb.style.display = 'none';
-                // [수정된 부분] 모바일에서 우측 패널 열 때 투명 방어막(오버레이) 켜기
-                if (window.innerWidth <= 768) document.getElementById('mobile-overlay').classList.add('is-active');
+            } else if (currentHash === '#right') {
+                rp.classList.remove('is-closed');
+                ov.classList.add('is-active');
+                gb.style.display = 'none';
+            } else if (currentHash === '#editor') {
+                // 편집창 뷰 (모두 닫힘)
             } else {
-                rp.classList.add('is-closed');
-                gb.style.display = 'flex';
-                // [수정된 부분] 모바일에서 우측 패널 닫을 때 방어막 끄기
-                if (window.innerWidth <= 768) document.getElementById('mobile-overlay').classList.remove('is-active');
+                lp.classList.add('is-mobile-open');
+                ov.classList.add('is-active');
+                if (window.location.hash !== '#home') history.replaceState(null, null, '#home');
+            }
+        });
+
+        // [PC/모바일 공통] ESC 키 감지
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault(); 
+                const tooltip = document.querySelector('.ql-tooltip');
+                let handledPopup = false;
+                
+                if (tooltip && !tooltip.classList.contains('ql-hidden')) {
+                    quill.theme.tooltip.hide();
+                    if (lastSelection) quill.setSelection(lastSelection.index, lastSelection.length);
+                    handledPopup = true;
+                } else if (lastSelection && lastSelection.length === 1) {
+                    const [leaf] = quill.getLeaf(lastSelection.index);
+                    if (leaf && leaf.domNode && leaf.domNode.tagName === 'IMG') {
+                        quill.setSelection(lastSelection.index + 1, 0); 
+                        handledPopup = true;
+                    }
+                }
+
+                if (handledPopup) return; // 팝업/이미지만 해제하고 종료
+
+                closeAllMemoMenus();
+                
+                if (window.innerWidth <= 768) {
+                    const h = window.location.hash;
+                    if (h === '#trash' || h === '#right' || h === '#home') history.back();
+                } else {
+                    closeAllRightPanels();
+                }
+            }
+        });
+
+        // ==========================================
+        // 🔄 패널 열기/닫기 함수 (URL Hash 방식 적용)
+        // ==========================================
+        function toggleLeftPaneMobile() {
+            window.location.hash = (window.location.hash === '#home') ? '#editor' : '#home';
+        }
+
+        function toggleRightPane() {
+            if (window.innerWidth <= 768) {
+                window.location.hash = (window.location.hash === '#right') ? '#editor' : '#right';
+            } else {
+                const rp = document.getElementById('col-right');
+                const gb = document.getElementById('global-menu-btn');
+                document.getElementById('trash-pane').classList.remove('is-open');
+                if (rp.classList.contains('is-closed')) {
+                    rp.classList.remove('is-closed');
+                    gb.style.display = 'none';
+                } else {
+                    rp.classList.add('is-closed');
+                    gb.style.display = 'flex';
+                }
+            }
+        }
+
+        function toggleTrashPane() {
+            if (window.innerWidth <= 768) {
+                window.location.hash = (window.location.hash === '#trash') ? '#right' : '#trash';
+                if (window.location.hash === '#trash') loadTrashList();
+            } else {
+                const tp = document.getElementById('trash-pane');
+                if (tp.classList.contains('is-open')) {
+                    tp.classList.remove('is-open');
+                } else {
+                    tp.classList.add('is-open');
+                    loadTrashList();
+                }
+            }
+        }
+
+        function closeAllRightPanels() {
+            if (window.innerWidth <= 768) {
+                window.location.hash = '#editor';
+            } else {
+                document.getElementById('trash-pane').classList.remove('is-open');
+                document.getElementById('col-right').classList.add('is-closed');
+                document.getElementById('global-menu-btn').style.display = 'flex';
+            }
+        }
+
+        function closeAllPanelsMobile() {
+            closeAllMemoMenus();
+            if (window.innerWidth <= 768 && window.location.hash !== '#editor') {
+                window.location.hash = '#editor';
             }
         }
 
@@ -992,31 +1163,6 @@
             document.querySelectorAll('.memo-actions-wrap.is-menu-open').forEach(wrap => {
                 wrap.classList.remove('is-menu-open');
             });
-        }
-
-	function toggleTrashPane() {
-            const tp = document.getElementById('trash-pane');
-            if (tp.classList.contains('is-open')) {
-                tp.classList.remove('is-open');
-                // [수정된 부분] 휴지통만 닫았는데 우측 패널마저 닫혀있다면 방어막 끄기
-                if (window.innerWidth <= 768 && document.getElementById('col-right').classList.contains('is-closed')) {
-                    document.getElementById('mobile-overlay').classList.remove('is-active');
-                }
-            } else {
-                tp.classList.add('is-open');
-                loadTrashList(); 
-                // [수정된 부분] 모바일에서 휴지통 열 때 투명 방어막(오버레이) 켜기
-                if (window.innerWidth <= 768) document.getElementById('mobile-overlay').classList.add('is-active');
-            }
-        }
-
-        function closeAllRightPanels() {
-            document.getElementById('trash-pane').classList.remove('is-open');
-            document.getElementById('col-right').classList.add('is-closed');
-            document.getElementById('global-menu-btn').style.display = 'flex';
-            if (window.innerWidth <= 768) {
-                document.getElementById('mobile-overlay').classList.remove('is-active');
-            }
         }
 
         // [추가] 다중 선택 모드 방어막 (캡처링 단계)
@@ -1329,18 +1475,41 @@
 
         document.getElementById('memo-title-input').addEventListener('input', triggerAutoSave);
 
-        function executeSave() {
+function executeSave() {
             if (isSaving || isLoading) {
                 pendingSave = true;
                 return;
             } 
-            const title = document.getElementById('memo-title-input').value.trim() || '제목 없는 노트';
+            const titleInput = document.getElementById('memo-title-input').value.trim();
+            const title = titleInput || '제목 없는 노트';
             document.title = title;
-            const content = quill.root.innerHTML, plainText = quill.getText();
+            const content = quill.root.innerHTML;
+            const plainText = quill.getText().trim();
             
-            if (!currentMemoId && !document.getElementById('memo-title-input').value && plainText.trim() === '') {
-                updateUIState('saved');
-                saveTimer = null;
+            // [수정] 빈 노트 판별: 제목이 비었거나 기본값이고 + 텍스트가 없고 + 이미지가 없을 때
+            const isEmptyNote = (titleInput === '' || title === '제목 없는 노트') && 
+                                plainText === '' && 
+                                !content.includes('<img');
+
+            if (isEmptyNote) {
+                if (currentMemoId) {
+                    // 쓰다가 다 지워서 빈칸이 되었다면 즉시 DB에서 삭제
+                    const tx = db.transaction(['memos'], 'readwrite');
+                    tx.objectStore('memos').delete(currentMemoId);
+                    tx.oncomplete = () => {
+                        currentMemoId = null;
+                        document.getElementById('memo-title-input').value = '';
+                        quill.root.innerHTML = '';
+                        updateUIState('saved');
+                        loadMemoList(true);
+                        // 모바일이면 삭제 후 자동으로 왼쪽 목록창 열기
+                        if (window.innerWidth <= 768) window.location.hash = '#home';
+                    };
+                } else {
+                    // 애초에 새 노트인데 아무것도 안 썼다면 저장 취소
+                    updateUIState('saved');
+                    saveTimer = null;
+                }
                 return;
             }
             
@@ -1938,32 +2107,6 @@
                 e.target.value = ''; 
             };
             reader.readAsText(file);
-        }
-
-        function toggleLeftPaneMobile() {
-            const lp = document.getElementById('col-left');
-            const ov = document.getElementById('mobile-overlay');
-            lp.classList.toggle('is-mobile-open');
-            if (lp.classList.contains('is-mobile-open')) {
-                ov.classList.add('is-active');
-                document.getElementById('col-right').classList.add('is-closed');
-                document.getElementById('trash-pane').classList.remove('is-open');
-                document.getElementById('global-menu-btn').style.display = 'flex';
-            } else {
-                ov.classList.remove('is-active');
-            }
-        }
-
-        function closeAllPanelsMobile() {
-	    // 👇 이 줄을 추가합니다. (패널이 닫힐 때 열려있던 삼점 메뉴도 싹 닫아줍니다.)
-	    closeAllMemoMenus();
-            if (window.innerWidth <= 768) {
-                document.getElementById('col-left').classList.remove('is-mobile-open');
-                document.getElementById('col-right').classList.add('is-closed');
-                document.getElementById('trash-pane').classList.remove('is-open');
-                document.getElementById('mobile-overlay').classList.remove('is-active');
-                document.getElementById('global-menu-btn').style.display = 'flex';
-            }
         }
         
         window.addEventListener('resize', () => {
