@@ -258,11 +258,11 @@
         .status-container {
             position: fixed;
             top: 35px;
-            right: 70px;
+            right: 55px; /* 상태알림과 상태점의 오른쪽 여백, 모바일에서도 고쳐야 함 */
             z-index: 999;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px; /* 상태알림과 상태점 사이의 여백 */
         }
 
         .status-dot {
@@ -636,7 +636,7 @@
             }
             
             #memo-title-input { width: 100% !important; font-size: 24px !important; }
-            .status-container { position: fixed; top: 35px; right: 70px; z-index: 999; }
+            .status-container { position: fixed; top: 35px; right: 55px; z-index: 999; }
             
             /* [수정] 천장에 달라붙는(Sticky) & 1줄 가로 스크롤 편집 툴바 */
             .ql-toolbar.ql-snow {
@@ -887,7 +887,8 @@
     
     <div id="mobile-overlay" class="mobile-overlay" onclick="closeAllPanelsMobile()"></div>
 
-    <button id="global-menu-btn" class="toggle-btn" style="position: fixed; top: 24px; right: 20px; z-index: 1000;" onclick="toggleRightPane()">
+    /* 삼점 */
+    <button id="global-menu-btn" class="toggle-btn" style="position: fixed; top: 24px; right: 10px; z-index: 1000;" onclick="toggleRightPane()">
         <i class="fa-solid fa-ellipsis-vertical"></i>
     </button>
 
