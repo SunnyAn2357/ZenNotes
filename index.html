@@ -2550,8 +2550,8 @@
 	    if (!toast) {
 	        toast = document.createElement('div');
 	        toast.id = 'zen-toast';
-	        // 👇 text-align:center; 추가 및 white-space:pre-wrap; 으로 수정됨
-	        toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.9); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:24px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; pointer-events:none; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6);';
+	        // 👇 폭을 넓히고(width:max-content), 단어 쪼개짐을 막는(word-break:keep-all) 속성 추가
+        	toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.9); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:24px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; pointer-events:none; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all;';
 	        document.body.appendChild(toast);
 	    }
 	    toast.innerText = msg;
