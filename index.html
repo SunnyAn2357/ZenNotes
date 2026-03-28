@@ -425,9 +425,10 @@
             display: block; /* 이미지를 독립적인 단락으로 처리 */
             margin: 16px 0; /* 위아래로 16px 여백, 좌우는 텍스트 시작선과 일치 */
             border-radius: 8px; /* 상용 앱 특유의 부드러운 둥근 모서리 적용 */
-	    min-height: 100px; /* 이미지가 없어도 최소한의 영역 확보 */
-            background-color: var(--surface); /* 빈 자리를 채울 어두운 배경색 */
-            border: 1px dashed var(--border); /* 점선 테두리로 영역 표시 */
+	    min-height: 140px; /* 이미지가 없어도 최소한의 영역 확보 */
+            background-color: #2a2a2d !important; /* 👈 입력창보다 밝은 차콜색 */
+            border: 1px solid #3d3d41 !important; /* 👈 형태를 잡아주는 미세한 테두리 */
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); /* 안쪽으로 살짝 파인 듯한 입체감 */
         }
         .ql-editor hr {
             border: none;
@@ -2523,8 +2524,8 @@
                                         imgIndex++;
                                         return restored;
                                     }
-                                    // 🎯 훨씬 더 크고 명확한 클라우드 이미지 안내판으로 교체
-                                    return match.replace(/src=""/i, 'src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDQwMCAxMjAiPjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMTIwIiBmaWxsPSIjMmUyZTMyIiByeD0iMTAiLz48dGV4dCB4PSI1MCUiIHk9IjQ1JSIgZm9udC1mYW1pbHk9IlByZXRlbmRhcmQsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM3OGE5ZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPuKYge_vuPCfSCDtmZTrnbzsmpTrkZwg64+Z6riw7ZmUIOydtOuvuOyngDwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjY1JSIgZm9udC1mYW1pbHk9IlByZXRlbmRhcmQsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiNjNGM3YzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPuyXreyCrOunmCDsm5Drvqgg6riw6riw7JeQIOyggOydpeyYgeyKteuLiOuLpDwvdGV4dD48L3N2Zz4="');
+                                    // 🎯 안내판 배경색을 CSS와 일치시켜 일체감 부여
+                                    return match.replace(/src=""/i, 'src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDQwMCAxMjAiPjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMTIwIiBmaWxsPSIjMmEyYTJkIiByeD0iMTAiLz48dGV4dCB4PSI1MCUiIHk9IjQ1JSIgZm9udC1mYW1pbHk9IlByZXRlbmRhcmQsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM3OGE5ZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPuKYge_vuPCfSCDtmZTrnbzsmpTrkZwg64+Z6riw7ZmUIOydtOuvuOyngDwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjY1JSIgZm9udC1mYW1pbHk9IlByZXRlbmRhcmQsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiNjNGM3YzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPuyXreyCrOunmCDsm5Drvqgg6riw6riw7JeQIOyggOydpeyYgeyKteuLiOuLpDwvdGV4dD48L3N2Zz4="');
                                 });
                             }
                             cloudMemo.content = mergedContent;
