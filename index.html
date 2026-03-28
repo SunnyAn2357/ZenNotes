@@ -1325,83 +1325,68 @@
 
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
-        let statusTextTimer = null; // [추가] 상태 문자 증발 방지용 중앙 제어 타이머
+		let statusTextTimer = null; // [추가] 상태 문자 증발 방지용 중앙 제어 타이머
+		let syncStartTime = 0;
 
-        // [수정] UI 상태 중앙 통제실 완벽 개조 (5초 자동 동기화 타이머 완전 삭제)
-        function updateUIState(state) {
-            const hasToken = gapiInited && gapi.client && gapi.client.getToken() !== null;
-            
-            // 기존에 돌고 있던 타이머가 있다면 즉시 취소 (상태 꼬임 원천 차단)
+		function updateUIState(state) {
             if (statusTextTimer) {
                 clearTimeout(statusTextTimer);
                 statusTextTimer = null;
             }
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
 
             if (state === 'typing' || state === 'saving') {
                 if (typingStartTime === 0) typingStartTime = Date.now();
-                statusDot.className = 'status-dot unsaved pulse-fast'; 
-                statusText.innerText = 'saving'; // [유지] 사용자님의 하드코딩 반영
+                statusDot.className = 'status-dot unsaved pulse-fast'; // 🔴 빨간 점
+                statusText.innerText = 'saving';
                 statusText.style.opacity = '1';
-                
-            } else if (state === 'syncing') {
-                // [추가] 클라우드 동기화 진행 중 (푸른 점 두근거림)
-                statusDot.className = 'status-dot saved pulse-fast'; 
-                statusText.innerText = 'syncing'; // [유지] 사용자님의 하드코딩 반영
-                statusText.style.opacity = '1';
-                
-            } else if (state === 'sync-error') {
-                // [추가] 클라우드 동기화 실패 (멈춘 붉은 점)
-                statusDot.className = 'status-dot unsaved'; 
-                statusText.innerText = 'sync error';
-                statusText.style.opacity = '1';
-                
+
             } else if (state === 'saved') {
                 const elapsed = Date.now() - typingStartTime;
-                const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
-                
+                const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0; // 빨간 점 2초 유지
                 statusTextTimer = setTimeout(() => {
                     if (saveTimer || isSaving) return;
-                    typingStartTime = 0; 
-                    
-                    if (hasToken) {
-                        statusDot.className = 'status-dot saved pulse-slow'; 
-                        statusText.innerText = 'saved';
-                        statusText.style.opacity = '1';
-                    } else {
-                        statusDot.className = 'status-dot logged-out';
-                        statusText.innerText = statusText.dataset.nsText || 'ns: 0';
-                        statusText.style.opacity = '1';
-                    }
-                    
-                    // [핵심 변경사항] 5초 자동 동기화 타이머 삭제 완료
-                    
-                    // 2초 뒤 글자 숨기기 (이 역시 중앙 타이머에 등록하여 통제)
-                    statusTextTimer = setTimeout(() => { 
+                    typingStartTime = 0;
+                    statusDot.className = 'status-dot saved pulse-slow'; // 🔵 파란 점
+                    statusText.innerText = 'saved';
+                    statusTextTimer = setTimeout(() => {
                         if (!saveTimer && !isSaving) {
-                            if (hasToken) {
-                                statusText.style.opacity = '0';
-                                statusDot.className = 'status-dot saved';
-                            } else {
-                                statusText.innerText = statusText.dataset.nsText || 'ns: 0';
-                                statusText.style.opacity = '1';
-                                statusDot.className = 'status-dot logged-out';
-                            }
+                            statusText.innerText = statusText.dataset.nsText || 'ns: 0';
+                            statusDot.className = 'status-dot saved'; // 🔵 파란 점 유지
                         }
-                    }, 2000);
+                    }, 10000); // 10초 유지
                 }, remain);
-                
-            } else if (state === 'offline-idle') {
-                statusDot.className = 'status-dot logged-out';
+
+            } else if (state === 'syncing') {
+                syncStartTime = Date.now();
+                statusDot.className = 'status-dot unsaved pulse-fast'; // 🔴 빨간 점 (동기화 중)
+                statusText.innerText = 'syncing';
+                statusText.style.opacity = '1';
+
+            } else if (state === 'synced') {
+                const elapsed = Date.now() - syncStartTime;
+                const remain = syncStartTime > 0 ? Math.max(0, 5000 - elapsed) : 0; // 최소 5초 유지
+                statusTextTimer = setTimeout(() => {
+                    syncStartTime = 0;
+                    statusDot.className = 'status-dot saved'; // 🔵 파란 점
+                    statusText.innerText = 'synced';
+                    statusTextTimer = setTimeout(() => {
+                        statusText.innerText = statusText.dataset.nsText || 'ns: 0';
+                        statusDot.className = 'status-dot saved'; // 🔵 파란 점 유지
+                    }, 10000); // 10초 유지
+                }, remain);
+
+            } else if (state === 'sync-error') {
+                statusDot.className = 'status-dot unsaved'; // 🔴 빨간 점 (에러)
+                statusText.innerText = 'sync error';
+
+            } else { // idle 상태 (offline-idle, online-idle 등 공통)
+                statusDot.className = 'status-dot saved'; // 🔵 회색 점 대신 파란 점 사용
                 statusText.innerText = statusText.dataset.nsText || 'ns: 0';
                 statusText.style.opacity = '1';
                 typingStartTime = 0;
-                
-            } else if (state === 'online-idle') {
-                // [추가] 온라인 대기 상태 (문자 숨김 처리)
-                if (!isSaving && !saveTimer) {
-                    statusText.style.opacity = '0';
-                    statusDot.className = 'status-dot saved';
-                }
+                syncStartTime = 0;
             }
         }
 
@@ -1758,7 +1743,7 @@
 					console.log("✅ 클라우드 동기화 완료");
 					localStorage.setItem('zen_last_sync_time', Date.now()); // 👈 현재 시간을 '마지막 동기화 시간'으로 기록
 					updateUnsyncedCount(); // ns: 0 으로 즉시 초기화
-					updateUIState('saved'); 
+					updateUIState('synced'); 
 
 					// 🎯 사용자에게 동기화 완료를 알리는 메시지 즉시 출력
 					if (typeof showExitToast === 'function') {
@@ -1771,7 +1756,7 @@
 							localStorage.removeItem('zen_logged_in'); 
 							checkAuthState(); 
 						}
-					}, 5000); // 5초 뒤 조용히 권한 해제
+					}, 10000); // 10초 뒤 조용히 권한 해제
                 } catch (err) {
                     console.error("❌ 전송 실패:", err);
                     updateUIState('sync-error'); 
