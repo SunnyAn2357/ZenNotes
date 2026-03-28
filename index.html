@@ -1355,7 +1355,7 @@
                             statusText.innerText = statusText.dataset.nsText || 'ns: 0';
                             statusDot.className = 'status-dot saved'; // 🔵 파란 점 유지
                         }
-                    }, 10000); // 파란 점 10초 유지
+                    }, 5000); // 파란 점 5초 유지
                 }, remain);
 
             } else if (state === 'syncing') {
@@ -1374,7 +1374,7 @@
                     statusTextTimer = setTimeout(() => {
                         statusText.innerText = statusText.dataset.nsText || 'ns: 0';
                         statusDot.className = 'status-dot saved'; // 🔵 파란 점 유지
-                    }, 10000); // 10초 유지
+                    }, 5000); // 5초 유지
                 }, remain);
 
             } else if (state === 'sync-error') {
