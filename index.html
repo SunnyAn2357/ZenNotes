@@ -586,19 +586,27 @@
             margin-right: 0 !important;
         }
 
+	/* 이미지 조절 핸들 스타일 */
+        .ql-image-resize-module .handler {
+            background-color: #78a9ff !important;
+            border: 1px solid white !important;
+            width: 10px !important;
+            height: 10px !important;
+        }
+
         @media screen and (max-width: 768px) {
 	    /* 🎯 1. 모바일 화면 전체 일괄 확대 (1.1 = 110%, 1.2 = 120%) */
 	    body {
-	        zoom: 1.05; /* 원하시는 확대 비율로 조절하세요 */
+		zoom: 1.05; /* 원하시는 확대 비율로 조절하세요 */
 	    }
 
-            .mobile-only { display: flex !important; }
+	    .mobile-only { display: flex !important; }
             .mobile-overlay { display: block; }
             .mobile-overlay.is-active { opacity: 1; pointer-events: auto; }
 
             /* [수정] 모바일 화면 전체 스크롤 및 상단 텍스트 가림막(방어막) */
             .col-center::before {
-                content: '';
+		content: '';
                 position: fixed;
                 top: 0; left: 0; right: 0;
                 height: 65px;
@@ -606,7 +614,7 @@
                 z-index: 899;
             }
             .col-center {
-		/* 🎯 2. 가로 스크롤 방지를 위해 vw를 %로 수정 */
+				/* 🎯 2. 가로 스크롤 방지를 위해 vw를 %로 수정 */
                 width: 100%;
                 min-width: 100%;
                 overflow-y: auto !important; /* 스크롤을 가운데 창 전체로 풉니다 */
@@ -617,12 +625,14 @@
                 overflow-y: visible !important; /* 에디터 내부의 좁은 스크롤은 끕니다 */
                 height: auto !important;
             }
-            
-            .editor-header {
-                padding: 85px 20px 10px !important; /* 상단 고정 버튼들에 가리지 않게 여백 조정 */
+
+	    .editor-header {
+                /* 🎯 수정됨: 여백을 (85, 20, 10)에서 (80, 14, 8)로 압축 */
+                padding: 80px 14px 8px !important; 
                 flex-direction: column;
                 align-items: flex-start !important;
-                gap: 16px;
+                /* 🎯 수정됨: 간격을 16에서 10으로 압축 */
+                gap: 10px !important; 
             }
             
             #memo-title-input { width: 100% !important; font-size: 24px !important; }
@@ -644,7 +654,8 @@
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none; /* 파이어폭스 스크롤바 숨김 */
                 
-                padding: 8px 10px !important; /* 위아래 여백을 줄여서 편집 공간 더 확보 */
+                /* 🎯 수정됨: 툴바 두께 다이어트를 위해 (8, 10)에서 (6, 8)로 압축 */
+                padding: 6px 8px !important; 
                 align-items: center;
             }
             
@@ -678,8 +689,10 @@
             }
             
             /* [수정] 모바일에서 키보드가 올라와도 글을 쓸 수 있도록 최소 높이 대폭 확보 */
-            .ql-editor { padding: 16px 20px !important; font-size: 15px; min-height: 70vh; }
-            .ql-editor.ql-blank::before { left: 20px !important; }
+            /* 🎯 수정됨: 본문 여백을 (16, 20)에서 (12, 14)로 압축하여 넓게 씀 */
+            .ql-editor { padding: 12px 14px !important; font-size: 15px; min-height: 70vh; }
+            /* 🎯 수정됨: 본문 여백에 맞춰 안내 문구 시작 위치도 20에서 14로 당김 */
+            .ql-editor.ql-blank::before { left: 14px !important; }
             
             .col-left {
                 position: fixed !important;
@@ -784,7 +797,7 @@
                [일반 노트] 메뉴 열림 상태
                - 삼점은 빛의 속도로(0초) 즉시 투명화 (방해 금지)
                - 삼점 사라진 빈자리에 메뉴가 스르륵 등장
-            ========================================= */
+			========================================= */
             .memo-actions-wrap:not(.is-pinned-state).is-menu-open .btn-more {
                 visibility: hidden;
                 transition: none; /* 딜레이 없이 즉각 소멸 */
@@ -814,13 +827,7 @@
 
             /* 고정 닫힘: 휴지통 숨김, 핀만 보임 */
             .memo-actions-wrap.is-pinned-state:not(.is-menu-open) .btn-delete {
-
-                display: none !important;   /* <--- 핀을 밀려나게 해서 삼점자리로 보냄 */
-
-                /* 고정 닫힘: 휴지통 투명화 (자리 유지), 핀 절대 고정
-                visibility: hidden !important; 
-                pointer-events: none; */
-
+                display: none !important;
             }
             /* 고정 열림: 핀 옆에 휴지통이 퍽! 나타남 */
             .memo-actions-wrap.is-pinned-state.is-menu-open .btn-delete {
@@ -833,14 +840,41 @@
                 padding: 8px !important;	/* 👈 터치 영역 - 기본 8px */
                 font-size: 14px !important;	/* 👈 아이콘 크기 - 기본 14px*/
             }
-        }
+			/* =========================================
+			1. 패널 높이 보정 (밀려남 방지)
+			- zoom 비율(1.05)만큼 높이를 나눠서 화면에 딱 맞춥니다.
+			========================================= */
+			.col-left, .col-right, .trash-pane {
+				height: calc(100vh / 1.05) !important;
+				height: calc(100svh / 1.05) !important;
+			}
 
-        /* 이미지 조절 핸들 스타일 */
-        .ql-image-resize-module .handler {
-            background-color: #78a9ff !important;
-            border: 1px solid white !important;
-            width: 10px !important;
-            height: 10px !important;
+			/* =========================================
+			2. 우측 메뉴창 간격 압축
+			========================================= */
+			.col-right {
+				gap: 16px !important; /* 큰 그룹 사이 간격 (기존 36px -> 16px 대폭 축소) */
+				padding-top: 20px !important; /* 윗부분 여백 축소 */
+			}
+			.util-section {
+				gap: 6px !important; /* 버튼들 사이 간격 (기존 12px -> 6px 축소) */
+			}
+			.util-btn {
+				padding: 8px 10px !important; /* 버튼 자체의 위아래 뚱뚱함 살짝 다이어트 */
+			}
+
+			/* =========================================
+			3. 좌측/휴지통 노트 목록 간격 압축
+			========================================= */
+			.nav-header {
+				padding: 16px 16px 12px !important; /* 상단 검색창 주변 여백 축소 */
+				gap: 10px !important; /* 버튼과 검색창 사이 간격 축소 */
+			}
+			.memo-item {
+				padding: 10px 12px !important; /* 노트 항목 안쪽 여백 축소 */
+				margin-bottom: 2px !important; /* 노트와 노트 사이 간격 축소 (기존 4px -> 2px) */
+			}
+
         }
 
     </style>
