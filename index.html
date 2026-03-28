@@ -426,7 +426,9 @@
             display: block;
             margin: 20px 0;
             border-radius: 12px;
-            background-color: #2a2a2d; /* 기본 배경색 */
+            /* 🎯 테두리 삭제, 배경색은 진한 남색 톤의 회색으로 심화 */
+            background-color: #1A1D24; 
+            border: none; /* 끊겨 보이던 테두리 완전 삭제 */
         }
 
         /* 2. 🎯 클라우드 동기화 대기 중인 이미지 가로채기 스타일 */
@@ -435,14 +437,14 @@
         .ql-editor img[src=""], 
         .ql-editor img:not([src]) {
             width: 100% !important;
-            height: 160px !important; /* 높이를 확보해서 안내판이 잘 보이게 함 */
-            background-color: #2a2a2d !important;
-            border: 1px dashed #3d3d41 !important;
+            height: 160px !important; 
+            background-color: #1A1D24 !important; /* 배경색 통일 */
+            border: none !important; /* 테두리 삭제 */
             display: block !important;
             position: relative;
             
-            /* ☁️ 안내판 이미지를 CSS 배경으로 직접 주입 (가장 확실함) */
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='120'%3E%3Ctext x='50%25' y='45%25' font-family='Pretendard, sans-serif' font-size='16' fill='%2378a9ff' text-anchor='middle' dominant-baseline='middle'%3E☁️ 이미지 동기화 대기 중%3C/text%3E%3Ctext x='50%25' y='65%25' font-family='Pretendard, sans-serif' font-size='12' fill='%23c4c7c5' text-anchor='middle' dominant-baseline='middle'%3E다른 기기에서 업로드된 이미지를 기다리고 있습니다.%3C/text%3E%3C/svg%3E") !important;
+            /* ☁️ 안내판 이미지 직접 주입: 문구 한 줄로 축소 및 한 칸 띄우기 적용 */
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='120'%3E%3Ctext x='50%25' y='55%25' font-family='Pretendard, sans-serif' font-size='16' fill='%2378a9ff' text-anchor='middle' dominant-baseline='middle'%3E☁️ 다른 기기에서 저장한 이미지입니다.%3C/text%3E%3C/svg%3E") !important;
             background-repeat: no-repeat !important;
             background-position: center !important;
             background-size: auto !important;
