@@ -419,13 +419,12 @@
             width: 100%;
             position: relative;
         }
-        .ql-editor img {
+       .ql-editor img {
             max-width: 100%;
             height: auto;
             display: block;
-            margin: 20px 0;
-            border-radius: 12px;
-            background-color: #0D1117; 
+            margin: 16px 0;
+            border-radius: 8px;
         }
         .ql-editor hr {
             border: none;
@@ -2521,8 +2520,7 @@
                                         imgIndex++;
                                         return restored;
                                     }
-                                    // 🎯 완벽하게 인코딩된 SVG 주입 (테두리, 깨진 아이콘 원천 차단 + 진한 남색 배경)
-                                    return match.replace(/src=""/i, "src=\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'400'%20height%3D'120'%20viewBox%3D'0%200%20400%20120'%3E%3Crect%20width%3D'400'%20height%3D'120'%20fill%3D'%230D1117'%20rx%3D'12'%2F%3E%3Ctext%20x%3D'50%25'%20y%3D'50%25'%20font-family%3D'Pretendard%2C%20sans-serif'%20font-size%3D'15'%20fill%3D'%2378a9ff'%20text-anchor%3D'middle'%20dominant-baseline%3D'central'%3E%E2%98%81%EF%B8%8F%20%EB%8B%A4%EB%A5%B8%20%EA%B8%B0%EA%B8%B0%EC%97%90%EC%84%9C%20%EC%A0%80%EC%9E%A5%ED%95%9C%20%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%9E%85%EB%8B%88%EB%8B%A4.%3C%2Ftext%3E%3C%2Fsvg%3E\"");
+                                    return match;
                                 });
                             }
                             cloudMemo.content = mergedContent;
