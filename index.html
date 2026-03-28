@@ -1625,8 +1625,8 @@
 				const memos = e.target.result;
         
 				// 1. 휴지통에 없고(!m.isDeleted)
-				// 2. 마지막 동기화 시간보다 나중에 수정된(m.updatedAt > lastSync) 노트만 카운트
-				const unsyncedCount = memos.filter(m => !m.isDeleted && m.updatedAt > lastSync).length;
+				// 2. ✅ 변경 후 (휴지통 이동, 영구삭제를 포함하여 '어쨌든 변경된' 모든 노트를 카운트)
+				const unsyncedCount = memos.filter(m => m.updatedAt > lastSync).length;
         
 				const statusText = document.getElementById('status-text');
 				statusText.dataset.nsText = `ns: ${unsyncedCount}`; // 계산된 값을 HTML 데이터로 임시 저장
@@ -1845,7 +1845,8 @@
                     const cursor = e.target.result;
                     if (cursor) {
                         const m = cursor.value;
-                        if (!m.isDeleted && (m.title.toLowerCase().includes(query) || (m.plainText && m.plainText.toLowerCase().includes(query)))) {
+			// ✅ 변경 후 (!m.isPermanentlyDeleted 조건 추가)
+                        if (!m.isDeleted && !m.isPermanentlyDeleted && (m.title.toLowerCase().includes(query) || (m.plainText && m.plainText.toLowerCase().includes(query)))) {
                             if (m.pinnedAt) pinnedMemos.push(m);
                             else normalMemos.push(m);
                         }
@@ -1879,7 +1880,8 @@
                 const cursor = e.target.result;
                 if (cursor) {
                     const m = cursor.value;
-                    if (m.isDeleted && (m.title.toLowerCase().includes(query) || (m.plainText && m.plainText.toLowerCase().includes(query)))) {
+                    // ✅ 변경 후 (!m.isPermanentlyDeleted 조건 추가)
+	            if (m.isDeleted && !m.isPermanentlyDeleted && (m.title.toLowerCase().includes(query) || (m.plainText && m.plainText.toLowerCase().includes(query)))) {
                         displayedTrashMemos.push(m);
                     }
                     cursor.continue();
@@ -2163,11 +2165,24 @@
             if (!confirm(targets.length > 1 ? `선택한 ${targets.length}개의 노트를 영구 삭제하시겠습니까?` : '이 노트를 영구 삭제하시겠습니까? (복구 불가)')) return;
             
             const tx = db.transaction(['memos'], 'readwrite');
-            targets.forEach(targetId => tx.objectStore('memos').delete(targetId));
+            const store = tx.objectStore('memos'); // 🎯 추가됨
+            
+            // 🎯 삭제(delete) 대신 영구삭제 꼬리표(isPermanentlyDeleted)를 달아둠
+            targets.forEach(targetId => {
+                store.get(targetId).onsuccess = ev => {
+                    const memo = ev.target.result;
+                    if (memo) {
+                        memo.isPermanentlyDeleted = true;
+                        memo.updatedAt = Date.now();
+                        store.put(memo);
+                    }
+                };
+            });
             
             tx.oncomplete = () => {
                 targets.forEach(targetId => selectedTrashMemos.delete(targetId));
                 loadTrashList();
+                updateUnsyncedCount(); // 🎯 삭제했다는 사실도 동기화해야 하므로 카운트 업데이트
             };
         }
 
@@ -2177,11 +2192,18 @@
             
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
-            displayedTrashMemos.forEach(memo => store.delete(memo.id));
+            
+            // 🎯 삭제(delete) 대신 꼬리표 달기
+            displayedTrashMemos.forEach(memo => {
+                memo.isPermanentlyDeleted = true;
+                memo.updatedAt = Date.now();
+                store.put(memo);
+            });
             
             tx.oncomplete = () => {
                 selectedTrashMemos.clear();
                 loadTrashList();
+                updateUnsyncedCount();
             };
         }
 
