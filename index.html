@@ -54,8 +54,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
-
     <style>
         :root {
             --bg: #131314;
@@ -421,7 +419,13 @@
             width: 100%;
             position: relative;
         }
-
+	.ql-editor img {
+            max-width: 100%; /* 큰 이미지는 에디터 폭에 맞춰 자동으로 축소 */
+            height: auto; /* 이미지 원본 비율 찌그러짐 방지 */
+            display: block; /* 이미지를 독립적인 단락으로 처리 */
+            margin: 16px 0; /* 위아래로 16px 여백, 좌우는 텍스트 시작선과 일치 */
+            border-radius: 8px; /* 상용 앱 특유의 부드러운 둥근 모서리 적용 */
+        }
         .ql-editor hr {
             border: none;
             border-bottom: 1px solid var(--border);
@@ -437,7 +441,6 @@
             pointer-events: none !important;
             opacity: 0.9;
         }
-
         .col-right {
             position: fixed;
             right: 0;
@@ -457,7 +460,6 @@
             transition: transform 0.25s ease-in-out;
         }
         .col-right.is-closed { transform: translateX(100%); }
-
         .trash-pane {
             position: fixed;
             right: 0;
@@ -475,7 +477,6 @@
             box-shadow: -4px 0 24px rgba(0,0,0,0.4);
         }
         .trash-pane.is-open { transform: translateX(0); }
-
         .util-section { display: flex; flex-direction: column; gap: 12px; }
         .util-title {
             font-size: 11px;
@@ -505,7 +506,6 @@
             hr.print-hr { display: block !important; border-bottom: 1px solid #d4d4d4; margin: 0 16px 16px; }
             .ql-editor { color: black !important; }
         }
-
         .ql-editor * { background-color: transparent !important; }
         .ql-editor pre.ql-syntax {
             background-color: #1E222A !important;
@@ -519,6 +519,16 @@
             margin: 1rem 0 !important;
             overflow-x: auto;
         }
+	/* 세련된 인용구(Blockquote) 스타일 */
+        .ql-editor blockquote {
+            border-left: 4px solid var(--accent) !important; /* 포인트 컬러로 굵은 선 */
+            background-color: var(--surface) !important; /* 배경색을 아주 살짝 깔아줌 */
+            margin: 16px 0 !important;
+            padding: 12px 16px !important;
+            color: var(--text-muted) !important; /* 글자색을 살짝 차분하게 */
+            font-style: normal !important; /* 촌스러운 기울임꼴 제거 */
+            border-radius: 0 8px 8px 0 !important; /* 오른쪽 모서리만 둥글게 */
+        }
         .ql-editor code {
             background-color: rgba(120, 169, 255, 0.1) !important;
             color: var(--accent) !important;
@@ -527,7 +537,6 @@
             font-size: 0.9em !important;
             font-family: inherit;
         }
-        
         .ql-editor pre.ql-syntax span { background-color: transparent !important; }
         .ql-editor pre.ql-syntax span.hljs-keyword,
         .ql-editor pre.ql-syntax span.hljs-selector-tag { color: #c678dd !important; font-weight: 500; }
@@ -541,7 +550,6 @@
         .ql-editor pre.ql-syntax span.hljs-literal { color: #d19a66 !important; }
         .ql-editor pre.ql-syntax span.hljs-built_in,
         .ql-editor pre.ql-syntax span.hljs-name { color: #56b6c2 !important; }
-        
         .ql-editor ol, .ql-editor ul { padding-left: 1.5em !important; }
         .ql-editor li:not(.ql-direction-rtl)::before {
             margin-left: -1.5em !important;
@@ -553,9 +561,7 @@
         .ql-editor .ql-indent-1:not(.ql-direction-rtl) { padding-left: 3em !important; }
         .ql-editor .ql-indent-2:not(.ql-direction-rtl) { padding-left: 4.5em !important; }
         .ql-editor .ql-indent-3:not(.ql-direction-rtl) { padding-left: 6em !important; }
-
         .mobile-only { display: none !important; }
-        
         .mobile-overlay {
             display: none;
             position: fixed;
@@ -586,14 +592,6 @@
             margin-right: 0 !important;
         }
 
-	/* 이미지 조절 핸들 스타일 */
-        .ql-image-resize-module .handler {
-            background-color: #78a9ff !important;
-            border: 1px solid white !important;
-            width: 10px !important;
-            height: 10px !important;
-        }
-
         @media screen and (max-width: 768px) {
 	    /* 🎯 1. 모바일 화면 전체 일괄 확대 (1.1 = 110%, 1.2 = 120%) */
 	    body {
@@ -614,7 +612,7 @@
                 z-index: 899;
             }
             .col-center {
-				/* 🎯 2. 가로 스크롤 방지를 위해 vw를 %로 수정 */
+		/* 🎯 2. 가로 스크롤 방지를 위해 vw를 %로 수정 */
                 width: 100%;
                 min-width: 100%;
                 overflow-y: auto !important; /* 스크롤을 가운데 창 전체로 풉니다 */
@@ -1122,9 +1120,6 @@
         DividerBlot.tagName = 'hr';
         Quill.register(DividerBlot);
 
-        // [1] 이미지 조절 라이브러리를 위한 전역 설정
-        window.Quill = Quill;
-
         // [2] 에디터 본체 설정 (조절 기능 포함)
         const quill = new Quill('#editor', {
             theme: 'snow',
@@ -1132,7 +1127,6 @@
             placeholder: '여기에 지식을 기록하세요...',
             modules: {
                 syntax: true,
-                imageResize: { displaySize: true }, // 8방향 핸들 활성화
                 toolbar: {
                     container: [
                         [{ 'header':[1, 2, 3, false] }],
@@ -1142,6 +1136,15 @@
                         ['clean']
                     ],
                     handlers: {
+			'image': function() {
+                            const input = document.createElement('input');
+                            input.setAttribute('type', 'file');
+                            input.setAttribute('accept', 'image/*');
+                            input.click();
+                            input.onchange = () => {
+                                if (input.files[0]) handleImageFiles([input.files[0]]);
+                            };
+                        },
                         'divider': function() {
                             const r = this.quill.getSelection(true);
                             this.quill.insertText(r.index, '\n', Quill.sources.USER);
@@ -1182,8 +1185,9 @@
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         const range = quill.getSelection(true);
-                        quill.insertEmbed(range.index, 'image', e.target.result);
-                        quill.setSelection(range.index + 1);
+                        quill.insertEmbed(range.index, 'image', e.target.result, Quill.sources.USER);
+                        quill.setSelection(range.index + 1, Quill.sources.SILENT);
+                        triggerAutoSave(); // 🎯 이미지 삽입 즉시 자동 저장 강제 실행
                     };
                     reader.readAsDataURL(file);
                 }
@@ -1494,13 +1498,12 @@
                 } 
             
                 // [4순위] 이미지 선택 해제 또는 서식 블록(인용구 등) 탈출
-                else {
-                    if (!escapeFormattingBlock()) {
-                        const selectedImg = document.querySelector('.ql-editor img.ql-selected');
-                        if (selectedImg) selectedImg.classList.remove('ql-selected');
-                        document.activeElement.blur();
-                    }
-                }
+                // [4순위] 서식 블록(인용구 등) 탈출
+		else {
+		    if (!escapeFormattingBlock()) {
+		        document.activeElement.blur();
+		    }
+		}
             }
         });
 
@@ -1569,17 +1572,11 @@
                 return;
             }
 
-            // [4순위] 이미지 선택 해제 또는 서식 블록 탈출
-            const selectedImg = document.querySelector('.ql-editor img.ql-selected');
-            if (selectedImg) {
-                selectedImg.classList.remove('ql-selected');
-                history.pushState({ page: 'main' }, '');
-                return;
-            }
-            if (escapeFormattingBlock()) {
-                history.pushState({ page: 'main' }, '');
-                return;
-            }
+            // [4순위] 서식 블록 탈출
+	    if (escapeFormattingBlock()) {
+	        history.pushState({ page: 'main' }, '');
+	        return;
+	    }
 
             // [5순위] 앱 종료 방어 및 최종 정리 (가비지 컬렉션 + 최종 저장)
             const now = Date.now();
@@ -1633,7 +1630,13 @@
             document.title = title;
             const content = quill.root.innerHTML, plainText = quill.getText();
             
-            if (!currentMemoId && !document.getElementById('memo-title-input').value && plainText.trim() === '') {
+            // 🎯 수정: 글자가 없어도 이미지가 포함되어 있다면 저장을 진행하도록 변경
+	    // 1. 🎯 변수 2개 추가 (글자 없음? 이미지 없음?)
+            const hasNoText = plainText.trim() === '';
+            const hasNoImage = !content.includes('<img'); // HTML 내용에 이미지가 없는지 확인
+
+	    // 2. 🎯 if 조건문 수정 (글자도 없고 + 이미지도 없을 때만 저장을 건너뜀)
+            if (!currentMemoId && !document.getElementById('memo-title-input').value && hasNoText && hasNoImage) {
                 updateUIState('saved');
                 saveTimer = null;
                 return;
@@ -1811,10 +1814,13 @@
             lastSelectedId = null;
             document.getElementById('memo-title-input').value = '';
             document.title = "새 노트";
+            
+            isLoading = true; // 👈 1. 방어막 켜기 (가짜 타이핑 신호 차단)
             quill.root.innerHTML = '';
             updateUIState('saved');
             loadMemoList();
             closeAllPanelsMobile();
+            setTimeout(() => { isLoading = false; }, 100); // 👈 2. 0.1초 뒤 에디터가 진정하면 방어막 해제
         }
 
         function loadMemoList(queryDB = true) {
