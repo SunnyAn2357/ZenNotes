@@ -425,6 +425,9 @@
             display: block; /* 이미지를 독립적인 단락으로 처리 */
             margin: 16px 0; /* 위아래로 16px 여백, 좌우는 텍스트 시작선과 일치 */
             border-radius: 8px; /* 상용 앱 특유의 부드러운 둥근 모서리 적용 */
+	    min-height: 100px; /* 이미지가 없어도 최소한의 영역 확보 */
+            background-color: var(--surface); /* 빈 자리를 채울 어두운 배경색 */
+            border: 1px dashed var(--border); /* 점선 테두리로 영역 표시 */
         }
         .ql-editor hr {
             border: none;
@@ -2520,7 +2523,8 @@
                                         imgIndex++;
                                         return restored;
                                     }
-                                    return match.replace(/src=""/i, 'src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjEyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBhbGlnbm1lbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI2FhYSI+WDwvdGV4dD48L3N2Zz4="');
+                                    // 🎯 훨씬 더 크고 명확한 클라우드 이미지 안내판으로 교체
+                                    return match.replace(/src=""/i, 'src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDQwMCAxMjAiPjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMTIwIiBmaWxsPSIjMmUyZTMyIiByeD0iMTAiLz48dGV4dCB4PSI1MCUiIHk9IjQ1JSIgZm9udC1mYW1pbHk9IlByZXRlbmRhcmQsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM3OGE5ZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPuKYge_vuPCfSCDtmZTrnbzsmpTrkZwg64+Z6riw7ZmUIOydtOuvuOyngDwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjY1JSIgZm9udC1mYW1pbHk9IlByZXRlbmRhcmQsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiNjNGM3YzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPuyXreyCrOunmCDsm5Drvqgg6riw6riw7JeQIOyggOydpeyYgeyKteuLiOuLpDwvdGV4dD48L3N2Zz4="');
                                 });
                             }
                             cloudMemo.content = mergedContent;
@@ -2565,7 +2569,7 @@
 	        toast = document.createElement('div');
 	        toast.id = 'zen-toast';
 	        // 👇 폭을 넓히고(width:max-content), 단어 쪼개짐을 막는(word-break:keep-all) 속성 추가
-        	toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.9); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:24px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; pointer-events:none; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all;';
+        	toast.style.cssText = 'position:fixed; bottom:160px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.9); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; pointer-events:none; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all;';
 	        document.body.appendChild(toast);
 	    }
 	    toast.innerText = msg;
