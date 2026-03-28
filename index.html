@@ -909,7 +909,7 @@
                     <button id="btn-paste" class="btn-paste">
                         <i class="fa-solid fa-paste"></i>
                     </button>
-                    <span id="status-text" class="status-text">offline</span>
+                    <span id="status-text" class="status-text">ns: 0</span>
                     <div id="status-dot" class="status-dot logged-out"></div>
                 </div>
             </div>
@@ -926,8 +926,8 @@
                 <i class="fa-solid fa-bars"></i>
             </button>
             <button class="toggle-btn" id="btn-auth">
-                <i class="fa-brands fa-google"></i>
-            </button>
+				<i class="fa-solid fa-cloud-arrow-up"></i>
+			</button>
         </div>
 
         <div class="util-section">
@@ -1016,15 +1016,6 @@
         }
             } else {
                 togglePin(id, e);
-            }
-        }
-
-        let tokenRefreshTimer = null;
-
-        function silentTokenRefresh() {
-            if (localStorage.getItem('zen_logged_in') === 'true' && tokenClient) {
-                console.log(">>> [3단계] 토큰 만료 임박(45분): 백그라운드 갱신 시도");
-                tokenClient.requestAccessToken({ prompt: '' });
             }
         }
 
@@ -1306,6 +1297,7 @@
             console.log("✅ 로컬 DB 연결 성공!"); // 성공 로그 추가
             runAutoPurge(); 
             loadMemoList();
+			updateUnsyncedCount();
         };
 
         // 👇 이 부분이 추가되었습니다. DB 연결이 막혔을 때 에러를 띄워줍니다.
@@ -1374,7 +1366,7 @@
                         statusText.style.opacity = '1';
                     } else {
                         statusDot.className = 'status-dot logged-out';
-                        statusText.innerText = 'offline';
+                        statusText.innerText = statusText.dataset.nsText || 'ns: 0';
                         statusText.style.opacity = '1';
                     }
                     
@@ -1387,7 +1379,7 @@
                                 statusText.style.opacity = '0';
                                 statusDot.className = 'status-dot saved';
                             } else {
-                                statusText.innerText = 'offline';
+                                statusText.innerText = statusText.dataset.nsText || 'ns: 0';
                                 statusText.style.opacity = '1';
                                 statusDot.className = 'status-dot logged-out';
                             }
@@ -1397,7 +1389,7 @@
                 
             } else if (state === 'offline-idle') {
                 statusDot.className = 'status-dot logged-out';
-                statusText.innerText = 'offline';
+                statusText.innerText = statusText.dataset.nsText || 'ns: 0';
                 statusText.style.opacity = '1';
                 typingStartTime = 0;
                 
@@ -1615,10 +1607,34 @@
                 if (window.quill && quill.hasFocus()) quill.blur();
 
                 // [핵심 변경사항] 사용자 요청 문구 적용 완료!
-                showExitToast("뒤로가기 버튼을 한 번 더 누르면 종료됩니다.\n(온라인 동기화 → 다음 로그인 시)");
+                showExitToast("뒤로가기 버튼을 한 번 더 누르면 종료됩니다.\n(온라인 동기화: 다음 로그인 시)");
                 history.pushState({ page: 'main' }, '');
             }
         });
+
+		// ✅ 추가할 함수: 동기화되지 않은 노트(ns) 개수 계산
+		function updateUnsyncedCount() {
+			if (!db) return;
+			// 마지막으로 동기화에 성공했던 시간을 가져옵니다 (없으면 0)
+			const lastSync = parseInt(localStorage.getItem('zen_last_sync_time') || '0', 10);
+    
+			db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = e => {
+				const memos = e.target.result;
+        
+				// 1. 휴지통에 없고(!m.isDeleted)
+				// 2. 마지막 동기화 시간보다 나중에 수정된(m.updatedAt > lastSync) 노트만 카운트
+				const unsyncedCount = memos.filter(m => !m.isDeleted && m.updatedAt > lastSync).length;
+        
+				const statusText = document.getElementById('status-text');
+				statusText.dataset.nsText = `ns: ${unsyncedCount}`; // 계산된 값을 HTML 데이터로 임시 저장
+        
+				// 만약 현재 화면에 'ns: ' 텍스트가 떠있는 상태라면 실시간으로 숫자 업데이트
+				if (statusText.innerText.startsWith('ns:') || statusText.innerText === 'offline') {
+					statusText.innerText = `ns: ${unsyncedCount}`;
+					statusText.style.opacity = '1';
+				}
+			};
+		}
 
         function executeSave() {
             if (isSaving || isLoading) {
@@ -1661,6 +1677,7 @@
                 saveTimer = null;
                 updateUIState('saved');
                 loadMemoList(true);
+				updateUnsyncedCount();
                 if (pendingSave) {
                     pendingSave = false;
                     executeSave();
@@ -1735,8 +1752,23 @@
                         });
                     }
 
-                    console.log("✅ 클라우드 동기화 완료 (이제 확실히 보입니다)");
-                    updateUIState('saved'); 
+					console.log("✅ 클라우드 동기화 완료");
+					localStorage.setItem('zen_last_sync_time', Date.now()); // 👈 현재 시간을 '마지막 동기화 시간'으로 기록
+					updateUnsyncedCount(); // ns: 0 으로 즉시 초기화
+					updateUIState('saved'); 
+
+					// 🎯 사용자에게 동기화 완료를 알리는 메시지 즉시 출력
+					if (typeof showExitToast === 'function') {
+						showExitToast("✅ 동기화가 완료되었습니다.");
+					}
+
+					setTimeout(() => {
+						if (gapi.client && gapi.client.getToken() !== null) {
+							gapi.client.setToken(null); 
+							localStorage.removeItem('zen_logged_in'); 
+							checkAuthState(); 
+						}
+					}, 5000); // 5초 뒤 조용히 권한 해제
                 } catch (err) {
                     console.error("❌ 전송 실패:", err);
                     updateUIState('sync-error'); 
@@ -2092,6 +2124,7 @@
                 if (targets.includes(currentMemoId)) createNewMemo();
                 else loadMemoList();
                 targets.forEach(targetId => selectedMemos.delete(targetId));
+				updateUnsyncedCount();
             };
         }
 
@@ -2117,6 +2150,7 @@
                 targets.forEach(targetId => selectedTrashMemos.delete(targetId));
                 loadTrashList();
                 loadMemoList();
+				updateUnsyncedCount();
             };
         }
 
@@ -2401,49 +2435,37 @@
             checkAuthState(); 
         });
 
-        document.getElementById('btn-auth').addEventListener('click', () => {
-            if (!gapiInited || !gisInited) return;
-            closeAllPanelsMobile(); 
-            
-            if (gapi.client.getToken() !== null) {
-                if (confirm('구글 계정에서 로그아웃 하시겠습니까?')) {
-                    const token = gapi.client.getToken();
-                    
-                    google.accounts.oauth2.revoke(token.access_token, () => {
-                        console.log('>>> 구글 토큰 회수 완료');
-                    });
-                    
-                    gapi.client.setToken(null);
-                    localStorage.removeItem('zen_logged_in');
-                    if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-                    checkAuthState(); 
-                }
-                return; 
-            }
-            
-            tokenClient.callback = async (resp) => {
-                if (resp.error !== undefined) {
-                    console.warn(">>> 로그인 실패/취소됨", resp.error);
-                    localStorage.removeItem('zen_logged_in');
-                    checkAuthState();
-                    return;
-                }
-                
-                localStorage.setItem('zen_logged_in', 'true');
-                checkAuthState(); 
-                
-                const icon = document.querySelector('#btn-auth i');
-                icon.classList.add('blink-active');
-                setTimeout(() => icon.classList.remove('blink-active'), 1500);
-                
-                if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-                tokenRefreshTimer = setTimeout(silentTokenRefresh, 45 * 60 * 1000);
-                
-                smartSync(); 
-            };
-            
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-        });
+		document.getElementById('btn-auth').addEventListener('click', () => {
+			if (!gapiInited || !gisInited) {
+				alert('구글 서비스 준비 중입니다. 잠시 후 다시 시도해주세요.');
+				return;
+			}
+			closeAllPanelsMobile(); 
+    
+			// 만약 5초가 안 지나서 권한(토큰)이 살아있을 때 또 눌렀다면 바로 동기화 진행
+			if (gapi.client.getToken() !== null) {
+				smartSync();
+				return; 
+			}
+    
+			// 권한이 없다면 구글에 조용히 토큰 요청
+			tokenClient.callback = async (resp) => {
+				if (resp.error !== undefined) {
+					console.warn(">>> 동기화 취소 또는 에러", resp.error);
+					return;
+				}
+
+				// 아이콘 깜빡임 효과
+				const icon = document.querySelector('#btn-auth i');
+				icon.classList.add('blink-active');
+				setTimeout(() => icon.classList.remove('blink-active'), 1500);
+        
+				smartSync(); // 권한을 받아왔으니 즉시 백업(동기화) 시작
+			};
+    
+			// prompt: 'consent'를 지웠기 때문에, 최초 1회 이후엔 동의 창 없이 스무스하게 넘어갑니다.
+			tokenClient.requestAccessToken(); 
+		});
 
         async function smartSync() {
             if (!gapi.client.getToken() || !db) return;
