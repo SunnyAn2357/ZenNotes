@@ -1747,12 +1747,6 @@
 					localStorage.setItem('zen_last_sync_time', Date.now()); // 👈 현재 시간을 '마지막 동기화 시간'으로 기록
 					updateUnsyncedCount(); // ns: 0 으로 즉시 초기화
 					updateUIState('synced'); 
-
-					// 🎯 사용자에게 동기화 완료를 알리는 메시지 즉시 출력
-					if (typeof showExitToast === 'function') {
-						showExitToast("✅ 동기화가 완료되었습니다.");
-					}
-
 					setTimeout(() => {
 						if (gapi.client && gapi.client.getToken() !== null) {
 							gapi.client.setToken(null); 
