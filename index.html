@@ -1609,6 +1609,11 @@
                 history.back(); 
             } else {
                 backPressTimer = now;
+                
+                // ⭐️ 핵심: 브라우저가 이전 상태로 돌아가면서 에디터에 강제로 포커스를 주는 현상 즉각 차단
+                if (document.activeElement) document.activeElement.blur();
+                if (window.quill && quill.hasFocus()) quill.blur();
+
                 // [핵심 변경사항] 사용자 요청 문구 적용 완료!
                 showExitToast("뒤로가기 버튼을 한 번 더 누르면 종료됩니다.\n(온라인 동기화 → 다음 로그인 시)");
                 history.pushState({ page: 'main' }, '');
@@ -2532,10 +2537,13 @@
         let backPressTimer = 0;
 
         window.addEventListener('load', () => {
-			if (window.innerWidth <= 768) {
-				history.pushState({ page: 'main' }, ''); 
-			}
-	});
+            if (window.innerWidth <= 768) {
+                // 1. 진짜 첫 화면을 'base'로 못 박아둡니다.
+                history.replaceState({ page: 'base' }, ''); 
+                // 2. 그 위에 'main'을 얹어 완벽한 이중 방어막을 칩니다.
+                history.pushState({ page: 'main' }, ''); 
+            }
+        });
 
         function showExitToast(msg) {
             let toast = document.getElementById('zen-toast');
