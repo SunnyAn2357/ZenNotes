@@ -1344,7 +1344,7 @@
 
             } else if (state === 'saved') {
                 const elapsed = Date.now() - typingStartTime;
-                const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0; // 빨간 점 2초 유지
+                const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0; // 빨간 점 최소 2초 유지
                 statusTextTimer = setTimeout(() => {
                     if (saveTimer || isSaving) return;
                     typingStartTime = 0;
@@ -1355,7 +1355,7 @@
                             statusText.innerText = statusText.dataset.nsText || 'ns: 0';
                             statusDot.className = 'status-dot saved'; // 🔵 파란 점 유지
                         }
-                    }, 10000); // 10초 유지
+                    }, 10000); // 파란 점 10초 유지
                 }, remain);
 
             } else if (state === 'syncing') {
@@ -1366,7 +1366,7 @@
 
             } else if (state === 'synced') {
                 const elapsed = Date.now() - syncStartTime;
-                const remain = syncStartTime > 0 ? Math.max(0, 5000 - elapsed) : 0; // 최소 5초 유지
+                const remain = syncStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0; // 빨간 점 최소 2초 유지
                 statusTextTimer = setTimeout(() => {
                     syncStartTime = 0;
                     statusDot.className = 'status-dot saved'; // 🔵 파란 점
