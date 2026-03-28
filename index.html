@@ -257,7 +257,7 @@
 
         .status-container {
             position: fixed;
-            top: 34px;
+            top: 35px;
             right: 70px;
             z-index: 999;
             display: flex;
@@ -587,6 +587,11 @@
         }
 
         @media screen and (max-width: 768px) {
+	    /* 🎯 1. 모바일 화면 전체 일괄 확대 (1.1 = 110%, 1.2 = 120%) */
+	    body {
+	        zoom: 1.05; /* 원하시는 확대 비율로 조절하세요 */
+	    }
+
             .mobile-only { display: flex !important; }
             .mobile-overlay { display: block; }
             .mobile-overlay.is-active { opacity: 1; pointer-events: auto; }
@@ -600,11 +605,12 @@
                 background-color: var(--bg);
                 z-index: 899;
             }
-            .col-center { 
-                width: 100vw; 
-                min-width: 100vw; 
+            .col-center {
+		/* 🎯 2. 가로 스크롤 방지를 위해 vw를 %로 수정 */
+                width: 100%;
+                min-width: 100%;
                 overflow-y: auto !important; /* 스크롤을 가운데 창 전체로 풉니다 */
-                display: block !important; 
+                display: block !important;
             }
             .quill-wrapper, .ql-container.ql-snow {
                 display: block !important;
@@ -620,7 +626,7 @@
             }
             
             #memo-title-input { width: 100% !important; font-size: 24px !important; }
-            .status-container { position: fixed; top: 34px; right: 70px; z-index: 999; }
+            .status-container { position: fixed; top: 35px; right: 70px; z-index: 999; }
             
             /* [수정] 천장에 달라붙는(Sticky) & 1줄 가로 스크롤 편집 툴바 */
             .ql-toolbar.ql-snow {
@@ -837,40 +843,6 @@
             height: 10px !important;
         }
 
-        /* [추가] 헤더 스마트 붙여넣기 버튼 스타일 */
-        .status-container .btn-paste {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: none;
-            border: none;
-            padding: 0;
-            cursor: pointer;
-            color: var(--text-muted); /* 기본 색상 */
-            transition: color 0.2s ease; /* 부드러운 색상 변화 */
-            opacity: 0.8; /* 기본 투명도 */
-            /* 👇 이 숫자를 조절해서 왼쪽으로 얼마나 밀지 결정하세요 (예: 15px, 20px 등) */
-            margin-right: 4px;
-        }
-
-        /* [추가] 마우스 올렸을 때 툴박스처럼 푸른색 효과 */
-        .status-container .btn-paste:hover i {
-            color: var(--accent) !important;
-            opacity: 1;
-        }
-
-        /* [추가] 붙여넣기 아이콘 크기 (조절 가능) */
-        .status-container .btn-paste i {
-            font-size: 12px; /* 기본 크기: status-text보다 살짝 크게 */
-        }
-
-        /* [추가] 모바일 화면에서의 버튼 크기 (조절 가능) */
-        @media screen and (max-width: 768px) {
-            .status-container .btn-paste i {
-                font-size: 14px; /* 모바일: 터치 영역 확보를 위해 살짝 크게 */
-            }
-        }
-
     </style>
 </head>
 <body>
@@ -906,9 +878,6 @@
             <input type="text" id="memo-title-input" placeholder="제목 없는 노트">
             <div class="editor-actions">
                 <div class="status-container">
-                    <button id="btn-paste" class="btn-paste">
-                        <i class="fa-solid fa-paste"></i>
-                    </button>
                     <span id="status-text" class="status-text">ns: 0</span>
                     <div id="status-dot" class="status-dot logged-out"></div>
                 </div>
@@ -2226,24 +2195,6 @@
                 updatedAt: Date.now()
             })], {type:'application/json'}), `${getTitle()}.json`);
         }
-
-        // 헤더 붙여넣기 버튼 기능
-        document.getElementById('btn-paste').addEventListener('click', async () => {
-            closeAllPanelsMobile(); 
-            try {
-                const text = await navigator.clipboard.readText();
-                if (!text) return; 
-                
-                const range = quill.getSelection(true); 
-                if (range) {
-                    quill.insertText(range.index, text, Quill.sources.USER);
-                    quill.setSelection(range.index + text.length, Quill.sources.SILENT);
-                }
-            } catch (err) {
-                console.error("클립보드 읽기 실패:", err);
-                alert('붙여넣기 권한이 필요합니다.');
-            }
-        });
 
         function backupAllData() {
             db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = e => {
