@@ -870,7 +870,7 @@
             ========================================= */
             .col-right {
                 gap: 40px !important; 
-                padding-top: 20px !important; 
+                padding-top: 24px !important; 
             }
             .util-section {
                 gap: 8px !important; 
@@ -890,6 +890,23 @@
                 padding: 10px 12px !important; 
                 margin-bottom: 2px !important; 
             }
+        }
+
+	/* 🎯 [디테일 교정] '새 노트 작성'과 '비우기' 버튼 높이 완벽 일치 */
+        .new-note-btn {
+            min-height: 24px; /* 버튼이 숨쉴 수 있는 최소 높이 고정 */
+        }
+        .new-note-btn i {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* 👆 펜과 휴지통 아이콘을 똑같은 16px 정사각형 틀 안에 가둬서 중심을 맞춤 */
+        }
+        .new-note-btn .btn-text {
+            line-height: 1.2; /* 괄호나 숫자로 인해 중심축이 흔들리는 현상 차단 */
+            transform: translateY(1px); /* 폰트 특성상 붕 떠 보이는 것을 1px 묵직하게 눌러줌 */
         }
 
     </style>
@@ -992,7 +1009,7 @@
             <button class="toggle-btn trash-hamburger" onclick="toggleTrashPane()">
                 <i class="fa-solid fa-bars"></i>
             </button>            <button class="new-note-btn" onclick="emptyTrash()" style="color: var(--text-main); font-weight: 600;">
-                <i class="fa-solid fa-trash-can"></i> <span class="btn-text">비우기(30일이후 영구삭제)</span>
+                <i class="fa-solid fa-trash-can"></i> <span class="btn-text">비우기(30일 이후 영구 삭제)</span>
             </button>
             <div class="search-bar">
                 <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
