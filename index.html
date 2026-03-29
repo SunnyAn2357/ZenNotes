@@ -212,23 +212,25 @@
             border-radius: 4px 8px 8px 4px;
         }
 
-        .memo-info { overflow: hidden; display: flex; flex-direction: column; gap: 4px; }
+	.memo-info { overflow: hidden; display: flex; flex-direction: column; gap: 4px; max-width: 170px; } /* 👈 max-width 추가! */
         .memo-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 400; }
         .memo-date { font-size: 11px; color: var(--text-muted); opacity: 0.7; }
-        .memo-actions { display: flex; align-items: center; gap: 4px; }
+        .memo-actions { display: flex; align-items: center; gap: 10px; }
+        .memo-item:hover .btn-delete, .memo-item:hover .btn-pin { opacity: 0.6; }
+        .memo-item:hover .btn-restore, .memo-item:hover .btn-hard-delete { opacity: 0.6; }
 
         .btn-delete { opacity: 0; color: #fda4af; padding: 4px; font-size: 12px; transition: all 0.2s; cursor: pointer; }
         .btn-delete:hover { color: #f43f5e; opacity: 1 !important; }
+
         .btn-pin { opacity: 0; color: #94a3b8; padding: 4px; font-size: 12px; transition: all 0.2s; transform: rotate(-45deg); cursor: pointer; }
         .btn-pin:hover { color: #60a5fa; opacity: 1 !important; }
         .btn-pin.is-pinned { transform: rotate(0deg); color: #3b82f6; opacity: 1 !important; }
-        .memo-item:hover .btn-delete, .memo-item:hover .btn-pin { opacity: 0.6; }
 
         .btn-restore { opacity: 0; color: #94a3b8; padding: 4px; font-size: 12px; transition: all 0.2s; cursor: pointer; }
         .btn-restore:hover { color: #60a5fa; opacity: 1 !important; }
+
         .btn-hard-delete { opacity: 0; color: #fda4af; padding: 4px; font-size: 12px; transition: all 0.2s; cursor: pointer; }
         .btn-hard-delete:hover { color: #f43f5e; opacity: 1 !important; }
-        .memo-item:hover .btn-restore, .memo-item:hover .btn-hard-delete { opacity: 0.6; }
 
         .col-center {
             flex: 1;
@@ -788,7 +790,7 @@
             /* 3. 메뉴 그룹(핀/휴지통): 스르륵 애니메이션 기본 설정 */
             .memo-actions {
                 display: flex !important;
-                gap: 6px !important;
+                gap: 4px !important;
                 align-items: center;
                 /* padding-right: 0px; */
                 margin-right: -2px !important;
