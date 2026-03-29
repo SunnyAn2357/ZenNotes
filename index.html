@@ -105,7 +105,7 @@
             cursor: pointer;
             color: var(--text-main);
             font-family: inherit;
-            font-size: 14px;
+            font-size: 15px;
             transition: all 0.2s ease;
             display: flex;
             align-items: center;
@@ -155,6 +155,7 @@
             color: var(--text-muted);
             cursor: pointer;
         }
+	.toggle-btn i { font-size: 15px; }
         .toggle-btn:hover { background: var(--surface-hover); color: var(--text-main); }
 
         .col-left.collapsed { width: 60px; min-width: 60px; }
@@ -181,6 +182,9 @@
             border: 1px solid var(--border);
         }
         .search-bar input { width: 100%; }
+
+	/* 🎯 [제미나이 핏] 유틸, 네비게이션 아이콘 크기 통일 */
+        .new-note-btn i, .search-bar i, .util-btn i, .memo-actions i { font-size: 15px !important; }
 
         .memo-list {
             flex: 1;
@@ -248,7 +252,7 @@
 
         #memo-title-input {
             font-size: 28px;
-            font-weight: 700;
+            font-weight: 600;	/* 🎯 [제미나이 핏] 700에서 600으로 수정 */
             width: 60%;
             letter-spacing: -0.5px;
         }
@@ -303,6 +307,10 @@
             max-width: 800px;
             width: 100%;
         }
+
+	/* 🎯 [제미나이 핏] 툴바 버튼 규격 통일 */
+        .ql-toolbar.ql-snow button { width: 30px !important; height: 30px !important; }
+        .ql-toolbar.ql-snow button svg { width: 18px !important; height: 18px !important; }
 
         .ql-container.ql-snow {
             border: none !important;
@@ -409,7 +417,7 @@
 
         .ql-editor {
             padding: 24px 24px;
-            line-height: 1.8 !important;
+            line-height: 1.8 !important;	/* 🎯 [제미나이 핏] 본문 줄간격 1.8에서 1.6으로 변경 */
             color: var(--text-main);
             letter-spacing: -0.01em;
             font-weight: 400;
@@ -442,7 +450,7 @@
 
 	/* (선택 사항) 최신 브라우저에서는 빈 이미지에 가상 요소를 허용하므로 안내 문구 추가 가능 */
 	.ql-editor img[src=""]::after {
-	    content: '이미지 (다른 기기에 저장됨)';
+	    content: '이미지 (저장한 기기에만 표시됨)';
 	    position: absolute;
 	    top: 50%;
 	    left: 50%;
@@ -502,13 +510,13 @@
             box-shadow: -4px 0 24px rgba(0,0,0,0.4);
         }
         .trash-pane.is-open { transform: translateX(0); }
-        .util-section { display: flex; flex-direction: column; gap: 12px; }
+        .util-section { display: flex; flex-direction: column; gap: 8px; }
         .util-title {
-            font-size: 11px;
+            font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 1px;
             color: var(--text-muted);
-            font-weight: 700;
+            font-weight: 800;
             margin-bottom: 4px;
         }
         .util-btn {
@@ -618,10 +626,6 @@
         }
 
         @media screen and (max-width: 768px) {
-	    /* 🎯 1. 모바일 화면 전체 일괄 확대 (1.1 = 110%, 1.2 = 120%) */
-	    body {
-		zoom: 1.05; /* 원하시는 확대 비율로 조절하세요 */
-	    }
 
 	    .mobile-only { display: flex !important; }
             .mobile-overlay { display: block; }
@@ -632,7 +636,7 @@
 		content: '';
                 position: fixed;
                 top: 0; left: 0; right: 0;
-                height: 65px;
+                height: 62px;
                 background-color: var(--bg);
                 z-index: 899;
             }
@@ -650,12 +654,10 @@
             }
 
 	    .editor-header {
-                /* 🎯 수정됨: 여백을 (85, 20, 10)에서 (80, 14, 8)로 압축 */
-                padding: 80px 14px 8px !important; 
+                padding: 80px 18px 0px !important; 
                 flex-direction: column;
                 align-items: flex-start !important;
-                /* 🎯 수정됨: 간격을 16에서 10으로 압축 */
-                gap: 10px !important; 
+                gap: 8px !important; 
             }
             
             #memo-title-input { width: 100% !important; font-size: 24px !important; }
@@ -664,7 +666,7 @@
             /* [수정] 천장에 달라붙는(Sticky) & 1줄 가로 스크롤 편집 툴바 */
             .ql-toolbar.ql-snow {
                 position: sticky !important;
-                top: 65px !important; /* 삼선, 삼점 버튼 바로 아래에 안착 */
+                top: 62px !important; /* 삼선, 삼점 버튼 바로 아래에 안착 */
                 z-index: 900 !important;
                 background-color: var(--bg) !important;
                 border-bottom: 1px solid var(--border) !important;
@@ -677,8 +679,7 @@
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none; /* 파이어폭스 스크롤바 숨김 */
                 
-                /* 🎯 수정됨: 툴바 두께 다이어트를 위해 (8, 10)에서 (6, 8)로 압축 */
-                padding: 6px 8px !important; 
+                padding: 2px 8px 2px !important; 
                 align-items: center;
             }
             
@@ -711,11 +712,8 @@
                 z-index: 9999 !important;
             }
             
-            /* [수정] 모바일에서 키보드가 올라와도 글을 쓸 수 있도록 최소 높이 대폭 확보 */
-            /* 🎯 수정됨: 본문 여백을 (16, 20)에서 (12, 14)로 압축하여 넓게 씀 */
-            .ql-editor { padding: 12px 14px !important; font-size: 15px; min-height: 70vh; }
-            /* 🎯 수정됨: 본문 여백에 맞춰 안내 문구 시작 위치도 20에서 14로 당김 */
-            .ql-editor.ql-blank::before { left: 14px !important; }
+            .ql-editor { padding: 8px 16px 16px !important; font-size: 16px; min-height: 70vh; }
+            .ql-editor.ql-blank::before { left: 16px !important; top: 8px !important; }
             
             .col-left {
                 position: fixed !important;
@@ -863,41 +861,32 @@
                 padding: 8px !important;	/* 👈 터치 영역 - 기본 8px */
                 font-size: 14px !important;	/* 👈 아이콘 크기 - 기본 14px*/
             }
-			/* =========================================
-			1. 패널 높이 보정 (밀려남 방지)
-			- zoom 비율(1.05)만큼 높이를 나눠서 화면에 딱 맞춥니다.
-			========================================= */
-			.col-left, .col-right, .trash-pane {
-				height: calc(100vh / 1.05) !important;
-				height: calc(100svh / 1.05) !important;
-			}
 
-			/* =========================================
-			2. 우측 메뉴창 간격 압축
-			========================================= */
-			.col-right {
-				gap: 16px !important; /* 큰 그룹 사이 간격 (기존 36px -> 16px 대폭 축소) */
-				padding-top: 20px !important; /* 윗부분 여백 축소 */
-			}
-			.util-section {
-				gap: 6px !important; /* 버튼들 사이 간격 (기존 12px -> 6px 축소) */
-			}
-			.util-btn {
-				padding: 8px 10px !important; /* 버튼 자체의 위아래 뚱뚱함 살짝 다이어트 */
-			}
+	    /* =========================================
+            2. 우측 메뉴창 간격 압축 (기존 설정 유지)
+            ========================================= */
+            .col-right {
+                gap: 40px !important; 
+                padding-top: 20px !important; 
+            }
+            .util-section {
+                gap: 4px !important; 
+            }
+            .util-btn {
+                padding: 8px 10px !important; 
+            }
 
-			/* =========================================
-			3. 좌측/휴지통 노트 목록 간격 압축
-			========================================= */
-			.nav-header {
-				padding: 16px 16px 12px !important; /* 상단 검색창 주변 여백 축소 */
-				gap: 10px !important; /* 버튼과 검색창 사이 간격 축소 */
-			}
-			.memo-item {
-				padding: 10px 12px !important; /* 노트 항목 안쪽 여백 축소 */
-				margin-bottom: 2px !important; /* 노트와 노트 사이 간격 축소 (기존 4px -> 2px) */
-			}
-
+            /* =========================================
+            3. 좌측/휴지통 노트 목록 간격 압축 (기존 설정 유지)
+            ========================================= */
+            .nav-header {
+                padding: 16px 16px 12px !important; 
+                gap: 18px !important; 
+            }
+            .memo-item {
+                padding: 10px 12px !important; 
+                margin-bottom: 2px !important; 
+            }
         }
 
     </style>
