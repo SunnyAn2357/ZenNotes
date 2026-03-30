@@ -1606,7 +1606,10 @@
             console.log("✅ 로컬 DB 연결 성공!"); // 성공 로그 추가
             runAutoPurge(); 
             loadMemoList();
-			updateUnsyncedCount();
+	    updateUnsyncedCount();
+
+	    // 👇 추가: 앱 숏컷이나 공유하기를 통해 열렸는지 확인하고 처리
+            handleLaunchParams();
         };
 
         // 👇 이 부분이 추가되었습니다. DB 연결이 막혔을 때 에러를 띄워줍니다.
@@ -2975,6 +2978,40 @@
                         console.error('❌ 서비스 워커 등록 실패:', error);
                     });
             });
+        }
+
+	// 👇 추가: 앱 숏컷 & 공유 타겟 처리 함수
+        function handleLaunchParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+
+            // 1. 앱 숏컷(새 노트 작성)으로 앱을 켰을 때
+            if (urlParams.get('action') === 'new') {
+                createNewMemo();
+                // 새로고침 시 다시 새 노트가 켜지지 않도록 URL에서 ?action=new 를 조용히 지웁니다.
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return;
+            }
+
+            // 2. 다른 앱(유튜브, 웹브라우저 등)에서 '공유하기'로 ZenNotes를 선택했을 때
+            const sharedTitle = urlParams.get('title');
+            const sharedText = urlParams.get('text');
+            const sharedUrl = urlParams.get('url');
+
+            if (sharedTitle || sharedText || sharedUrl) {
+                createNewMemo(); // 빈 노트를 하나 열고
+                
+                if (sharedTitle) document.getElementById('memo-title-input').value = sharedTitle;
+
+                let contentToInsert = '';
+                if (sharedText) contentToInsert += sharedText + '<br><br>';
+                if (sharedUrl) contentToInsert += `<a href="${sharedUrl}" target="_blank">${sharedUrl}</a>`;
+
+                quill.root.innerHTML = contentToInsert; // 에디터 본문에 내용을 쏙 넣습니다.
+                triggerAutoSave(); // 방금 들어온 내용을 즉시 로컬에 저장!
+
+                // 역시 새로고침 방지를 위해 URL을 깔끔하게 정리합니다.
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
         }
 
     </script>

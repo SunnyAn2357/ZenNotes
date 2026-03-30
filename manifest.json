@@ -1,8 +1,8 @@
 {
-  "name": "ZenNotes",
+  "name": "ZenNotes-ADS",
   "short_name": "ZenNotes",
   "start_url": "./",
-  "display": "standalone", 
+  "display": "standalone",
   "background_color": "#131314",
   "theme_color": "#131314",
   "icons": [
@@ -16,5 +16,24 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  
+  "shortcuts": [
+    {
+      "name": "새 노트 작성",
+      "short_name": "새 노트",
+      "description": "빈 노트를 새로 작성합니다.",
+      "url": "./?action=new",
+      "icons": [{ "src": "img192.png", "sizes": "192x192" }]
+    }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }
