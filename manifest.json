@@ -1,35 +1,28 @@
 {
   "name": "ZenNotes-ADS",
   "short_name": "ZenNotes",
+  "id": "/ZenNotes/",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#131314",
   "theme_color": "#131314",
   "icons": [
-    {
-      "src": "img192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "img512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "img192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img512.png", "sizes": "512x512", "type": "image/png" }
   ],
-  
   "shortcuts": [
     {
       "name": "새 노트 작성",
       "short_name": "새 노트",
-      "description": "빈 노트를 새로 작성합니다.",
-      "url": "./?action=new",
+      "description": "빈 노트를 즉시 새로 작성합니다.",
+      "url": "./index.html?action=new",
       "icons": [{ "src": "img192.png", "sizes": "192x192" }]
     }
   ],
   "share_target": {
-    "action": "./",
+    "action": "./index.html",
     "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
     "params": {
       "title": "title",
       "text": "text",
