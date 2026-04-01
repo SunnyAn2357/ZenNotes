@@ -39,6 +39,8 @@
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
+				// 🎯 추가됨: 매번 무작위 암호를 생성하여 위조된 응답을 방어합니다.
+                state: Math.random().toString(36).substring(2),
                 callback: ''
             });
             gisInited = true;
