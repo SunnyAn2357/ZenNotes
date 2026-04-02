@@ -2267,12 +2267,24 @@
            3. 모바일 환경: 뒤로가기(popstate) 통합 제어
            ========================================== */
         window.addEventListener('popstate', (e) => {
+            // 🎯 [핵심] 우리가 코드로 강제 실행한 '쓰레기 청소용' 뒤로가기라면 UI 변화 없이 조용히 넘어갑니다!
+            if (isProgrammaticBack) {
+                isProgrammaticBack = false;
+                return;
+            }
+
             const fmPane = document.getElementById('file-manager-pane');
             if (fmPane && fmPane.style.display === 'flex') {
                 const searchInput = document.getElementById('fm-search-input');
                 const isSearching = searchInput && searchInput.value !== '';
 
-                // 🎯 1순위: 팝업이나 메뉴가 떠있으면 최우선으로 닫음
+                // 🎯 다중 선택 취소 (true를 보내서 청소기가 중복 작동하지 않게 함)
+                if (isFmMultiSelectMode) {
+                    cancelFmMultiSelect(true); 
+                    return; 
+                }
+
+                // 🎯 팝업/메뉴 닫기
                 const globalMenu = document.getElementById('fm-global-menu');
                 const itemMenu = document.getElementById('fm-item-menu');
                 const moveModal = document.getElementById('fm-move-modal');
@@ -2286,14 +2298,10 @@
                 if (isMenuOpen || isModalOpen) {
                     if (globalMenu) globalMenu.classList.remove('is-active');
                     if (itemMenu) itemMenu.classList.remove('is-active');
-                    if (moveModal && moveModal.style.display === 'flex') closeMoveModal();
-                    if (securityModal && securityModal.style.display === 'flex') closeSecurityModal();
-                    return; 
-                }
-
-                // 🎯 2순위: 다중 선택 중이면 선택 취소
-                if (isFmMultiSelectMode) {
-                    cancelFmMultiSelect(); 
+                    
+                    // 🎯 모달 닫기 (true를 보내서 청소기가 중복 작동하지 않게 함)
+                    if (moveModal && moveModal.style.display === 'flex') closeMoveModal(true);
+                    if (securityModal && securityModal.style.display === 'flex') closeSecurityModal(true);
                     return; 
                 }
 
@@ -2990,9 +2998,7 @@
             menu.style.top = `${e.clientY + 10}px`;
             menu.style.left = `${e.clientX - 120}px`;
             menu.classList.toggle('is-active');
-	    // 👈 5. 메뉴가 열렸을 때만 방어막 추가!
-            if (menu.classList.contains('is-active')) history.pushState({ mode: 'menu' }, '');
-            document.getElementById('fm-item-menu').classList.remove('is-active');
+	    document.getElementById('fm-item-menu').classList.remove('is-active');
         }
 
         // 🎯 특정 폴더에 새 노트 작성 후 즉시 열기
@@ -3001,23 +3007,6 @@
             createNewMemo(folderId); // 타겟 폴더 ID를 넘겨줍니다.
             document.getElementById('fm-global-menu').classList.remove('is-active');
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 	// 🎯 파라미터에 sysType 추가 및 3대장 메뉴 분기
         function openFmItemMenu(e, id, type, isTrashMode, sysType) {
@@ -3060,7 +3049,6 @@
             menu.style.top = `${e.clientY + 10}px`;
             menu.style.left = `${e.clientX - 120}px`;
             menu.classList.add('is-active');
-	    history.pushState({ mode: 'menu' }, ''); // 👈 6. 개별 메뉴 방어막 추가!
         }
 
 	// 1. 새 폴더 생성
@@ -3222,9 +3210,16 @@
 		}
 
 		// 🎯 [유지됨] 보안 팝업 닫기 함수
-		function closeSecurityModal() { 
-			document.getElementById('fm-security-modal').style.display = 'none'; 
-		}
+		function closeSecurityModal(fromPopstate = false) { 
+	            if (document.getElementById('fm-security-modal').style.display === 'none') return;
+	            document.getElementById('fm-security-modal').style.display = 'none'; 
+            
+		    // 🎯 모달이 닫힐 때 유령 방어막 청소
+		    if (!fromPopstate) {
+			isProgrammaticBack = true;
+			history.back();
+	            }
+	        }
 
 		// 🎯 비밀번호 제출 및 마스터키/2중 검증 로직
 		async function submitSecurityPassword() {
@@ -3391,6 +3386,7 @@
         }
 
         let fmSelectedItems = new Set();
+	let isProgrammaticBack = false; // 👈 쓰레기 청소용 강제 뒤로가기를 구분하는 전원 스위치
 
 	// 🎯 [신규] 파일 관리창 전용 롱프레스(길게 누르기) 다중 선택 진입
         function startFmPress(e, m) {
@@ -3466,50 +3462,48 @@
         function startFmMultiSelect() {
             const globalMenu = document.getElementById('fm-global-menu');
             const itemMenu = document.getElementById('fm-item-menu');
-            // 🎯 드롭다운 메뉴가 열려있었는지 확인
-            const wasMenuOpen = (globalMenu && globalMenu.classList.contains('is-active')) || 
-                                (itemMenu && itemMenu.classList.contains('is-active'));
-
+            
             if (globalMenu) globalMenu.classList.remove('is-active');
             if (itemMenu) itemMenu.classList.remove('is-active');
 
             if (!isFmMultiSelectMode) {
-                if (wasMenuOpen) {
-                    // 🎯 메뉴에서 넘어온 거라면, 유령 상태로 남을 '메뉴 방어막'을 '다중선택 방어막'으로 교체!
-                    history.replaceState({ mode: 'multi' }, ''); 
-                } else {
-                    // 롱프레스로 넘어온 거라면 정상적으로 방어막 추가
-                    history.pushState({ mode: 'multi' }, ''); 
-                }
+                // 🎯 메뉴 방어막이 사라졌으므로, 교체(replace)가 아닌 무조건 추가(push)를 합니다!
+                history.pushState({ mode: 'multi' }, ''); 
             }
+            
             isFmMultiSelectMode = true;
             fmSelectedItems.clear();
             updateFmBottomBar();
             loadFileManager(currentFmFolderId); 
         }
 
-        function cancelFmMultiSelect() {
+        function cancelFmMultiSelect(fromPopstate = false) {
+            if (!isFmMultiSelectMode) return; // 헛도는 것 방지
             isFmMultiSelectMode = false;
             fmSelectedItems.clear();
             updateFmBottomBar();
             loadFileManager(currentFmFolderId);
+
+            // 🎯 UI 버튼(취소 등)으로 닫았을 때, 쌓여있는 유령 방어막을 강제로 1장 치워줍니다.
+            if (!fromPopstate) {
+                isProgrammaticBack = true;
+                history.back();
+            }
         }
 
         // 단일 항목 이동 (기존 팝업에서 호출)
         function openMoveModal(id) {
             movingItemIds = [id]; 
             selectedDestId = null;
+            
             const itemMenu = document.getElementById('fm-item-menu');
             const globalMenu = document.getElementById('fm-global-menu');
-            const wasMenuOpen = (itemMenu && itemMenu.classList.contains('is-active')) || 
-                                (globalMenu && globalMenu.classList.contains('is-active'));
-
+            
             if (itemMenu) itemMenu.classList.remove('is-active');
             if (globalMenu) globalMenu.classList.remove('is-active');
 
-            // 🎯 메뉴 카드를 팝업 카드로 교체
-            if (wasMenuOpen) history.replaceState({ mode: 'modal' }, '');
-            else history.pushState({ mode: 'modal' }, '');
+            // 🎯 교체(replace) 로직을 지우고, 모달이 뜨므로 무조건 방어막 1장 추가(push)!
+            history.pushState({ mode: 'modal' }, '');
 
             document.getElementById('fm-move-modal').style.display = 'flex';
             renderDestFolders();
@@ -3552,9 +3546,16 @@
             };
         }
 
-        function closeMoveModal() {
+        function closeMoveModal(fromPopstate = false) {
+            if (document.getElementById('fm-move-modal').style.display === 'none') return;
             document.getElementById('fm-move-modal').style.display = 'none';
-            movingItemId = null;
+            movingItemIds = [];
+            
+            // 🎯 모달이 닫힐 때 유령 방어막 청소
+            if (!fromPopstate) {
+                isProgrammaticBack = true;
+                history.back();
+            }
         }
 
 	function renderDestFolders() {
