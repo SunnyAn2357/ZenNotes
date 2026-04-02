@@ -2261,14 +2261,25 @@
                 const isSearching = searchInput && searchInput.value !== '';
 
 		// 🎯 [신규 0순위] 다중 선택 중일 때 뒤로가기: 다중 선택 취소
-            	if (isFmMultiSelectMode) {
-                	cancelFmMultiSelect();
-                	// 🎯 브라우저의 '히스토리 조작 방지(Intervention)'를 우회하기 위한 비동기 지연 방어막
-                	setTimeout(() => {
-                    	history.pushState({ fmOpen: true, fmFolderId: currentFmFolderId, fmPath: fmPath }, '');
-                	}, 10);
-                	return;
-            	}
+            	// 🎯 [수정] 사용자님의 의도대로 '선택 해제'와 '메뉴 종료'를 분리합니다.
+		if (isFmMultiSelectMode) {
+		    if (fmSelectedItems.size > 0) {
+		        // [1단계] 선택된 항목만 싹 비우기
+		        fmSelectedItems.clear();
+		        updateFmBottomBar();
+		        loadFileManager(currentFmFolderId); 
+		        showToast("선택이 해제되었습니다.");
+
+		        // 핵심: 메뉴는 아직 떠있어야 하므로 방어막을 즉시 리필합니다.
+		        setTimeout(() => {
+		            history.pushState({ fmOpen: true, fmFolderId: currentFmFolderId, fmPath: fmPath }, '');
+		        }, 10);
+		    } else {
+		        // [2단계] 이미 선택된 게 없다면 메뉴(하단 바)를 완전히 닫기
+		        cancelFmMultiSelect();
+		    }
+		    return;
+		}
 
 		// 🎯 [신규 0.5순위] 각종 팝업/메뉴가 열려있을 때 뒤로가기: 팝업만 닫기
             	const globalMenu = document.getElementById('fm-global-menu');
@@ -3406,9 +3417,10 @@
             const countLabel = document.getElementById('fm-selected-count');
             const btnGroup = document.getElementById('fm-bottom-btn-group');
 
-            if (isFmMultiSelectMode) {
-                bar.classList.add('is-visible');
-                countLabel.innerText = `${fmSelectedItems.size}개 선택됨`;
+            // 🎯 [수정] 모드가 켜져있다면 아이템이 0개여도 하단 바를 숨기지 않습니다.
+	    if (isFmMultiSelectMode) {
+	        bar.classList.add('is-visible');
+	        countLabel.innerText = `${fmSelectedItems.size}개 선택됨`;
                 
                 if (currentFmFolderId === globalTrashFolderId) {
                     // 휴지통 전용 버튼
