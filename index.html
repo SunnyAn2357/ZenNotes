@@ -3664,18 +3664,9 @@
             document.getElementById('col-left').style.display = '';
             document.getElementById('col-right').style.display = '';
             document.getElementById('mobile-left-menu-btn').style.display = '';
-            if (window.innerWidth > 768) {
-                document.getElementById('global-menu-btn').style.display = 'flex';
-            } else {
-                document.getElementById('global-menu-btn').style.display = 'none';
-            }
-            
-            if (window.innerWidth <= 768) {
-                const lp = document.getElementById('col-left');
-                if (!lp.classList.contains('is-mobile-open')) {
-                    toggleLeftPaneMobile();
-                }
-            }
+	    // 왼쪽 창 자동 열기 로직 삭제 및 우측 메뉴 버튼 복구
+            document.getElementById('global-menu-btn').style.display = 'flex';
+
             history.pushState({ page: 'main' }, '');
 
             // 🎯 창을 닫으면 다시 글을 쓸 수 있도록 에디터 잠금 해제
