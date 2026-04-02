@@ -2272,13 +2272,7 @@
                 const searchInput = document.getElementById('fm-search-input');
                 const isSearching = searchInput && searchInput.value !== '';
 
-                // 🎯 다중 선택 취소 (방어막 리필 삭제)
-                if (isFmMultiSelectMode) {
-                    cancelFmMultiSelect(); 
-                    return; 
-                }
-
-                // 🎯 팝업/메뉴 닫기 (방어막 리필 삭제)
+                // 🎯 1순위: 팝업이나 메뉴가 떠있으면 최우선으로 닫음
                 const globalMenu = document.getElementById('fm-global-menu');
                 const itemMenu = document.getElementById('fm-item-menu');
                 const moveModal = document.getElementById('fm-move-modal');
@@ -2294,6 +2288,12 @@
                     if (itemMenu) itemMenu.classList.remove('is-active');
                     if (moveModal && moveModal.style.display === 'flex') closeMoveModal();
                     if (securityModal && securityModal.style.display === 'flex') closeSecurityModal();
+                    return; 
+                }
+
+                // 🎯 2순위: 다중 선택 중이면 선택 취소
+                if (isFmMultiSelectMode) {
+                    cancelFmMultiSelect(); 
                     return; 
                 }
 
@@ -3464,14 +3464,28 @@
         }
 
         function startFmMultiSelect() {
-            document.getElementById('fm-global-menu').classList.remove('is-active');
-	    if (!isFmMultiSelectMode) {
-                history.pushState({ mode: 'multi' }, ''); // 👈 4. 메뉴를 통한 실행 방어막 추가!
+            const globalMenu = document.getElementById('fm-global-menu');
+            const itemMenu = document.getElementById('fm-item-menu');
+            // 🎯 드롭다운 메뉴가 열려있었는지 확인
+            const wasMenuOpen = (globalMenu && globalMenu.classList.contains('is-active')) || 
+                                (itemMenu && itemMenu.classList.contains('is-active'));
+
+            if (globalMenu) globalMenu.classList.remove('is-active');
+            if (itemMenu) itemMenu.classList.remove('is-active');
+
+            if (!isFmMultiSelectMode) {
+                if (wasMenuOpen) {
+                    // 🎯 메뉴에서 넘어온 거라면, 유령 상태로 남을 '메뉴 방어막'을 '다중선택 방어막'으로 교체!
+                    history.replaceState({ mode: 'multi' }, ''); 
+                } else {
+                    // 롱프레스로 넘어온 거라면 정상적으로 방어막 추가
+                    history.pushState({ mode: 'multi' }, ''); 
+                }
             }
             isFmMultiSelectMode = true;
             fmSelectedItems.clear();
             updateFmBottomBar();
-            loadFileManager(currentFmFolderId); // 체크박스 모드로 새로고침
+            loadFileManager(currentFmFolderId); 
         }
 
         function cancelFmMultiSelect() {
@@ -3483,9 +3497,20 @@
 
         // 단일 항목 이동 (기존 팝업에서 호출)
         function openMoveModal(id) {
-            movingItemIds = [id]; // 배열에 하나만 담음
+            movingItemIds = [id]; 
             selectedDestId = null;
-            document.getElementById('fm-item-menu').classList.remove('is-active');
+            const itemMenu = document.getElementById('fm-item-menu');
+            const globalMenu = document.getElementById('fm-global-menu');
+            const wasMenuOpen = (itemMenu && itemMenu.classList.contains('is-active')) || 
+                                (globalMenu && globalMenu.classList.contains('is-active'));
+
+            if (itemMenu) itemMenu.classList.remove('is-active');
+            if (globalMenu) globalMenu.classList.remove('is-active');
+
+            // 🎯 메뉴 카드를 팝업 카드로 교체
+            if (wasMenuOpen) history.replaceState({ mode: 'modal' }, '');
+            else history.pushState({ mode: 'modal' }, '');
+
             document.getElementById('fm-move-modal').style.display = 'flex';
             renderDestFolders();
         }
@@ -3495,6 +3520,7 @@
             if (fmSelectedItems.size === 0) { showToast("이동할 항목을 선택해주세요."); return; }
             movingItemIds = Array.from(fmSelectedItems); // 선택된 놈들을 싹 다 배열로!
             selectedDestId = null;
+	    history.pushState({ mode: 'modal' }, ''); // 👈 추가: 다중선택 위에 모달이 뜨므로 방어막 1장 추가!
             document.getElementById('fm-move-modal').style.display = 'flex';
             renderDestFolders();
         }
