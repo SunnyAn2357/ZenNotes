@@ -1259,8 +1259,8 @@
             </div>
             
             <div id="fm-global-menu" class="fm-dropdown">
-                <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 항목 다중 선택</div>
-                <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더 생성</div>
+                <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
+                <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>
             </div>
             <div id="fm-item-menu" class="fm-dropdown"></div>
 
@@ -1281,7 +1281,7 @@
                     </div>
                     <div class="fm-modal-body" style="padding: 24px 24px 10px; text-align: center;">
                         <div id="sec-modal-desc" style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">비밀번호를 입력하세요.</div>
-                        <input type="password" id="sec-password-input" class="sec-input" placeholder="••••" onkeypress="if(event.key==='Enter') submitSecurityPassword()">
+                        <input type="password" id="sec-password-input" class="sec-input" placeholder="••••••••" onkeypress="if(event.key==='Enter') submitSecurityPassword()">
                     </div>
                     <div class="fm-modal-footer">
                         <button style="background: var(--surface-hover);" onclick="closeSecurityModal()">취소</button>
@@ -1378,7 +1378,7 @@
             <button class="toggle-btn trash-hamburger" onclick="toggleTrashPane()">
                 <i class="fa-solid fa-bars"></i>
             </button>            <button class="new-note-btn" onclick="emptyTrash()" style="color: var(--text-main); font-weight: 600;">
-                <i class="fa-solid fa-trash-can"></i> <span class="btn-text">비우기(30일 이후 영구 삭제)</span>
+                <i class="fa-solid fa-trash-can"></i> <span class="btn-text">비우기 (30일 이후 영구 삭제)</span>
             </button>
             <div class="search-bar">
                 <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
@@ -2929,13 +2929,13 @@
 
             if (currentFmFolderId === globalTrashFolderId) {
                 html = `
-                    <div class="fm-dropdown-item" onclick="emptyTrash()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> 휴지통 비우기</div>
-                    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 항목 다중 선택</div>
+                    <div class="fm-dropdown-item" onclick="emptyTrash()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> 비우기</div>
+                    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
                 `;
             } else if (currentFmFolderId === null) {
                 html = `
-                    <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더 생성</div>
-                    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 항목 다중 선택</div>
+                    <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>
+                    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
                 `;
             } else {
                 // 특정 폴더 내부에 들어왔을 때
@@ -2943,12 +2943,12 @@
                 
                 // 🎯 4대장 최상위 폴더가 아니라면 '폴더 자체 이동하기' 허용
                 if (!isSystemTop) {
-                    html += `<div class="fm-dropdown-item" onclick="openMoveModal(${currentFmFolderId})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 현재 폴더 이동하기</div>`;
+                    html += `<div class="fm-dropdown-item" onclick="openMoveModal(${currentFmFolderId})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 폴더 이동하기</div>`;
                 }
                 html += `
-                    <div class="fm-dropdown-item" onclick="createNewMemoInFolder(${currentFmFolderId})"><i class="fa-solid fa-pen-to-square"></i> 이곳에 새 노트 작성</div>
-                    <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 하위 폴더 생성</div>
-                    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 항목 다중 선택</div>
+                    <div class="fm-dropdown-item" onclick="createNewMemoInFolder(${currentFmFolderId})"><i class="fa-solid fa-pen-to-square"></i> 새 노트</div>
+                    <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>
+                    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
                 `;
             }
 
@@ -2987,11 +2987,11 @@
                     <div class="fm-dropdown-item" onclick="emergencyDeleteSecurity()"><i class="fa-solid fa-skull" style="color: var(--danger);"></i> 비상 삭제</div>
                 `;
             } else if (sysType === 'trash') {
-                html = `<div class="fm-dropdown-item" onclick="emptyTrash()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> 휴지통 비우기</div>`;
+                html = `<div class="fm-dropdown-item" onclick="emptyTrash()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> 비우기</div>`;
             } else if (isTrashMode) {
                 html = `
                     <div class="fm-dropdown-item" onclick="fmRestore(${id})"><i class="fa-solid fa-rotate-left"></i> 복구하기</div>
-                    <div class="fm-dropdown-item" onclick="fmHardDelete(${id})"><i class="fa-solid fa-xmark" style="color: var(--danger);"></i> 영구 삭제</div>
+                    <div class="fm-dropdown-item" onclick="fmHardDelete(${id})"><i class="fa-solid fa-xmark" style="color: var(--danger);"></i> 삭제</div>
                 `;
             } else {
                 html = `
@@ -3103,7 +3103,7 @@
 
         // 6. 영구 삭제
         function fmHardDelete(id) {
-            if (!confirm('이 항목을 영구 삭제하시겠습니까? (복구 불가)')) return;
+            if (!confirm('이 항목을 삭제하시겠습니까?')) return;
             const tx = db.transaction(['memos'], 'readwrite');
             tx.objectStore('memos').get(id).onsuccess = e => {
                 const m = e.target.result;
@@ -3396,7 +3396,7 @@
         // 🎯 일괄 영구 삭제 처리
         function fmBatchHardDelete() {
             if (fmSelectedItems.size === 0) { showToast("삭제할 항목을 선택해주세요."); return; }
-            if (!confirm(`선택한 ${fmSelectedItems.size}개의 항목을 영구 삭제하시겠습니까? (복구 불가)`)) return;
+            if (!confirm(`선택한 ${fmSelectedItems.size}개의 항목을 삭제하시겠습니까?`)) return;
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
             fmSelectedItems.forEach(id => {
@@ -3405,7 +3405,7 @@
                     if (m) { m.isPermanentlyDeleted = true; m.updatedAt = Date.now(); store.put(m); }
                 };
             });
-            tx.oncomplete = () => { cancelFmMultiSelect(); loadTrashList(); updateUnsyncedCount(); showToast("영구 삭제되었습니다."); };
+            tx.oncomplete = () => { cancelFmMultiSelect(); loadTrashList(); updateUnsyncedCount(); showToast("삭제되었습니다."); };
         }
 
         function startFmMultiSelect() {
@@ -4086,7 +4086,7 @@
         function hardDeleteMemo(id, e) {
             e.stopPropagation();
             const targets = (selectedTrashMemos.has(id) && selectedTrashMemos.size > 1) ? Array.from(selectedTrashMemos) : [id];
-            if (!confirm(targets.length > 1 ? `선택한 ${targets.length}개의 노트를 영구 삭제하시겠습니까?` : '이 노트를 영구 삭제하시겠습니까? (복구 불가)')) return;
+            if (!confirm(targets.length > 1 ? `선택한 ${targets.length}개의 노트를 삭제하시겠습니까?` : '이 노트를 삭제하시겠습니까?')) return;
             
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos'); // 🎯 추가됨
@@ -4125,7 +4125,7 @@
                     return; 
                 }
                 
-                if (!confirm('휴지통의 모든 메모를 영구 삭제합니다. 계속하시겠습니까?')) return;
+                if (!confirm('휴지통의 모든 메모를 삭제합니다. 계속하시겠습니까?')) return;
                 
                 trashItems.forEach(memo => {
                     memo.isPermanentlyDeleted = true;
