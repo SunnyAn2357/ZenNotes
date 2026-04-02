@@ -15,7 +15,7 @@ self.addEventListener('install', event => {
     // 🎯 [수정됨] self.skipWaiting(); 제거! (사용자가 알림창 버튼을 누를 때까지 얌전히 대기하도록 만듭니다)
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
-            console.log('워커: 기본 파일 캐싱 완료');
+            console.log('✅ 워커: 기본 파일 캐싱 완료');
             return cache.addAll(STATIC_ASSETS);
         })
     );
@@ -67,7 +67,7 @@ self.addEventListener('fetch', event => {
                 return networkResponse;
             }).catch(() => {
                 // 오프라인 상태인데 캐시에도 파일이 없을 때 이리로 빠집니다.
-                console.log('오프라인 상태이며 캐시가 없습니다:', event.request.url);
+                console.log('❌ 워커: 오프라인 상태이며 캐시가 없습니다:', event.request.url);
             });
         })
     );
