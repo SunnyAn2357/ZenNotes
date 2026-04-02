@@ -1,5 +1,5 @@
-// 캐시 이름 (버전을 바꾸면 이전 캐시를 지우고 새로 캐싱합니다)
-const CACHE_NAME = 'zennotes-cache-v1';
+// 캐시 이름 (앱을 업데이트할 때마다 v2, v3... 로 숫자를 올려주세요!)
+const CACHE_NAME = 'zennotes-cache-v1.1';
 
 // 반드시 캐싱해야 할 내 서버의 기본 파일들
 const STATIC_ASSETS = [
@@ -12,8 +12,7 @@ const STATIC_ASSETS = [
 
 // 1. 설치(Install) 이벤트: 워커가 설치될 때 기본 파일들을 미리 저장합니다.
 self.addEventListener('install', event => {
-    // 대기하지 않고 즉시 활성화되도록 강제
-    self.skipWaiting();
+    // 🎯 [수정됨] self.skipWaiting(); 제거! (사용자가 알림창 버튼을 누를 때까지 얌전히 대기하도록 만듭니다)
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
             console.log('워커: 기본 파일 캐싱 완료');
@@ -46,7 +45,7 @@ self.addEventListener('fetch', event => {
 
     event.respondWith(
         caches.match(event.request).then(cachedResponse => {
-            // 3-1. 캐시에 이미 저장된 파일(CDN 스크립트, 폰트 등)이 있으면 인터넷을 거치지 않고 바로 줍니다. (오프라인 작동!)
+            // 3-1. 캐시에 이미 저장된 파일이 있으면 인터넷을 거치지 않고 바로 줍니다. (오프라인 작동!)
             if (cachedResponse) {
                 return cachedResponse;
             }
@@ -55,11 +54,11 @@ self.addEventListener('fetch', event => {
             const fetchRequest = event.request.clone();
             return fetch(fetchRequest).then(networkResponse => {
                 // 정상적인 응답이 아니면 캐싱하지 않고 그냥 반환합니다.
-                if (!networkResponse || networkResponse.status !== 200) {
+                if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
                     return networkResponse;
                 }
 
-                // 정상적으로 인터넷에서 가져왔다면, 다음 오프라인 때를 대비해 캐시에 복사본을 몰래 넣어둡니다. (동적 캐싱)
+                // 정상적으로 인터넷에서 가져왔다면, 다음 오프라인 때를 대비해 캐시에 복사본을 몰래 넣어둡니다.
                 const responseToCache = networkResponse.clone();
                 caches.open(CACHE_NAME).then(cache => {
                     cache.put(event.request, responseToCache);
@@ -72,4 +71,11 @@ self.addEventListener('fetch', event => {
             });
         })
     );
+});
+
+// 4. 업데이트 강제 수신기: index.html의 알림창에서 '새로고침' 버튼을 누르면 이 신호를 받습니다.
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting(); // 🎯 이때 비로소 이전 버전을 밀어내고 새 버전으로 강제 교체합니다!
+    }
 });

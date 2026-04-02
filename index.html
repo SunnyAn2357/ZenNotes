@@ -30,7 +30,7 @@
                     gapiInited = true;
                     console.log("✅ 구글 API 준비 완료!");
                 } catch (e) {
-                    console.error("GAPI 초기화 실패:", e);
+                    console.error("❌ GAPI 초기화 실패:", e);
                 }
             });
         }
@@ -2539,63 +2539,78 @@
             // [핵심 변경사항] PC 종료 시 동기화(syncDataToCloud) 삭제 완료
         });
 
-        // DB 전체를 스캔하여 빈 껍데기 메모를 일괄 영구 삭제하는 함수
-        function purgeEmptyMemos() {
-            if (!db) return;
-            const tx = db.transaction(['memos'], 'readwrite');
-            const store = tx.objectStore('memos');
-            let isPurged = false;
+	// DB 전체를 스캔하여 빈 껍데기 메모를 '유령화(영구 숨김)' 처리하는 함수
+	function purgeEmptyMemos() {
+	    if (!db) return;
+	    const tx = db.transaction(['memos'], 'readwrite');
+	    const store = tx.objectStore('memos');
+	    let isPurged = false;
 
-            store.openCursor().onsuccess = e => {
-                const cursor = e.target.result;
-                if (cursor) {
-                    const m = cursor.value;
-                    const title = (m.title || '').trim();
-                    const isTitleEmptyOrAuto = (title === '' || title === '제목 없는 노트' || title === 'Untitled');
-                    
-                    const plainText = (m.plainText || '').trim();
-                    const contentHTML = m.content || '';
-                    const hasNoContent = (plainText === '' && !contentHTML.includes('<img'));
-
-                    if (isTitleEmptyOrAuto && hasNoContent) {
-                        cursor.delete(); // 조건에 맞으면 DB에서 즉각 삭제
-                        isPurged = true;
-                    }
-                    cursor.continue();
-                }
-            };
-
-            tx.oncomplete = () => {
-                if (isPurged) {
-                    loadMemoList(true); // 폭파된 메모가 있다면 목록 즉시 갱신
-                }
-            };
-        }
-
-	// 🎯 [신규 추가] 방금까지 편집하던 '현재 노트' 단 1개만 검사해서 빈 껍데기면 폭파시키는 핀셋 함수
-        function purgeMemoIfEmpty(memoIdToEvict) {
-            if (!memoIdToEvict || !db) return; // 저장된 적 없으면 패스
+	    store.openCursor().onsuccess = e => {
+	        const cursor = e.target.result;
+	        if (cursor) {
+	            const m = cursor.value;
+	            const title = (m.title || '').trim();
+	            const isTitleEmptyOrAuto = (title === '' || title === '제목 없는 노트' || title === 'Untitled');
             
-            const tx = db.transaction(['memos'], 'readwrite');
-            const store = tx.objectStore('memos');
-            
-            store.get(memoIdToEvict).onsuccess = e => {
-                const m = e.target.result;
-                if (!m) return;
-                
-                const title = (m.title || '').trim();
-                const isTitleEmptyOrAuto = (title === '' || title === '제목 없는 노트' || title === 'Untitled');
-                const plainText = (m.plainText || '').trim();
-                const contentHTML = m.content || '';
-                const hasNoContent = (plainText === '' && !contentHTML.includes('<img'));
+	            const plainText = (m.plainText || '').trim();
+	            const contentHTML = m.content || '';
+	            const hasNoContent = (plainText === '' && !contentHTML.includes('<img'));
 
-                // 조건에 맞으면 해당 노트 딱 1개만 즉시 삭제
-                if (isTitleEmptyOrAuto && hasNoContent) {
-                    store.delete(m.id);
-                    tx.oncomplete = () => loadMemoList(true); // 조용히 목록 새로고침
-                }
-            };
-        }
+	            if (isTitleEmptyOrAuto && hasNoContent) {
+	                // 🎯 [수정] 즉각 삭제(cursor.delete) 대신 유령 꼬리표 부착!
+	                m.isDeleted = true; // 30일 청소부 작동을 위한 조건 1
+	                m.deletedAt = Date.now(); // 30일 청소부 작동을 위한 타이머
+	                m.isPermanentlyDeleted = true; // 휴지통에서도 숨기기 위한 투명 망토
+	                m.updatedAt = Date.now(); // 동기화 서버에 상태 변경 알림
+	                cursor.update(m);
+	                isPurged = true;
+	            }
+	            cursor.continue();
+	        }
+	    };
+
+	    tx.oncomplete = () => {
+	        if (isPurged) {
+	            loadMemoList(true); // 유령화된 메모가 있다면 목록 즉시 갱신
+	            if (typeof updateUnsyncedCount === 'function') updateUnsyncedCount(); // 동기화 카운트 반영
+	        }
+	    };
+	}
+
+	// 🎯 방금까지 편집하던 '현재 노트' 단 1개만 검사해서 빈 껍데기면 유령화시키는 핀셋 함수
+	function purgeMemoIfEmpty(memoIdToEvict) {
+	    if (!memoIdToEvict || !db) return; 
+    
+	    const tx = db.transaction(['memos'], 'readwrite');
+	    const store = tx.objectStore('memos');
+    
+	    store.get(memoIdToEvict).onsuccess = e => {
+	        const m = e.target.result;
+	        if (!m) return;
+        
+	        const title = (m.title || '').trim();
+	        const isTitleEmptyOrAuto = (title === '' || title === '제목 없는 노트' || title === 'Untitled');
+	        const plainText = (m.plainText || '').trim();
+	        const contentHTML = m.content || '';
+	        const hasNoContent = (plainText === '' && !contentHTML.includes('<img'));
+
+	        // 조건에 맞으면 해당 노트 딱 1개만 즉시 유령화
+	        if (isTitleEmptyOrAuto && hasNoContent) {
+	            // 🎯 [수정] 즉각 삭제(store.delete) 대신 유령 꼬리표 부착!
+	            m.isDeleted = true;
+	            m.deletedAt = Date.now();
+	            m.isPermanentlyDeleted = true; 
+	            m.updatedAt = Date.now();
+	            store.put(m);
+            
+	            tx.oncomplete = () => {
+	                loadMemoList(true); // 조용히 목록 새로고침
+	                if (typeof updateUnsyncedCount === 'function') updateUnsyncedCount(); // 동기화 카운트 반영
+	            };
+	        }
+	    };
+	}
 
 	// 🎯 [성능 최적화] 검색창 3종 디바운스(Debounce) 타이머
         let mainSearchTimer = null;
@@ -4436,7 +4451,7 @@
             };
             
             utterance.onerror = function() {
-                console.warn('음성 읽기 중단');
+                console.warn('>>> 음성 읽기 중단');
                 isReading = false;
                 btnIcon.className = 'fa-solid fa-volume-high';
                 btnText.innerText = '음성으로 읽기';
@@ -4611,17 +4626,44 @@
             setTimeout(() => { toast.style.opacity = '0'; }, 2000);
         }
 
+	let refreshing = false;
+
 	if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(registration => {
-                        console.log('✅ 서비스 워커 등록 완료! 이제 오프라인에서도 작동합니다. Scope:', registration.scope);
-                    })
-                    .catch(error => {
-                        console.error('❌ 서비스 워커 등록 실패:', error);
-                    });
-            });
-        }
+	    window.addEventListener('load', () => {
+	        navigator.serviceWorker.register('./sw.js').then(registration => {
+	            console.log('✅ 서비스 워커 등록 완료! Scope:', registration.scope);
+
+	            // 🎯 새 버전의 서비스 워커가 발견되었을 때의 처리
+	            registration.addEventListener('updatefound', () => {
+	                const newWorker = registration.installing;
+                
+	                newWorker.addEventListener('statechange', () => {
+	                    // 새 워커가 다운로드 완료되었고, 기존에 작동 중인 워커가 있다면 (즉, 최초 설치가 아닌 '업데이트'라면)
+	                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+	                        const updateToast = document.getElementById('update-toast');
+	                        updateToast.style.display = 'flex';
+
+	                        // 새로고침 버튼을 누르면 대기 중인 워커에게 강제 적용(SKIP_WAITING) 명령 전송
+	                        document.getElementById('update-btn').addEventListener('click', () => {
+	                            updateToast.style.display = 'none';
+	                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+	                        });
+	                    }
+	                });
+	            });
+	        }).catch(error => {
+	            console.error('❌ 서비스 워커 등록 실패:', error);
+	        });
+
+	        // 🎯 대기 중이던 새 워커가 권한을 넘겨받고 활성화되면 페이지를 1회 새로고침하여 새 화면 표시
+	        navigator.serviceWorker.addEventListener('controllerchange', () => {
+	            if (!refreshing) {
+	                refreshing = true;
+	                window.location.reload();
+	            }
+	        });
+	    });
+	}
 
 	// 🎯 [추가] URL을 받아 예쁜 링크 카드로 변환하는 엔진 (Microlink API)
         async function insertRichLinkCard(url, fallbackTitle, fallbackText) {
@@ -4651,7 +4693,7 @@
                 showToast("링크 카드가 저장되었습니다.");
 
             } catch (error) {
-                console.error("링크 분석 실패:", error);
+                console.error("❌ 링크 분석 실패:", error);
                 // API 통신 실패 시, 아쉽지만 일반 텍스트 링크로 대체
                 const range = quill.getLength();
                 quill.insertText(range, url + '\n', Quill.sources.USER);
@@ -4696,5 +4738,11 @@
         }
 
     </script>
+
+    <div id="update-toast" style="display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: var(--surface-hover); color: var(--text-main); padding: 12px 20px; border-radius: 8px; border: 1px solid var(--accent); box-shadow: 0 10px 25px rgba(0,0,0,0.8); z-index: 10000; align-items: center; gap: 16px;">
+        <span style="font-size: 14px; font-weight: 500;">새로운 버전이 준비되었습니다!</span>
+        <button id="update-btn" style="background: var(--accent); color: #000; padding: 8px 12px; border-radius: 6px; font-weight: 700; font-size: 13px;">새로고침</button>
+    </div>
+
 </body>
 </html>
