@@ -2260,52 +2260,52 @@
                 const searchInput = document.getElementById('fm-search-input');
                 const isSearching = searchInput && searchInput.value !== '';
 
-	    // 🎯 [신규 0순위] 다중 선택 중일 때 뒤로가기: 다중 선택 취소
-            if (isFmMultiSelectMode) {
-                cancelFmMultiSelect();
-                history.pushState({ fmOpen: true, fmFolderId: currentFmFolderId, fmPath: fmPath }, '');
-                return;
-            }
+		// 🎯 [신규 0순위] 다중 선택 중일 때 뒤로가기: 다중 선택 취소
+	        if (isFmMultiSelectMode) {
+		    cancelFmMultiSelect();
+		    setTimeout(() => history.forward(), 10); // 모바일 강제종료 방지 (forward 우회)
+		    return;
+		}
 
-            // 🎯 [신규 0.5순위] 각종 팝업/메뉴가 열려있을 때 뒤로가기: 팝업만 닫기
-            const globalMenu = document.getElementById('fm-global-menu');
-            const itemMenu = document.getElementById('fm-item-menu');
-            const moveModal = document.getElementById('fm-move-modal');
-            const securityModal = document.getElementById('fm-security-modal');
+		// 🎯 [신규 0.5순위] 각종 팝업/메뉴가 열려있을 때 뒤로가기: 팝업만 닫기
+		const globalMenu = document.getElementById('fm-global-menu');
+		const itemMenu = document.getElementById('fm-item-menu');
+		const moveModal = document.getElementById('fm-move-modal');
+		const securityModal = document.getElementById('fm-security-modal');
 
-            const isMenuOpen = (globalMenu && globalMenu.classList.contains('is-active')) || 
-                               (itemMenu && itemMenu.classList.contains('is-active'));
-            const isModalOpen = (moveModal && moveModal.style.display === 'flex') || 
-                                (securityModal && securityModal.style.display === 'flex');
+		const isMenuOpen = (globalMenu && globalMenu.classList.contains('is-active')) || 
+					      (itemMenu && itemMenu.classList.contains('is-active'));
+		const isModalOpen = (moveModal && moveModal.style.display === 'flex') || 
+					       (securityModal && securityModal.style.display === 'flex');
 
-            if (isMenuOpen || isModalOpen) {
-                if (globalMenu) globalMenu.classList.remove('is-active');
-                if (itemMenu) itemMenu.classList.remove('is-active');
-                if (moveModal && moveModal.style.display === 'flex') closeMoveModal();
-                if (securityModal && securityModal.style.display === 'flex') closeSecurityModal();
+		if (isMenuOpen || isModalOpen) {
+		    if (globalMenu) globalMenu.classList.remove('is-active');
+		    if (itemMenu) itemMenu.classList.remove('is-active');
+		    if (moveModal && moveModal.style.display === 'flex') closeMoveModal();
+		    if (securityModal && securityModal.style.display === 'flex') closeSecurityModal();
                 
-                // 브라우저 뒤로가기를 막기 위해 현재 상태(위치) 다시 푸시
-                history.pushState({ fmOpen: true, fmFolderId: currentFmFolderId, fmPath: fmPath }, '');
-                return;
-            }
+		    setTimeout(() => history.forward(), 10); // 모바일 강제종료 방지 (forward 우회)
+		    return;
+		}
 
-                // 🎯 1. 검색 중일 때 뒤로가기: 검색창을 비우고 깨끗한 Home으로 복귀
-                if (isSearching) {
-                    resetFmToHome();
-                    return; 
-                } 
-                
-                // 🎯 2. 평상시 폴더 탐색 중일 때 뒤로가기: 브라우저 기록을 역추적하여 '한 단계 위' 폴더로 이동
-                if (e.state && e.state.fmOpen) {
-                    fmPath = e.state.fmPath || [{ id: null, title: 'Home' }];
-                    loadFileManager(e.state.fmFolderId);
-                    return;
-                } else {
-                    // 🎯 3. 더 이상 돌아갈 과거 폴더가 없는 '진짜 초기 Home' 상태라면 창 닫기
-                    closeFileManager();
-                    return;
-                }
-            }
+		// 🎯 1. 검색 중일 때 뒤로가기: 검색창을 비우고 깨끗한 Home으로 복귀
+		if (isSearching) {
+		    resetFmToHome();
+		    return; 
+		} 
+
+		// 🎯 2. 평상시 폴더 탐색 중일 때 뒤로가기: 브라우저 기록을 역추적하여 '한 단계 위' 폴더로 이동
+		if (e.state && e.state.fmOpen) {
+		    fmPath = e.state.fmPath || [{ id: null, title: 'Home' }];
+		    loadFileManager(e.state.fmFolderId);
+		    return;
+		} else {
+		    // 🎯 3. 더 이상 돌아갈 과거 폴더가 없는 '진짜 초기 Home' 상태라면 창 닫기
+		    closeFileManager();
+		    return;
+		}
+	    }
+
             if (window.innerWidth > 768) return;
 
             const trashPane = document.getElementById('trash-pane');
