@@ -2261,9 +2261,10 @@
                 const isSearching = searchInput && searchInput.value !== '';
 
 		// 🎯 [신규 0순위] 다중 선택 중일 때 뒤로가기: 다중 선택 취소
-	        if (isFmMultiSelectMode) {
+		if (isFmMultiSelectMode) {
 		    cancelFmMultiSelect();
-		    setTimeout(() => history.forward(), 10); // 모바일 강제종료 방지 (forward 우회)
+		    // 메인 창과 동일하게 현재 상태를 밀어넣어 방어막 즉시 리필
+		    history.pushState({ fmOpen: true, fmFolderId: currentFmFolderId, fmPath: fmPath }, '');
 		    return;
 		}
 
@@ -2276,7 +2277,7 @@
 		const isMenuOpen = (globalMenu && globalMenu.classList.contains('is-active')) || 
 					      (itemMenu && itemMenu.classList.contains('is-active'));
 		const isModalOpen = (moveModal && moveModal.style.display === 'flex') || 
-					       (securityModal && securityModal.style.display === 'flex');
+					      (securityModal && securityModal.style.display === 'flex');
 
 		if (isMenuOpen || isModalOpen) {
 		    if (globalMenu) globalMenu.classList.remove('is-active');
@@ -2284,7 +2285,8 @@
 		    if (moveModal && moveModal.style.display === 'flex') closeMoveModal();
 		    if (securityModal && securityModal.style.display === 'flex') closeSecurityModal();
                 
-		    setTimeout(() => history.forward(), 10); // 모바일 강제종료 방지 (forward 우회)
+		    // 메인 창과 동일하게 현재 상태를 밀어넣어 방어막 즉시 리필
+		    history.pushState({ fmOpen: true, fmFolderId: currentFmFolderId, fmPath: fmPath }, '');
 		    return;
 		}
 
