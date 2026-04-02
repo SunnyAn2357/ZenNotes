@@ -28,7 +28,7 @@
                 try {
                     await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
                     gapiInited = true;
-                    console.log("구글 API 준비 완료!");
+                    console.log("✅ 구글 API 준비 완료!");
                 } catch (e) {
                     console.error("GAPI 초기화 실패:", e);
                 }
