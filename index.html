@@ -690,6 +690,11 @@
         }
 
         @media screen and (max-width: 768px) {
+	    /* 🎯 [추가] 모바일에서는 네비게이션 화살표 숨기기 */
+            .fm-nav-btn { display: none !important; }
+
+	    /* 🎯 [추가] 모바일에서는 좁은 화면을 위해 검색창 우측 여백 최소화 */
+            .fm-search-bar { margin-right: 8px !important; }
 
 	    /* 🎯 1. 모바일에서 파일관리창이 에디터와 함께 통째로 끌려 올라가는 현상 완벽 고정 (헤더 고정 효과) */
             .file-manager-pane {
