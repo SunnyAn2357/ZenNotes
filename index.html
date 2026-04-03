@@ -2619,7 +2619,7 @@
 							localStorage.removeItem('zen_logged_in'); 
 							checkAuthState(); 
 						}
-					}, 7000); // 10초 뒤 조용히 권한 해제
+					}, 10000); // 10초 뒤 조용히 권한 해제
                 } catch (err) {
                     console.error("❌ 전송 실패:", err);
                     updateUIState('sync-error'); 
