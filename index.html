@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#282A26">
+    <meta name="theme-color" media="(min-width: 769px)" content="#282A26">
+    <meta name="theme-color" media="(max-width: 768px)" content="#131314">
     <title>ZenNotes-ADS</title>
     <link rel="icon" type="image/png" href="favicon.png?v=1.0">
     <link rel="manifest" href="manifest.json">
@@ -5115,6 +5116,68 @@
                 updateUnsyncedCount();
                 history.back(); // 🎯 작업 완료 후 안전하게 부모 폴더로 되돌아갑니다.
             };
+        }
+
+	// ============================================================================
+        // 🎯 [모바일 마스터피스] 가상 키보드 툴바 도킹 (Visual Viewport API)
+        // 안드로이드와 아이폰(iOS)의 제멋대로인 키보드 동작을 완벽하게 계산하여 통제합니다.
+        // ============================================================================
+        if (window.visualViewport) {
+            const toolbar = document.querySelector('.ql-toolbar.ql-snow');
+            let isDocked = false;
+
+            const updateToolbarPosition = () => {
+                // PC 모드(화면 넓음)이거나 툴바가 없으면 작동하지 않고 안전하게 빠져나갑니다.
+                if (window.innerWidth > 768 || !toolbar) {
+                    if (isDocked) { 
+                        toolbar.style.cssText = ''; 
+                        isDocked = false; 
+                    }
+                    return;
+                }
+
+                // 에디터나 제목 입력창에 커서(포커스)가 있는지 확인
+                const isTyping = quill.hasFocus() || document.activeElement === document.getElementById('memo-title-input');
+                
+                // 화면의 '실내 공간(visualViewport)'이 기기 화면 높이의 75% 미만으로 좁아졌다면 키보드가 올라온 것으로 간주
+                const isKeyboardUp = isTyping && (window.visualViewport.height < window.screen.height * 0.75);
+
+                if (isKeyboardUp) {
+                    // 🚀 [안드로이드/iOS 통합 마법의 계산식]
+                    // 현재 시야의 시작점(offsetTop) + 현재 시야의 높이(height) - 툴바 자체 높이
+                    // 이 계산식은 폰 밑바닥이 아니라 '진짜 키보드 바로 위' 좌표를 찾아냅니다.
+                    const topPosition = window.visualViewport.offsetTop + window.visualViewport.height - toolbar.offsetHeight;
+                    
+                    // 기존 CSS(천장 고정)를 무시하고 계산된 좌표로 강제 순간이동 시킵니다.
+                    toolbar.style.setProperty('position', 'fixed', 'important');
+                    toolbar.style.setProperty('top', `${topPosition}px`, 'important');
+                    toolbar.style.setProperty('bottom', 'auto', 'important');
+                    toolbar.style.setProperty('z-index', '9999', 'important');
+                    
+                    // 키보드나 화면 스크롤 시 덜덜거리지 않고 레이더처럼 즉각 따라붙게 만듭니다.
+                    toolbar.style.setProperty('transition', 'none', 'important'); 
+                    isDocked = true;
+                } else {
+                    // 키보드가 스르륵 닫히면, 강제로 부여했던 인라인 스타일을 싹 지우고
+                    // 원래 CSS에 적혀있던 자리(상단 제목 밑)로 예쁘게 복귀합니다.
+                    if (isDocked) {
+                        toolbar.style.cssText = ''; 
+                        isDocked = false;
+                    }
+                }
+            };
+
+            // 화면 줌, 텍스트 스크롤, 키보드 애니메이션 등 '시야'가 변하는 모든 순간을 1밀리초 단위로 감지
+            window.visualViewport.addEventListener('resize', updateToolbarPosition);
+            window.visualViewport.addEventListener('scroll', updateToolbarPosition);
+            
+            // 사용자가 글씨를 쓰려고 화면을 터치하는 순간 즉각 반응
+            quill.root.addEventListener('focus', updateToolbarPosition);
+            document.getElementById('memo-title-input').addEventListener('focus', updateToolbarPosition);
+            
+            // 키보드가 닫히는 애니메이션 시간을 고려해 0.1초 뒤에 복귀(천장에 다시 붙임) 계산
+            quill.root.addEventListener('blur', () => setTimeout(updateToolbarPosition, 100)); 
+            document.getElementById('memo-title-input').addEventListener('blur', () => setTimeout(updateToolbarPosition, 100));
         }
 
     </script>
