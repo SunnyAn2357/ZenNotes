@@ -1075,24 +1075,31 @@
             flex-direction: column;
         }
 
-	.fm-header {
+		.fm-header {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start; /* 🎯 좌측 정렬로 꽉 차 보이게 변경 */
             align-items: center;
-            padding: 30px 24px 16px; /* 에디터 헤더와 비슷한 상단 여백 */
+            padding: 30px 24px 16px;
             border-bottom: 1px solid var(--border);
-            gap: 16px;
-            /* 🎯 핵심: 에디터와 동일한 최대 너비 중앙 정렬 */
+            gap: 12px; /* 🎯 버튼 사이 간격 축소 */
             max-width: 800px; 
             margin: 0 auto;
             width: 100%;
         }
+        
+        /* 🎯 네비게이션 화살표 디자인 (새로 추가됨!) */
+        .fm-nav-btn {
+            background: transparent; color: var(--text-muted); border: none;
+            font-size: 16px; padding: 8px; border-radius: 50%; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; flex-shrink: 0;
+        }
+        .fm-nav-btn:hover { background: var(--surface-hover); color: var(--accent); }
 
-	.fm-search-bar {
-            flex: 1;
-            max-width: 400px;
-            margin-left: 12px;       /* 🎯 삼선 오른쪽으로 살짝 띄우기 */
-            margin-right: auto;      /* 🎯 우측 메뉴들(상태점+삼점)을 오른쪽 끝으로 예쁘게 밀어내기 */
+        .fm-search-bar {
+            flex: 1; /* 🎯 남은 빈 공간을 검색창이 유연하게 쫙 채움 */
+            margin-left: 4px;
+			margin-right: 12px;
             background: var(--surface);
             padding: 10px 16px;
             border-radius: 8px;
@@ -1100,9 +1107,12 @@
             align-items: center;
             gap: 10px;
             border: 1px solid var(--border);
+            transition: border-color 0.2s;
         }
-
+        .fm-search-bar:focus-within { border-color: var(--accent); } /* 🎯 검색창 터치 시 테두리 강조 */
+        
         .fm-search-bar input { width: 100%; font-size: 15px; }
+
         .fm-body {
             flex: 1;
             overflow-y: auto;
@@ -1113,7 +1123,7 @@
 	    transition: padding-bottom 0.3s ease; /* 여백 변화를 부드럽게 */
         }
 
-	/* 🎯 [추가] 다중 선택 바가 나타났을 때만 목록을 더 위로 밀어올림 */
+		/* 🎯 [추가] 다중 선택 바가 나타났을 때만 목록을 더 위로 밀어올림 */
         .fm-body.has-bottom-bar {
             /* 팝업 높이가 커졌으므로 넉넉하게 70px + 안전영역 확보 */
             padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
@@ -1248,7 +1258,7 @@
             </div>
             <div class="search-bar">
                 <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
-                <input type="text" id="list-search-input" placeholder="노트 검색..." oninput="triggerMainSearch()">
+                <input type="text" id="list-search-input" placeholder="바탕 화면 검색..." oninput="triggerMainSearch()">
             </div>
         </div>
         <ul id="memo-list" class="memo-list"></ul>
@@ -1259,11 +1269,16 @@
 	<div id="file-manager-pane" class="file-manager-pane" style="display: none;">
             <div class="fm-header">
                 <button class="toggle-btn" onclick="handleFmHamburger()"><i class="fa-solid fa-bars"></i></button>
-                <div class="fm-search-bar" style="margin-right: 16px;">
+                
+                <button class="fm-nav-btn" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i></button>
+                <button class="fm-nav-btn" onclick="history.forward()"><i class="fa-solid fa-arrow-right"></i></button>
+
+                <div class="fm-search-bar">
                     <i class="fa-solid fa-magnifying-glass" style="font-size: 12px; color: var(--text-muted);"></i>
-                    <input type="text" id="fm-search-input" placeholder="파일 및 폴더 검색..." oninput="triggerFmSearch()">
+                    <input type="text" id="fm-search-input" placeholder="ZenNotes - ADS 검색..." oninput="triggerFmSearch()">
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+
+                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
                     <div class="status-container" style="position: static; margin-right: 0;">
                         <span class="status-text" data-ns-text="미동기: 0">미동기: 0</span>
                         <div class="status-dot logged-out"></div>
@@ -1396,7 +1411,7 @@
             </button>
             <div class="search-bar">
                 <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
-                <input type="text" id="trash-search-input" placeholder="휴지통 검색..." oninput="triggerTrashSearch()">
+                <input type="text" id="trash-search-input" placeholder="바탕 화면 휴지통 검색..." oninput="triggerTrashSearch()">
             </div>
         </div>
         <ul id="trash-list" class="memo-list"></ul>
@@ -3204,6 +3219,8 @@
                 loadFileManager(currentFmFolderId);
                 loadMemoList(true);
                 updateUnsyncedCount();
+                // 🎯 삭제 완료 후 토스트에 복구용 기억(payload) 전달
+                showToast("휴지통으로 이동되었습니다.", [{ id: id, action: 'restore' }]);
             };
         }
 
@@ -3639,9 +3656,14 @@
             });
             
             tx.oncomplete = () => {
-                cancelFmMultiSelect(); // 삭제 완료 후 모드 종료
+                // 🎯 복구용 아이디 배열 생성
+                const undoPayload = Array.from(fmSelectedItems).map(id => ({ id: id, action: 'restore' }));
+                const count = fmSelectedItems.size;
+
+                cancelFmMultiSelect(); 
                 loadMemoList(true);
                 updateUnsyncedCount();
+                showToast(`${count}개 항목이 휴지통으로 이동되었습니다.`, undoPayload);
             };
         }
 
@@ -3740,11 +3762,11 @@
             return div;
         }
 
-        // 🎯 [교정] 이동 최종 승인 (동일 위치 검사 및 0개 이동 방지)
         document.getElementById('fm-move-confirm-btn').onclick = () => {
             if (selectedDestId === undefined) { alert("이동할 위치를 선택해주세요."); return; }
             
             let actualMoveCount = 0;
+            let undoPayload = []; // 🎯 돌아갈 고향 정보를 담을 가방
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
             
@@ -3752,29 +3774,30 @@
                 store.get(id).onsuccess = e => {
                     const m = e.target.result;
                     if (m && m.isSystem !== 'desktop' && m.isSystem !== 'security' && m.isSystem !== 'trash' && m.isSystem !== 'backup') {
-                        // 1. 위치 이동
-                        m.parentId = selectedDestId;
-                        m.updatedAt = Date.now();
+                        if (m.parentId !== selectedDestId) { 
+                            // 🎯 이동 전 원래 부모 아이디를 가방에 저장
+                            undoPayload.push({ id: m.id, action: 'moveBack', oldParentId: m.parentId });
+                            
+                            m.parentId = selectedDestId;
+                            m.updatedAt = Date.now();
 
-                        // 🎯 2. 만약 휴지통에 있던 항목이라면, '삭제 해제' 처리 (복구 로직 통합)
-                        if (m.isDeleted) {
-                            m.isDeleted = false;
-                            delete m.deletedAt;
-                            delete m.isPermanentlyDeleted;
+                            if (m.isDeleted) {
+                                m.isDeleted = false;
+                                delete m.deletedAt;
+                                delete m.isPermanentlyDeleted;
+                            }
+                            store.put(m);
+                            actualMoveCount++;
                         }
-
-                        store.put(m);
-                        actualMoveCount++;
                     }
                 };
             });
 
             tx.oncomplete = () => {
                 closeMoveModal();
-                
-                // 🎯 [수정] 0개 이동(제자리 걸음) 에러 토스트 삭제 및 로직 간소화
                 if (actualMoveCount > 0) {
-                    showToast(`${actualMoveCount}개 항목이 이동되었습니다.`);
+                    // 🎯 토스트에 가방(undoPayload) 전달
+                    showToast(`${actualMoveCount}개 항목이 이동되었습니다.`, undoPayload);
                     cancelFmMultiSelect(); 
                     loadMemoList(true);
                 }
@@ -3782,7 +3805,7 @@
             };
         };
 
-	// 🎯 [수정] 파일 관리창 열기/닫기 (에디터 강제 초기화 및 완벽 잠금)
+		// 🎯 [수정] 파일 관리창 열기/닫기 (에디터 강제 초기화 및 완벽 잠금)
         function openFileManager() {
             if (document.activeElement) document.activeElement.blur(); 
             closeAllMemoMenus(); 
@@ -4833,17 +4856,71 @@
             }
         });
 
-        function showToast(msg) {
+        let toastTimer = null;
+        let lastUndoData = null; // 🎯 실행 취소를 위한 기억 장치
+
+        function showToast(msg, undoData = null) {
             let toast = document.getElementById('zen-toast');
             if (!toast) {
                 toast = document.createElement('div');
                 toast.id = 'zen-toast';
-                toast.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.9); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; pointer-events:none; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all;';
+                // 🎯 버튼과 텍스트가 가로로 예쁘게 배치되도록 flex 스타일 추가
+                toast.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.95); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:auto;';
                 document.body.appendChild(toast);
             }
-            toast.innerText = msg;
+            
+            // 🎯 실행 취소 데이터가 넘어오면 파란색 예쁜 버튼을 추가 생성
+            let html = `<span>${msg}</span>`;
+            if (undoData) {
+                lastUndoData = undoData;
+                html += `<button id="zen-undo-btn" style="color:var(--accent); font-weight:700; font-size:14px; padding:10px 12px; background:rgba(120,169,255,0.15); border:none; border-radius:6px; cursor:pointer; transition:background 0.2s; flex-shrink:0;">실행 취소</button>`;
+            }
+            
+            toast.innerHTML = html;
             toast.style.opacity = '1';
-            setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+            
+            // 🎯 취소 버튼 클릭 시 즉각적인 롤백 명령 하달
+            if (undoData) {
+                document.getElementById('zen-undo-btn').onclick = () => {
+                    executeUndo();
+                    toast.style.opacity = '0';
+                };
+            }
+            
+            if (toastTimer) clearTimeout(toastTimer);
+            // 🎯 실행 취소가 있으면 5초 대기, 일반 알림은 2.5초 대기 후 사라짐
+            toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, undoData ? 5000 : 2500);
+        }
+
+        // 🎯 [실행 취소] 핵심 DB 롤백 엔진
+        function executeUndo() {
+            if (!lastUndoData || !db) return;
+            const tx = db.transaction(['memos'], 'readwrite');
+            const store = tx.objectStore('memos');
+
+            lastUndoData.forEach(item => {
+                store.get(item.id).onsuccess = e => {
+                    const m = e.target.result;
+                    if (m) {
+                        if (item.action === 'restore') {
+                            m.isDeleted = false; // 휴지통에서 다시 살려냄
+                            delete m.deletedAt;
+                        } else if (item.action === 'moveBack') {
+                            m.parentId = item.oldParentId; // 원래 있던 방으로 되돌림
+                        }
+                        m.updatedAt = Date.now();
+                        store.put(m);
+                    }
+                };
+            });
+
+            tx.oncomplete = () => {
+                showToast("작업이 실행 취소되었습니다.");
+                lastUndoData = null; // 기억 비우기
+                loadFileManager(currentFmFolderId); // 현재 창 새로고침
+                loadMemoList(true); // 메인 목록 새로고침
+                updateUnsyncedCount();
+            };
         }
 
 	let refreshing = false;
