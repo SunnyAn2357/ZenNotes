@@ -1383,7 +1383,7 @@
 	<div class="util-section">
             <div class="util-title">Export & Print</div>
             <button class="util-btn" id="btn-read-memo">
-                <i class="fa-solid fa-volume-high"></i> <span class="btn-text">음성으로 읽기</span>
+                <i class="fa-solid fa-volume-high"></i> <span class="btn-text">음성으로 듣기</span>
             </button>
             <button class="util-btn" onclick="exportHTML();">
                 <i class="fa-brands fa-html5"></i> <span class="btn-text">HTML 저장</span>
@@ -1405,11 +1405,11 @@
         <div class="util-section mt-auto">
             <div class="util-title">Data Management</div>
             <button class="util-btn" onclick="document.getElementById('import-file').click(); closeAllPanelsMobile();">
-                <i class="fa-solid fa-file-import"></i> <span class="btn-text">파일 불러오기</span>
+                <i class="fa-solid fa-file-import"></i> <span class="btn-text">불러오기</span>
             </button>
             <div style="display: flex; gap: 8px;">
                 <button class="util-btn" style="flex: 1;" onclick="backupAllData();">
-                    <i class="fa-solid fa-database"></i> <span class="btn-text">전체 백업</span>
+                    <i class="fa-solid fa-database"></i> <span class="btn-text">로컬 백업</span>
                 </button>
                 <button class="util-btn" style="flex: 1; justify-content: center;" onclick="toggleTrashPane();">
                     <i class="fa-solid fa-trash"></i> <span class="btn-text">휴지통</span>
@@ -2048,7 +2048,7 @@
                             if (item.title === '바탕 화면' && item.isSystem !== 'desktop') { item.isSystem = 'desktop'; needsUpdate = true; }
                             if (item.title === '보안 폴더' && item.isSystem !== 'security') { item.isSystem = 'security'; needsUpdate = true; }
                             if (item.title === '휴지통' && item.isSystem !== 'trash') { item.isSystem = 'trash'; needsUpdate = true; }
-                            if (item.title === '바탕 화면 백업' && item.isSystem !== 'backup') { item.isSystem = 'backup'; needsUpdate = true; }
+                            if (item.title === '쓸어 담기' && item.isSystem !== 'backup') { item.isSystem = 'backup'; needsUpdate = true; }
                             
                             // 4대장에게 구글 드라이브가 절대 헷갈리지 않을 '글로벌 고정 주민번호(syncId)' 발급
                             if (item.isSystem === 'desktop' && item.syncId !== 'sys_desktop') { item.syncId = 'sys_desktop'; needsUpdate = true; }
@@ -2104,10 +2104,10 @@
                         }).onsuccess = ev => { globalTrashFolderId = ev.target.result; };
                     }
 
-                    // 6. 🎯 바탕 화면 백업 폴더 생성 (4대장)
+                    // 6. 🎯 쓸어 담기 폴더 생성 (4대장)
                     if (!globalBackupFolderId) {
                         store.add({
-                            title: '바탕 화면 백업', type: 'folder', isSystem: 'backup',
+                            title: '쓸어 담기', type: 'folder', isSystem: 'backup',
                             parentId: null, updatedAt: Date.now(), isDeleted: false,
                             syncId: 'sys_backup' // 🎯 필수!
                         }).onsuccess = ev => { globalBackupFolderId = ev.target.result; };
@@ -3243,10 +3243,10 @@
             // 🎯 기획하신 4대장 전용 메뉴 세팅!
             if (sysType === 'desktop') {
                 html = `
-                    <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 바탕 화면 백업 폴더로 이동</div>
+                    <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 쓸어 담기로 이동</div>
                 `;
             } else if (sysType === 'backup') {
-                html = `<div class="fm-dropdown-item" onclick="alert('이 폴더는 시스템 백업 전용 창고입니다.')"><i class="fa-solid fa-circle-info"></i> 백업 폴더 정보</div>`;
+                html = `<div class="fm-dropdown-item" onclick="alert('이 폴더는 바탕 화면의 모든 노트를 폴더별로 정리하기 전, \\n일단 몽땅 쓸어 담는 용도의 임시 창고입니다. \\n바탕 화면 폴더의 삼점을 눌러서 쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 폴더 정보</div>`;
             } else if (sysType === 'security') {
                 html = `
                     <div class="fm-dropdown-item" onclick="handleSecurityMenuChange()"><i class="fa-solid fa-key"></i> 비번 변경</div>
@@ -3851,7 +3851,7 @@
                     { id: null, title: 'Home', icon: 'fa-house', color: 'var(--text-main)' },
                     { id: globalDesktopFolderId, title: '바탕 화면', icon: 'fa-desktop', color: 'var(--accent)' },
                     { id: globalSecurityFolderId, title: '보안 폴더', icon: 'fa-lock', color: '#f59e0b' },
-                    { id: globalBackupFolderId, title: '바탕 화면 백업', icon: 'fa-box-archive', color: '#8ba888' } // 🎯 백업 폴더 등재
+                    { id: globalBackupFolderId, title: '쓸어 담기', icon: 'fa-box-archive', color: '#8ba888' }
                 ];
 
                 systemItems.forEach(sys => {
@@ -4805,7 +4805,7 @@
                 synth.cancel();
                 isReading = false;
                 btnIcon.className = 'fa-solid fa-volume-high';
-                btnText.innerText = '음성으로 읽기';
+                btnText.innerText = '음성으로 듣기';
                 return;
             }
             
@@ -4819,14 +4819,14 @@
             utterance.onend = function() {
                 isReading = false;
                 btnIcon.className = 'fa-solid fa-volume-high';
-                btnText.innerText = '음성으로 읽기';
+                btnText.innerText = '음성으로 듣기';
             };
             
             utterance.onerror = function() {
                 console.warn('>>> 음성 읽기 중단');
                 isReading = false;
                 btnIcon.className = 'fa-solid fa-volume-high';
-                btnText.innerText = '음성으로 읽기';
+                btnText.innerText = '음성으로 듣기';
             };
             
             synth.cancel();
