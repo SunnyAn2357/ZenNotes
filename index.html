@@ -76,8 +76,11 @@
             padding: 0;
         }
 
+        html, body {
+            /* 🎯 [추가] 브라우저 최상단부터 당겨서 새로고침 완벽 차단 */
+            overscroll-behavior: none !important; 
+        }
         body {
-            overscroll-behavior-y: none; /* 당겨서 새로고침 완벽 차단 */
             background-color: var(--bg);
             color: var(--text-main);
             font-family: var(--font-family);
@@ -724,12 +727,19 @@
             }
 
             .col-center {
-		/* 🎯 2. 가로 스크롤 방지를 위해 vw를 %로 수정 */
                 width: 100%;
                 min-width: 100%;
-                overflow-y: auto !important; /* 스크롤을 가운데 창 전체로 풉니다 */
+                overflow-y: auto !important; 
                 display: block !important;
+                
+                /* 🎯 [추가] 모바일 가운데 창에서 발생하는 스와이프 새로고침 2차 차단 */
+                overscroll-behavior-y: none !important; 
+                
+                /* 🎯 [추가] 제목 끼임 방어막! 
+                   브라우저에게 "맨 위에 110px짜리 투명 벽이 있으니, 스크롤 끌어올릴 때 무조건 그만큼 띄워!" 라고 명령합니다. */
+                scroll-padding-top: calc(110px + env(safe-area-inset-top)) !important;
             }
+
             .quill-wrapper, .ql-container.ql-snow {
                 display: block !important;
                 overflow-y: visible !important; /* 에디터 내부의 좁은 스크롤은 끕니다 */
@@ -2028,26 +2038,48 @@
 
                 store.getAll().onsuccess = e => {
                     const allData = e.target.result;
+
+                    // 🚀 [신규: 1차 방어막] 과거에 만들어진 일반 폴더가 4대장 행세를 하거나, 고유 번호(syncId)가 없는 경우 강제 업그레이드
+                    allData.forEach(item => {
+                        if (item.type === 'folder') {
+                            let needsUpdate = false;
+                            
+                            // 이름이 같으면 무조건 4대장 시스템 폴더로 강제 편입 (과거 JSON 백업 파일 복원 시 완벽 대응)
+                            if (item.title === '바탕 화면' && item.isSystem !== 'desktop') { item.isSystem = 'desktop'; needsUpdate = true; }
+                            if (item.title === '보안 폴더' && item.isSystem !== 'security') { item.isSystem = 'security'; needsUpdate = true; }
+                            if (item.title === '휴지통' && item.isSystem !== 'trash') { item.isSystem = 'trash'; needsUpdate = true; }
+                            if (item.title === '바탕 화면 백업' && item.isSystem !== 'backup') { item.isSystem = 'backup'; needsUpdate = true; }
+                            
+                            // 4대장에게 구글 드라이브가 절대 헷갈리지 않을 '글로벌 고정 주민번호(syncId)' 발급
+                            if (item.isSystem === 'desktop' && item.syncId !== 'sys_desktop') { item.syncId = 'sys_desktop'; needsUpdate = true; }
+                            if (item.isSystem === 'security' && item.syncId !== 'sys_security') { item.syncId = 'sys_security'; needsUpdate = true; }
+                            if (item.isSystem === 'trash' && item.syncId !== 'sys_trash') { item.syncId = 'sys_trash'; needsUpdate = true; }
+                            if (item.isSystem === 'backup' && item.syncId !== 'sys_backup') { item.syncId = 'sys_backup'; needsUpdate = true; }
+                            
+                            if (needsUpdate) store.put(item); // 수정한 내용은 즉시 DB에 덮어쓰기
+                        }
+                    });
                     
                     // 1. 고정 시스템 폴더 존재 여부 확인
                     const desktopFolder = allData.find(item => item.type === 'folder' && item.isSystem === 'desktop');
                     const securityFolder = allData.find(item => item.type === 'folder' && item.isSystem === 'security');
-                    const trashFolder = allData.find(item => item.type === 'folder' && item.isSystem === 'trash'); // 🎯 휴지통 확인
-		    const backupFolder = allData.find(item => item.type === 'folder' && item.isSystem === 'backup'); // 🎯 백업 폴더 확인
+                    const trashFolder = allData.find(item => item.type === 'folder' && item.isSystem === 'trash'); 
+                    const backupFolder = allData.find(item => item.type === 'folder' && item.isSystem === 'backup'); 
 
                     if (desktopFolder) globalDesktopFolderId = desktopFolder.id;
                     if (securityFolder) globalSecurityFolderId = securityFolder.id;
-                    if (trashFolder) globalTrashFolderId = trashFolder.id; // 🎯 휴지통 변수 할당
-		    if (backupFolder) globalBackupFolderId = backupFolder.id; // 🎯 백업 폴더 할당
+                    if (trashFolder) globalTrashFolderId = trashFolder.id; 
+                    if (backupFolder) globalBackupFolderId = backupFolder.id; 
 
                     // 2. 과거에 만들어진 노트들 분류
                     needsMigration = allData.filter(item => item.type === undefined);
 
-                    // 3. 바탕 화면 폴더 생성
+                    // 3. 바탕 화면 폴더 생성 (고정 syncId 부여)
                     if (!globalDesktopFolderId) {
                         store.add({
                             title: '바탕 화면', type: 'folder', isSystem: 'desktop',
-                            parentId: null, updatedAt: Date.now(), isDeleted: false
+                            parentId: null, updatedAt: Date.now(), isDeleted: false,
+                            syncId: 'sys_desktop' // 🎯 필수!
                         }).onsuccess = ev => {
                             globalDesktopFolderId = ev.target.result;
                             migrateFiles(globalDesktopFolderId);
@@ -2058,7 +2090,8 @@
                     if (!globalSecurityFolderId) {
                         store.add({
                             title: '보안 폴더', type: 'folder', isSystem: 'security',
-                            parentId: null, isLocked: true, updatedAt: Date.now(), isDeleted: false
+                            parentId: null, isLocked: true, updatedAt: Date.now(), isDeleted: false,
+                            syncId: 'sys_security' // 🎯 필수!
                         }).onsuccess = ev => { globalSecurityFolderId = ev.target.result; };
                     }
 
@@ -2066,15 +2099,17 @@
                     if (!globalTrashFolderId) {
                         store.add({
                             title: '휴지통', type: 'folder', isSystem: 'trash',
-                            parentId: null, updatedAt: Date.now(), isDeleted: false
+                            parentId: null, updatedAt: Date.now(), isDeleted: false,
+                            syncId: 'sys_trash' // 🎯 필수!
                         }).onsuccess = ev => { globalTrashFolderId = ev.target.result; };
                     }
 
-		    // 6. 🎯 바탕 화면 백업 폴더 생성 (4대장)
+                    // 6. 🎯 바탕 화면 백업 폴더 생성 (4대장)
                     if (!globalBackupFolderId) {
                         store.add({
                             title: '바탕 화면 백업', type: 'folder', isSystem: 'backup',
-                            parentId: null, updatedAt: Date.now(), isDeleted: false
+                            parentId: null, updatedAt: Date.now(), isDeleted: false,
+                            syncId: 'sys_backup' // 🎯 필수!
                         }).onsuccess = ev => { globalBackupFolderId = ev.target.result; };
                     }
 
@@ -2088,13 +2123,13 @@
                         });
                     }
                 };
-		tx.oncomplete = () => {
+                tx.oncomplete = () => {
                     resolve();
-		};
+                };
             });
         }
 
-	// 🎯 [자가 치유 엔진] 중복 폴더 자동 병합 및 미아 파일 구출 시스템
+        // 🎯 [자가 치유 엔진] 중복 폴더 자동 병합 및 미아 파일 구출 시스템
         function healDatabase(callback) {
             if (!db) { if (callback) callback(); return; }
             
@@ -2118,10 +2153,16 @@
                 // 2. 중복 폴더 색출 및 파괴
                 Object.keys(sysGroups).forEach(sysType => {
                     const group = sysGroups[sysType];
-                    if (group.length > 1) { // 🎯 2개 이상일 때만 청소기 작동!
+                    if (group.length > 1) { 
                         group.sort((a, b) => a.id - b.id); // 가장 먼저 만들어진 '진짜 원본'을 찾음
                         const masterId = group[0].id;
                         
+                        // 🚀 [신규: 2차 방어막] 가짜 폴더를 폭파시켰을 때, 앱의 '글로벌 기억 장치'가 가짜를 가리키고 있다면 즉시 진짜 원본으로 교정!
+                        if (sysType === 'desktop') globalDesktopFolderId = masterId;
+                        if (sysType === 'security') globalSecurityFolderId = masterId;
+                        if (sysType === 'trash') globalTrashFolderId = masterId;
+                        if (sysType === 'backup') globalBackupFolderId = masterId;
+
                         for (let i = 1; i < group.length; i++) {
                             const dupId = group[i].id;
                             dupToMasterMap.set(dupId, masterId); // 가짜 ID가 진짜 ID를 찾아갈 수 있게 지도 작성
