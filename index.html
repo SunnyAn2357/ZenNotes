@@ -731,13 +731,13 @@
                 min-width: 100%;
                 overflow-y: auto !important; 
                 display: block !important;
+                overscroll-behavior-y: none !important; /* 당겨서 새로고침 차단 */
                 
-                /* 🎯 [추가] 모바일 가운데 창에서 발생하는 스와이프 새로고침 2차 차단 */
-                overscroll-behavior-y: none !important; 
-                
-                /* 🎯 [추가] 제목 끼임 방어막! 
-                   브라우저에게 "맨 위에 110px짜리 투명 벽이 있으니, 스크롤 끌어올릴 때 무조건 그만큼 띄워!" 라고 명령합니다. */
+                /* 🎯 [상단 방어막] 위로 스크롤할 때 상단 메뉴에 제목이 끼이는 것 방지 */
                 scroll-padding-top: calc(110px + env(safe-area-inset-top)) !important;
+                
+                /* 🚀 [하단 방어막 추가!] 브라우저가 자동 스크롤할 때, 하단 툴바(약 45px) 뒤로 커서가 숨지 않도록 60px 여백 강제 확보! */
+                scroll-padding-bottom: 60px !important;
             }
 
             .quill-wrapper, .ql-container.ql-snow {
@@ -782,7 +782,7 @@
                 gap: 4px; /* 그룹과 그룹 사이 틈 */
             }
 
-	    /* ===================================================
+	        /* ===================================================
                🎯 [툴바 아이콘 여백/간격 최종 다이어트 & 정렬]
                =================================================== */
 
@@ -870,7 +870,9 @@
                 z-index: 9999 !important;
             }
             
-            .ql-editor { padding: 8px 16px 16px !important; font-size: 16px; min-height: 70vh; }
+            /* 🎯 [투명 방석] 맨 밑바닥에 화면 절반(50vh) 크기의 공간을 강제로 만들어, 
+               어중간한 길이의 글도 무조건 키보드 위로 시원하게 끌어올릴 수 있게 만듭니다. */
+            .ql-editor { padding: 8px 16px 50vh !important; font-size: 16px; min-height: 70vh; }
             .ql-editor.ql-blank::before { left: 16px !important; top: 8px !important; }
             
             .col-left {
