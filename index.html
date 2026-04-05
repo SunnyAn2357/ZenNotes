@@ -942,8 +942,8 @@
                 color: var(--text-muted);
                 font-size: 14px;
                 transition: none; /* 빛의 속도로 반응하기 위해 transition 제거 */
-	    .btn-more:hover { color: var(--accent) !important; }
             }
+	    .btn-more:hover { color: var(--accent) !important; }
 
             /* 3. 메뉴 그룹(핀/휴지통): 스르륵 애니메이션 기본 설정 */
             .memo-actions {
@@ -1417,7 +1417,7 @@
                     <i class="fa-solid fa-trash"></i> <span class="btn-text">휴지통</span>
                 </button>
             </div>
-            <input type="file" id="import-file" accept=".json, .txt" style="display: none;" onchange="handleFileImport(event)">
+            <input type="file" id="import-file" accept=".json, .txt, .html, .md, image/*, .pdf" style="display: none;" onchange="handleFileImport(event)">
         </div>
 
     <div class="trash-pane" id="trash-pane">
@@ -1702,26 +1702,7 @@
                 }
             }
         });
-
-	// 🎯 [스마트 백스페이스] 투명 글자(\u200B) 감지 시 '원샷' 삭제 로직
-        quill.keyboard.addBinding({
-            key: 8, // Backspace 키 번호
-            handler: function(range, context) {
-                if (range.index > 0) {
-                    // 커서 바로 앞 글자 확인
-                    const charBefore = quill.getText(range.index - 1, 1);
-                    
-                    if (charBefore === '\u200B') {
-                        // 투명 글자가 있다면, 투명 글자와 그 앞의 진짜 글자까지 총 2칸을 한 번에 삭제
-                        // 사용자는 투명 글자의 존재를 모르고 바로 앞 글자가 지워지는 것처럼 느끼게 됩니다.
-                        quill.deleteText(range.index - 2, 2, Quill.sources.USER);
-                        return false; // 기본 백스페이스 동작 중단 (우리가 이미 지웠으므로)
-                    }
-                }
-                return true; // 일반적인 상황에서는 평소처럼 작동
-            }
-        });
-
+	
 	// 🎯 [Pro 통합 버전] 마크다운 자동 변환 엔진 (밑줄, 취소선, 코드블록 추가)
 	quill.on('text-change', function(delta, oldDelta, source) {
 	    if (source !== 'user') return;
@@ -2601,7 +2582,41 @@
 	    };
 	}
 
-        function executeSave() {
+	// 🎯 [보안] 전역 변수: 암호화 엔진 동작을 위한 휘발성 열쇠 및 상태 플래그
+        let currentSecKey = null; 
+        let isEditingSecureMemo = false;
+
+        // 🎯 헬퍼 함수: DB에서 특정 메모의 parentId를 꺼내옵니다.
+        function getMemoParentIdDB(id) {
+            return new Promise(resolve => {
+                db.transaction(['memos'], 'readonly').objectStore('memos').get(id).onsuccess = e => {
+                    resolve(e.target.result ? e.target.result.parentId : null);
+                };
+            });
+        }
+
+        // 🎯 헬퍼 함수: 특정 폴더가 '보안 폴더' 소속인지 족보를 무한 추적하여 검증합니다.
+        async function checkIsUnderSecurity(folderId) {
+            if (!folderId) return false;
+            if (folderId === globalSecurityFolderId) return true;
+            return new Promise(resolve => {
+                db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = e => {
+                    const allData = e.target.result;
+                    const fMap = new Map();
+                    allData.forEach(m => { if (m.type === 'folder') fMap.set(m.id, m); });
+                    let curr = folderId;
+                    while (curr) {
+                        if (curr === globalSecurityFolderId) { resolve(true); return; }
+                        const parent = fMap.get(curr);
+                        if (!parent) break;
+                        curr = parent.parentId;
+                    }
+                    resolve(false);
+                };
+            });
+        }
+
+        async function executeSave() {
             if (isSaving || isLoading) {
                 pendingSave = true;
                 return;
@@ -2621,26 +2636,45 @@
             isSaving = true;
             updateUIState('saving');
 
+            // 🎯 1. 현재 편집 중인 노트가 암호화 대상(보안 폴더 소속)인지 검증합니다.
+            const targetParentId = currentMemoId ? (await getMemoParentIdDB(currentMemoId)) : targetNewMemoFolderId;
+            const isSecure = await checkIsUnderSecurity(targetParentId);
+
+            let finalContent = content;
+            let finalPlainText = plainText;
+
+            // 🎯 2. 보안 구역일 경우 암호화 수행
+            if (isSecure) {
+                if (!currentSecKey) {
+                    showToast("보안 세션이 만료되어 변경 사항을 저장할 수 없습니다.");
+                    isSaving = false;
+                    updateUIState('saved');
+                    return; // 열쇠가 없으면 평문 유출 방지를 위해 저장을 차단
+                }
+                // 본문과 순수 텍스트를 모두 AES-GCM 외계어로 변환
+                finalContent = await encryptData(content, currentSecKey);
+                finalPlainText = await encryptData(plainText, currentSecKey);
+            }
+
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
 
             if (currentMemoId) {
-                // 🎯 1. 기존 노트 수정 시: DB에서 원본을 가져와서 내용만 바꿈 (부모 폴더 유지)
+                // 🎯 기존 노트 수정 시
                 store.get(currentMemoId).onsuccess = e => {
                     const m = e.target.result;
                     if (m) {
-                        m.title = title;
-                        m.content = content;
-                        m.plainText = plainText;
+                        m.title = title; // 📌 제목은 검색을 위해 무조건 평문 유지!
+                        m.content = finalContent;
+                        m.plainText = finalPlainText;
                         m.updatedAt = Date.now();
-                        // parentId와 type은 기존 것을 그대로 유지합니다.
                         store.put(m);
                     }
                 };
             } else {
-                // 🎯 2. 신규 노트 작성 시: 예약된 폴더가 있으면 거기로, 없으면 바탕화면으로!
+                // 🎯 신규 노트 작성 시
                 const memoData = {
-                    title, content, plainText,
+                    title, content: finalContent, plainText: finalPlainText,
                     updatedAt: Date.now(),
                     isDeleted: false,
                     type: 'file',
@@ -2872,13 +2906,21 @@
 	function loadFileManager(folderId = null) {
             currentFmFolderId = folderId;
 	    // 🎯 오토-락: 빵부스러기나 뒤로가기로 보안 구역 밖으로 나가면 즉시 문을 걸어 잠금!
-            if (isSecurityUnlocked && folderId !== globalSecurityFolderId && folderId !== null) {
-                // 진입하려는 폴더가 보안 폴더의 하위 자손이 아니면 잠금
-                // (isDescendantOf 함수가 아직 선언 전이므로 위치만 체크)
+            if (isSecurityUnlocked && currentFmFolderId !== globalSecurityFolderId) {
+                // 진입하려는 폴더가 보안 폴더의 하위 자손인지 확인 (비동기 처리 회피를 위해 전역 함수 재활용)
+                checkIsUnderSecurity(currentFmFolderId).then(isSecure => {
+                    if (!isSecure) {
+                        isSecurityUnlocked = false;
+                        currentSecKey = null; // 🚀 보안 구역 밖으로 나가면 메모리에 있던 열쇠 즉각 분쇄!
+                    }
+                });
             }
-            if (folderId === null) isSecurityUnlocked = false; // 홈으로 가면 무조건 잠금
+            if (folderId === null) {
+                isSecurityUnlocked = false; // 홈으로 가면 무조건 잠금
+                currentSecKey = null; // 🚀 열쇠 분쇄
+            }
+            
             const list = document.getElementById('fm-list');
-            // 🎯 비동기 버그 원인 제거: 여기서 화면을 지우지 않고 DB 로딩 끝난 뒤에 지웁니다.
 
             // 1. 경로(Breadcrumb) 업데이트 로직
             const crumbIndex = fmPath.findIndex(p => p.id === folderId);
@@ -3449,8 +3491,8 @@
 		    if (!fromPopstate) {
 			isProgrammaticBack = true;
 			history.back();
-	            }
-	        }
+            }
+	    }
 
 		// 🎯 비밀번호 제출 및 마스터키/2중 검증 로직
 		async function submitSecurityPassword() {
@@ -3478,7 +3520,7 @@
 				const hash = await hashPassword(pw);
 		                if (hash === savedHash) {
 		                    isSecurityUnlocked = true;
-		                    // 🎯 [핵심 3] 청소기(closeSecurityModal)를 돌리지 않고 팝업만 조용히 숨깁니다.
+		                    currentSecKey = await getCryptoKey(pw); // 🚀 [핵심] 암호화 열쇠 획득!
 		                    document.getElementById('fm-security-modal').style.display = 'none';
 		                    enterSecurityFolder(); // 이 안에서 replaceState가 작동!
 		                } else {
@@ -3505,7 +3547,7 @@
 		                        showToast('비밀번호가 안전하게 설정되었습니다.');
                         
 		                        isSecurityUnlocked = true;
-		                        // 🎯 [핵심 3] 여기도 마찬가지로 팝업만 조용히 숨깁니다.
+		                        currentSecKey = await getCryptoKey(pw); // 🚀 [핵심] 암호화 열쇠 획득!
 		                        document.getElementById('fm-security-modal').style.display = 'none';
 		                        enterSecurityFolder();
 		                    } else {
@@ -3543,6 +3585,7 @@
 						// 새 비번 1차 입력값과 일치하면 최종 저장
 						const hash = await hashPassword(pw);
 						localStorage.setItem('zen_sec_hash', hash);
+						currentSecKey = await getCryptoKey(pw); // 🚀 [핵심] 암호화 열쇠 최신화!
 						showToast('비밀번호가 성공적으로 변경되었습니다.');
 						closeSecurityModal();
 					} else {
@@ -3614,6 +3657,7 @@
             tx.oncomplete = () => {
                 localStorage.removeItem('zen_sec_hash'); // 비번 초기화
                 isSecurityUnlocked = false; // 잠금 상태 초기화
+                currentSecKey = null; // 🚀 열쇠 분쇄
                 showToast('보안 폴더 데이터가 삭제되고 비밀 번호가 초기화되었습니다.');
                 resetFmToHome(); // 무조건 안전한 홈으로 쫓아냄
             };
@@ -4083,7 +4127,10 @@
                         if (m.type === 'folder' || m.isDeleted || m.isPermanentlyDeleted) return;
                         if (!isUnderDesktop(m.parentId)) return;
 
-                        const matchQuery = m.title.toLowerCase().includes(query) || (m.plainText && m.plainText.toLowerCase().includes(query));
+                        // 🚀 [보안 폴더 검색 차단] 암호화된 외계어 텍스트는 검색에서 제외시킵니다.
+                        const safePlainText = (m.plainText && !m.plainText.startsWith('ZENENC::')) ? m.plainText.toLowerCase() : '';
+                        const matchQuery = m.title.toLowerCase().includes(query) || safePlainText.includes(query);
+                        
                         if (matchQuery) {
                             if (m.pinnedAt) pinnedMemos.push(m);
                             else normalMemos.push(m);
@@ -4138,7 +4185,9 @@
                 // 🎯 3. 조건에 맞는 파일만 필터링
                 allData.forEach(m => {
                     const isFile = m.type === 'file' || m.type === undefined;
-                    const matchQuery = m.title.toLowerCase().includes(query) || (m.plainText && m.plainText.toLowerCase().includes(query));
+                    // 🚀 [보안 폴더 검색 차단] 암호화된 외계어 텍스트는 검색에서 제외시킵니다.
+                    const safePlainText = (m.plainText && !m.plainText.startsWith('ZENENC::')) ? m.plainText.toLowerCase() : '';
+                    const matchQuery = m.title.toLowerCase().includes(query) || safePlainText.includes(query);
 
                     // 지워진 상태이면서, 영구삭제되지 않은 '파일'이고, 검색어에 맞을 때
                     if (m.isDeleted && !m.isPermanentlyDeleted && isFile && matchQuery) {
@@ -4358,21 +4407,46 @@
             };
         }
 
-	function loadMemo(id) {
-	    targetNewMemoFolderId = null; // 🎯 기존 노트를 열 때는 저장 타겟 폴더를 초기화합니다.
+	    // 🚀 [보안 코어 1] 노트 불러오기 (복호화 검문소)
+        async function loadMemo(id) {
+            targetNewMemoFolderId = null; // 🎯 기존 노트를 열 때는 저장 타겟 폴더를 초기화합니다.
             if (currentMemoId === id) return; // 이미 열려있는 노트면 무시 (속도 향상)
             
             forceSaveImmediate(); // 이동 전 안전하게 저장
             const previousMemoId = currentMemoId; 
             
             isLoading = true; 
-            db.transaction(['memos'], 'readonly').objectStore('memos').get(id).onsuccess = e => {
+
+            // 🎯 [보안] 열려는 노트가 보안 폴더 소속인지 족보 검사
+            const targetParentId = await getMemoParentIdDB(id);
+            isEditingSecureMemo = await checkIsUnderSecurity(targetParentId);
+
+            db.transaction(['memos'], 'readonly').objectStore('memos').get(id).onsuccess = async e => {
                 const m = e.target.result;
                 if (m) {
                     currentMemoId = m.id;
                     document.getElementById('memo-title-input').value = m.title;
                     document.title = m.title; 
-                    quill.root.innerHTML = m.content;
+                    
+                    let finalContent = m.content || '';
+                    
+                    // 🎯 [보안 복호화] 본문이 암호화되어 있다면 해독 시도
+                    if (isEditingSecureMemo && finalContent.startsWith('ZENENC::')) {
+                        if (!currentSecKey) {
+                            showToast("보안 세션이 만료되었습니다. 폴더를 다시 열어주세요.");
+                            closeFileManager();
+                            createNewMemo();
+                            return;
+                        }
+                        try {
+                            finalContent = await decryptData(finalContent, currentSecKey);
+                        } catch (err) {
+                            showToast("복호화에 실패했습니다. 데이터가 손상되었습니다.");
+                            finalContent = '<p style="color:var(--danger);">[보안 오류] 데이터를 해독할 수 없습니다.</p>';
+                        }
+                    }
+
+                    quill.root.innerHTML = finalContent;
                     
                     updateUIState('idle'); // 조용히 대기 상태 유지
                     
@@ -4480,7 +4554,7 @@
             };
         }
 
-	// 🎯 [교정] 휴지통 비우기 (DB 직접 조회로 깡통 버그 완벽 해결)
+	    // 🎯 [교정] 휴지통 비우기 (DB 직접 조회로 깡통 버그 완벽 해결)
         function emptyTrash() {
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
@@ -4539,7 +4613,7 @@
 
         // 🎯 [신규] 바탕 화면 일괄 백업 함수
         function backupDesktop() {
-            if (!confirm('바탕 화면의 모든 폴더와 파일을 백업 폴더로 이동하시겠습니까?')) return;
+            if (!confirm('바탕 화면의 모든 폴더와 파일을 쓸어 담기로 이동하시겠습니까?')) return;
 
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
@@ -4665,98 +4739,140 @@
         }
 
         // 단일 메모 및 전체 저장 복구 로직 완벽 통합 + 영리한 중복 방지
+        // 🎯 [올인원 수입 엔진] 파일 하나로 모든 형식을 판단하여 처리합니다.
         function handleFileImport(e) {
             const file = e.target.files[0];
-            if(!file) return;
-            
+            if (!file) return;
+
+            const fileName = file.name;
+            const fileExt = fileName.split('.').pop().toLowerCase();
+            const isImage = file.type.startsWith('image/');
+            const isPdf = fileExt === 'pdf';
+
+            // --- [Case 1] 이미지 파일일 때: 현재 편집 중인 노트 본문에 바로 삽입 ---
+            if (isImage) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const range = quill.getSelection(true);
+                    quill.insertEmbed(range.index, 'image', ev.target.result, Quill.sources.USER);
+                    quill.insertText(range.index + 1, '\n', Quill.sources.USER);
+                    quill.setSelection(range.index + 2, Quill.sources.SILENT);
+                    triggerAutoSave();
+                    showToast("이미지를 노트에 삽입했습니다.");
+                };
+                reader.readAsDataURL(file);
+                e.target.value = ''; return;
+            }
+
+            // --- [Case 2] PDF 파일일 때: 우선 안내 메시지 출력 ---
+            if (isPdf) {
+                alert("PDF는 현재 '이미지로 변환'하여 삽입하는 엔진을 준비 중입니다.\n텍스트를 직접 넣으시려면 PDF에서 복사해서 붙여넣어 주세요!");
+                e.target.value = ''; return;
+            }
+
+            // --- [Case 3] 텍스트 기반 파일들 (JSON, TXT, HTML, MD) ---
             const reader = new FileReader();
-            const isTxt = file.name.toLowerCase().endsWith('.txt');
-            
             reader.onload = ev => {
                 const fileContent = ev.target.result;
-		// 1. TXT 파일 불러오기
-                if (isTxt) {
-                    createNewMemo();
-                    isLoading = false; // 🎯 방어막 즉시 강제 해제!
-                    document.getElementById('memo-title-input').value = file.name.replace(/\.[^/.]+$/, "");
-                    quill.setText(fileContent);
-                    executeSave(); // 🎯 1.2초 기다리지 않고 즉시 DB 저장 + 왼쪽 목록 자동 갱신!
-                    e.target.value = '';
-                    return;
-                }
-                try {
-                    const parsed = JSON.parse(fileContent);
-                    
-                    if (parsed.type === 'ZenBackup') {
-                        const tx = db.transaction(['memos'], 'readwrite');
-                        const store = tx.objectStore('memos');
 
-                        let restoredCount = 0;
-                        let skippedCount = 0;
+                // 📌 A. 기존 로직 완벽 보존: JSON 전체 백업 및 단일 노트 불러오기
+                if (fileExt === 'json') {
+                    try {
+                        const parsed = JSON.parse(fileContent);
+                        
+                        if (parsed.type === 'ZenBackup') {
+                            const tx = db.transaction(['memos'], 'readwrite');
+                            const store = tx.objectStore('memos');
+                            let restoredCount = 0;
+                            let skippedCount = 0;
 
-                        store.getAll().onsuccess = (ev) => {
-                            const currentMemos = ev.target.result;
-                            
-                            const existingMap = new Map();
-                            currentMemos.forEach(m => {
-                                if (m.syncId) existingMap.set(m.syncId, m);
-                            });
+                            store.getAll().onsuccess = (event) => {
+                                const currentMemos = event.target.result;
+                                const existingMap = new Map();
+                                currentMemos.forEach(m => {
+                                    if (m.syncId) existingMap.set(m.syncId, m);
+                                });
 
-                            parsed.data.forEach(m => {
-                                if (m.syncId && existingMap.has(m.syncId)) {
-                                    const localMemo = existingMap.get(m.syncId);
-                                    
-                                    if (localMemo.isDeleted) {
-                                        localMemo.isDeleted = false;
-                                        delete localMemo.deletedAt;
-                                        localMemo.updatedAt = Date.now();
-                                        store.put(localMemo);
-                                        restoredCount++; 
-                                    } else {
-                                        skippedCount++; 
+                                parsed.data.forEach(m => {
+                                    if (m.syncId && existingMap.has(m.syncId)) {
+                                        const localMemo = existingMap.get(m.syncId);
+                                        if (localMemo.isDeleted) {
+                                            localMemo.isDeleted = false;
+                                            delete localMemo.deletedAt;
+                                            localMemo.updatedAt = Date.now();
+                                            store.put(localMemo);
+                                            restoredCount++; 
+                                        } else {
+                                            skippedCount++; 
+                                        }
+                                        return; 
                                     }
-                                    return; 
-                                }
 
-                                const isDuplicateContent = currentMemos.some(existing => 
-                                    existing.title === m.title && existing.content === m.content
-                                );
-                                if (isDuplicateContent) {
-                                    skippedCount++; 
-                                    return;
-                                }
+                                    const isDuplicateContent = currentMemos.some(existing => 
+                                        existing.title === m.title && existing.content === m.content
+                                    );
+                                    if (isDuplicateContent) {
+                                        skippedCount++; 
+                                        return;
+                                    }
 
-                                delete m.id;
-                                if (!m.syncId) m.syncId = generateSyncId();
-                                store.add(m);
-                                restoredCount++; 
-                            });
-                        };
+                                    delete m.id;
+                                    if (!m.syncId) m.syncId = generateSyncId();
+                                    store.add(m);
+                                    restoredCount++; 
+                                });
+                            };
 
-                        tx.oncomplete = () => {
-                            // 🎯 [수정] 복원 직후 자가 치유 엔진으로 중복 폴더 정리
-                            healDatabase(() => {
-                                loadMemoList();
-                                alert(`복원이 완료되었습니다.\n(복원노트: ${restoredCount}개 / 중복제외: ${skippedCount}개)`);
-                            });
-                        };
+                            tx.oncomplete = () => {
+                                // 🎯 자가 치유 엔진 유지
+                                healDatabase(() => {
+                                    loadMemoList();
+                                    alert(`복원이 완료되었습니다.\n(복원노트: ${restoredCount}개 / 중복제외: ${skippedCount}개)`);
+                                });
+                            };
 
-                    // 2. JSON 단일 파일 불러오기
-                    } else if (parsed.type === 'ZenMemo') {
-                        createNewMemo();
-                        isLoading = false; // 🎯 방어막 즉시 강제 해제!
-                        document.getElementById('memo-title-input').value = parsed.title || file.name.replace(/\.[^/.]+$/, "");
-                        quill.root.innerHTML = parsed.content || '';
-                        executeSave(); // 🎯 즉시 DB 저장 + 왼쪽 목록 자동 갱신!
-                    } else {
-                        alert('지원하지 않는 JSON 형식입니다.');
+                        } else if (parsed.type === 'ZenMemo') {
+                            createNewMemo();
+                            isLoading = false; 
+                            document.getElementById('memo-title-input').value = parsed.title || fileName.replace(/\.[^/.]+$/, "");
+                            quill.root.innerHTML = parsed.content || '';
+                            executeSave(); 
+                        } else {
+                            alert('지원하지 않는 JSON 형식입니다.');
+                        }
+                    } catch(err) {
+                        alert('파일 읽기 오류가 발생했습니다.');
                     }
-                } catch(err) {
-                    alert('파일 읽기 오류가 발생했습니다.');
+                } 
+                // 📌 B. HTML 파일: 서식을 유지하며 새 노트로 생성
+                else if (fileExt === 'html') {
+                    createNewMemo();
+                    isLoading = false;
+                    document.getElementById('memo-title-input').value = fileName.replace('.html', '');
+                    quill.root.innerHTML = fileContent; // HTML 서식 그대로 주입
+                    executeSave();
+                    showToast("HTML 파일을 새 노트로 불러왔습니다.");
+                }
+                // 📌 C. TXT 및 마크다운(MD) 파일
+                else if (fileExt === 'txt' || fileExt === 'md') {
+                    createNewMemo();
+                    isLoading = false; 
+                    document.getElementById('memo-title-input').value = fileName.replace(/\.(txt|md)$/i, "");
+                    quill.setText(fileContent); // 일반 텍스트로 주입
+                    executeSave(); 
+                    showToast("텍스트 문서를 불러왔습니다.");
                 }
                 e.target.value = ''; 
             };
-            reader.readAsText(file);
+
+            // 텍스트 기반 파일 읽기 실행
+            if (fileExt === 'json' || fileExt === 'txt' || fileExt === 'html' || fileExt === 'md') {
+                reader.readAsText(file);
+            } else if (!isImage && !isPdf) {
+                // 그 외 알 수 없는 파일일 경우
+                alert("지원하지 않는 파일 형식입니다.");
+                e.target.value = '';
+            }
         }
 
         function toggleLeftPaneMobile() {
@@ -5307,6 +5423,83 @@
             // 키보드가 닫히는 애니메이션 시간을 고려해 0.1초 뒤에 복귀(천장에 다시 붙임) 계산
             quill.root.addEventListener('blur', () => setTimeout(updateToolbarPosition, 100)); 
             document.getElementById('memo-title-input').addEventListener('blur', () => setTimeout(updateToolbarPosition, 100));
+        }
+
+        // ============================================================================
+        // 🚀 [군사급 암호화 엔진] Web Crypto API (AES-GCM 256bit)
+        // 상용 보안 앱에 사용되는 최상위 레벨의 브라우저 내장 암호화 시스템입니다.
+        // ============================================================================
+        
+        // 1. 사용자의 비밀번호(문자열)를 강력한 AES-GCM 256비트 암호화 키로 변환하는 해시 공장
+        async function getCryptoKey(password) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]
+            );
+            // 소금(Salt)은 로컬 DB 특성상 기기 간 동기화 후에도 복호화할 수 있도록 강력한 고정값을 사용합니다.
+            const salt = enc.encode("ZenNotes_Ultimate_Crypto_Salt_2026"); 
+            
+            return crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+            );
+        }
+
+        // 2. 평문 텍스트(Base64 이미지 포함) -> 복호화 불가능한 외계어(암호문)로 변환
+        async function encryptData(plainText, cryptoKey) {
+            if (!plainText) return '';
+            
+            const iv = crypto.getRandomValues(new Uint8Array(12)); // 12바이트 랜덤 IV (초기화 벡터) 생성
+            const enc = new TextEncoder();
+            
+            // 본문을 완전히 갈아엎어 암호화 버퍼로 변환합니다.
+            const encryptedBuffer = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv }, cryptoKey, enc.encode(plainText)
+            );
+            
+            // IV와 암호문을 한 덩어리로 합쳐서 Base64 텍스트로 인코딩합니다.
+            const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
+            combined.set(iv, 0);
+            combined.set(new Uint8Array(encryptedBuffer), iv.length);
+            
+            // 🎯 대용량 데이터(사진 등) 처리를 위해 Call Stack 크래시를 방지하는 Blob FileReader 기법 적용!
+            return new Promise((resolve) => {
+                const blob = new Blob([combined]);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64 = e.target.result.split(',')[1];
+                    // 외계어 앞에 '이건 암호화된 노트다!'라는 꼬리표(ZENENC::)를 붙여줍니다.
+                    resolve('ZENENC::' + base64); 
+                };
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // 3. 외계어(암호문) -> 사람이 읽을 수 있는 평문으로 변환 (해독기)
+        async function decryptData(encryptedText, cryptoKey) {
+            // 우리가 만든 암호문 형태가 아니면 그냥 그대로 반환(패스)합니다.
+            if (!encryptedText || !encryptedText.startsWith('ZENENC::')) return encryptedText;
+            
+            // 꼬리표를 떼어내고 순수 암호문만 분리
+            const base64 = encryptedText.replace('ZENENC::', '');
+            const binaryStr = atob(base64);
+            const bytes = new Uint8Array(binaryStr.length);
+            
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            
+            // 합쳐놨던 IV(12바이트)와 실제 암호 데이터를 다시 분리
+            const iv = bytes.slice(0, 12);
+            const data = bytes.slice(12);
+            
+            // 열쇠(cryptoKey)를 넣고 자물쇠를 풉니다!
+            const decryptedBuffer = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv }, cryptoKey, data
+            );
+            
+            // 한국어/영어로 완벽하게 복원!
+            return new TextDecoder().decode(decryptedBuffer);
         }
 
     </script>
