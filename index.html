@@ -7,8 +7,8 @@
     <meta name="theme-color" media="(max-width: 768px)" content="#131314">
 
     <title>ZenNotes-ADS</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=1.2">
-    <link rel="manifest" href="manifest.json?v=1.2">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.5">
+    <link rel="manifest" href="manifest.json?v=1.5">
 
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -487,6 +487,8 @@
             display: block;
             margin: 16px 0;
             border-radius: 8px;
+	    -webkit-touch-callout: default !important; /* 🎯 꾹 누르면 뜨는 네이티브 메뉴 강제 활성화 */
+	    user-select: auto !important;
         }
 
 	/* 다른 기기에서 불러와서 소스가 빈 이미지의 자리 표시자 역할 */
@@ -1869,6 +1871,52 @@
                 e.preventDefault();
                 e.stopPropagation();
             });
+        });
+
+	// 🎯 [신규] 에디터 내 이미지 단독 추출(다운로드) 기능 (외부 웹 이미지 포함 완벽 버전)
+        document.querySelector('.col-center').addEventListener('click', async function(e) {
+            // 1. 클릭한 곳이 <img> 태그인지 확인 (빈 엑박 이미지는 무시)
+            if (e.target.tagName === 'IMG' && e.target.src && !e.target.src.endsWith('html')) {
+                const imgSrc = e.target.src;
+
+                if (confirm('이 이미지를 기기에 저장하시겠습니까?')) {
+                    if (imgSrc.startsWith('data:image')) {
+                        // 🟢 Case A: 우리 앱에 직접 업로드한 로컬(Base64) 이미지 (100% 다운로드 성공)
+                        const link = document.createElement('a');
+                        link.href = imgSrc;
+                        link.download = `ZenNotes_IMG_${Date.now()}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        showToast('이미지 저장이 완료되었습니다.');
+                    } else {
+                        // 🔵 Case B: 인터넷에서 복사/붙여넣기 한 외부 URL 이미지
+                        try {
+                            showToast("웹 이미지를 다운로드 중입니다...");
+                            // 남의 서버에 사진 데이터를 정중하게 요청(fetch)합니다.
+                            const response = await fetch(imgSrc);
+                            if (!response.ok) throw new Error("네트워크 응답 오류");
+                            
+                            const blob = await response.blob();
+                            const blobUrl = URL.createObjectURL(blob);
+                            
+                            const link = document.createElement('a');
+                            link.href = blobUrl;
+                            link.download = `ZenNotes_Web_IMG_${Date.now()}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(blobUrl); // 찌꺼기 메모리 청소
+                            
+                            showToast('웹 이미지가 저장되었습니다.');
+                        } catch (err) {
+                            console.warn("CORS 보안 에러로 다운로드 실패:", err);
+                            // 🔴 Case C (플랜 B): 상대 서버 보안(CORS)에 막혀서 다운로드가 거부당했을 때
+                            showToast('웹사이트 보안(CORS)으로 자동 저장이 차단되었습니다.\n사진을 꾹~ 길게 눌러 [이미지 저장]을 이용해 주세요!');
+                        }
+                    }
+                }
+            }
         });
 
         quill.root.addEventListener('drop', (e) => {
@@ -3935,43 +3983,94 @@
             return div;
         }
 
-        document.getElementById('fm-move-confirm-btn').onclick = () => {
+        // 🎯 [완벽 교정] 스마트 이동 엔진 (자동 암복호화 탑재)
+        document.getElementById('fm-move-confirm-btn').onclick = async () => {
             if (selectedDestId === undefined) { alert("이동할 위치를 선택해주세요."); return; }
-            
-            let actualMoveCount = 0;
-            let undoPayload = []; // 🎯 돌아갈 고향 정보를 담을 가방
-            const tx = db.transaction(['memos'], 'readwrite');
-            const store = tx.objectStore('memos');
-            
-            movingItemIds.forEach(id => {
-                store.get(id).onsuccess = e => {
-                    const m = e.target.result;
-                    if (m && m.isSystem !== 'desktop' && m.isSystem !== 'security' && m.isSystem !== 'trash' && m.isSystem !== 'backup') {
-                        if (m.parentId !== selectedDestId) { 
-                            // 🎯 이동 전 원래 부모 아이디를 가방에 저장
-                            undoPayload.push({ id: m.id, action: 'moveBack', oldParentId: m.parentId });
-                            
-                            m.parentId = selectedDestId;
-                            m.updatedAt = Date.now();
 
-                            if (m.isDeleted) {
-                                m.isDeleted = false;
-                                delete m.deletedAt;
-                                delete m.isPermanentlyDeleted;
-                            }
-                            store.put(m);
-                            actualMoveCount++;
+            // 1. 목적지가 보안 폴더 구역인지 확인
+            const isDestSecure = await checkIsUnderSecurity(selectedDestId);
+
+            // 2. 비동기 처리를 위해 이동할 데이터를 먼저 모두 RAM으로 끌어올립니다.
+            const itemsToMove = [];
+            await new Promise(resolve => {
+                const getTx = db.transaction(['memos'], 'readonly');
+                const getStore = getTx.objectStore('memos');
+                let processed = 0;
+
+                if (movingItemIds.length === 0) resolve();
+
+                movingItemIds.forEach(id => {
+                    getStore.get(id).onsuccess = e => {
+                        const m = e.target.result;
+                        if (m && m.isSystem !== 'desktop' && m.isSystem !== 'security' && m.isSystem !== 'trash' && m.isSystem !== 'backup') {
+                            if (m.parentId !== selectedDestId) itemsToMove.push(m);
                         }
-                    }
-                };
+                        processed++;
+                        if (processed === movingItemIds.length) resolve();
+                    };
+                });
             });
 
-            tx.oncomplete = () => {
+            if (itemsToMove.length === 0) { closeMoveModal(); return; }
+
+            // 3. 국경(일반<->보안)을 넘는 파일이 있는지 검사하고, 열쇠가 있는지 확인합니다.
+            let needsCrypto = false;
+            for (const m of itemsToMove) {
+                const isItemSecure = await checkIsUnderSecurity(m.parentId);
+                if (isItemSecure !== isDestSecure) needsCrypto = true;
+            }
+
+            if (needsCrypto && !currentSecKey) {
+                alert("보안 구역으로 넣거나 빼려면, 먼저 보안 폴더를 한 번 열어서(잠금 해제) 열쇠를 활성화해야 합니다.");
+                closeMoveModal();
+                return;
+            }
+
+            // 4. 변환 작업 (외계어 씌우기 or 벗기기)
+            let actualMoveCount = 0;
+            let undoPayload = [];
+
+            showToast("데이터를 변환하며 이동 중입니다...\n(잠시만 기다려주세요)");
+
+            for (const m of itemsToMove) {
+                const isItemSecure = await checkIsUnderSecurity(m.parentId);
+                undoPayload.push({ id: m.id, action: 'moveBack', oldParentId: m.parentId });
+
+                if (!isItemSecure && isDestSecure) {
+                    // 일반 -> 보안 (암호화)
+                    m.content = await encryptData(m.content, currentSecKey);
+                    m.plainText = await encryptData(m.plainText, currentSecKey);
+                } else if (isItemSecure && !isDestSecure) {
+                    // 보안 -> 일반 (복호화)
+                    m.content = await decryptData(m.content, currentSecKey);
+                    m.plainText = await decryptData(m.plainText, currentSecKey);
+                }
+
+                m.parentId = selectedDestId;
+                m.updatedAt = Date.now();
+                if (m.isDeleted) {
+                    m.isDeleted = false;
+                    delete m.deletedAt;
+                    delete m.isPermanentlyDeleted;
+                }
+                actualMoveCount++;
+            }
+
+            // 5. 변환이 끝난 데이터를 다시 DB에 꽂아 넣습니다.
+            const putTx = db.transaction(['memos'], 'readwrite');
+            const putStore = putTx.objectStore('memos');
+            itemsToMove.forEach(m => putStore.put(m));
+
+            putTx.oncomplete = () => {
                 closeMoveModal();
                 if (actualMoveCount > 0) {
-                    // 🎯 토스트에 가방(undoPayload) 전달
-                    showToast(`${actualMoveCount}개 항목이 이동되었습니다.`, undoPayload);
-                    cancelFmMultiSelect(); 
+                    // 🚨 국경을 넘은 경우 데이터 꼬임 방지를 위해 '실행 취소(Undo)' 버튼을 숨깁니다.
+                    if (needsCrypto) {
+                        showToast(`${actualMoveCount}개 항목이 안전하게 변환되어 이동되었습니다.`);
+                    } else {
+                        showToast(`${actualMoveCount}개 항목이 이동되었습니다.`, undoPayload);
+                    }
+                    cancelFmMultiSelect();
                     loadMemoList(true);
                 }
                 loadFileManager(currentFmFolderId);
