@@ -7,8 +7,8 @@
     <meta name="theme-color" media="(max-width: 768px)" content="#131314">
 
     <title>ZenNotes-ADS</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=2.0">
-    <link rel="manifest" href="manifest.json?v=2.0">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.9">
+    <link rel="manifest" href="manifest.json?v=1.9">
 
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -2092,7 +2092,7 @@
         
         request.onsuccess = async e => {
             db = e.target.result;
-            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v2.0)"); 
+            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.9)"); 
 
             await initFileSystem(); // 🎯 시스템 폴더 생성 및 마이그레이션 실행
             
