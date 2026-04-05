@@ -7,8 +7,8 @@
     <meta name="theme-color" media="(max-width: 768px)" content="#131314">
 
     <title>ZenNotes-ADS</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=1.8">
-    <link rel="manifest" href="manifest.json?v=1.8">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.7">
+    <link rel="manifest" href="manifest.json?v=1.7">
 
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1224,28 +1224,46 @@
         .fm-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 3000; backdrop-filter: blur(4px); }
         .fm-modal { background: var(--surface); border: 1px solid var(--border); width: 90%; max-width: 400px; border-radius: 16px; display: flex; flex-direction: column; max-height: 80vh; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
         .fm-modal-header { padding: 20px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-        .fm-modal-body { flex: 1; overflow-y: auto; padding: 12px; }
 
-	.fm-modal-footer { 
+        /* 🎯 1. 폴더 목록이 버튼 구역을 침범하지 못하게 가두기 (min-height: 0 추가) */
+        .fm-modal-body { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 12px; 
+            min-height: 0; /* 👈 이것이 핵심! 투명 유령 레이어가 삐져나오는 것을 완벽 차단합니다 */
+        }
+
+        /* 🎯 2. 하단 버튼 구역을 무조건 맨 위로 끌어올리고 배경색으로 방어막 치기 */
+        .fm-modal-footer { 
             padding: 16px; 
             border-top: 1px solid var(--border); 
             display: flex; 
             gap: 12px; 
-            position: relative; /* 🎯 겹침 방어 기준점 */
-            z-index: 10; 
+            background: var(--surface); /* 👈 투명해서 클릭이 새어나가는 걸 방지 */
+            position: relative; 
+            z-index: 999; /* 👈 압도적인 높이로 설정해서 그 어떤 것도 덮지 못하게 함 */
         }
+
         .fm-modal-footer button { 
             flex: 1; 
-            display: flex; /* 🎯 버튼 알맹이를 꽉 채우기 위한 설정 */
+            height: 48px; 
+            display: flex; 
             justify-content: center; 
-            align-items: center; /* 🎯 상하 중앙 정렬로 터치 영역 100% 확보 */
-            padding: 12px; 
+            align-items: center; 
             border-radius: 8px; 
             font-weight: 600; 
             cursor: pointer;
-            position: relative; 
-            z-index: 10; /* 🎯 스크롤 영역에 덮히지 않게 위로 끌어올림 */
-            height: 48px; /* 🎯 일정한 버튼 높이 보장 */
+            border: none;
+            /* 🎯 핵심: 버튼 자체가 클릭을 모두 흡수하도록 강제 설정 */
+            pointer-events: auto !important; 
+            user-select: none;
+            position: relative;
+            z-index: 20; 
+        }
+
+        /* 🎯 텍스트나 아이콘이 마우스 클릭을 훔쳐가는 짓을 원천 차단 (투과시킴) */
+        .fm-modal-footer button * {
+            pointer-events: none !important;
         }
 
 	/* 🎯 [No.020] 보안 폴더 비밀번호 팝업 전용 스타일 */
@@ -1378,10 +1396,10 @@
 	            </div>
 	            <div id="fm-dest-list" class="fm-modal-body">
 	                </div>
-	            <div class="fm-modal-footer">
-	                <button style="background: var(--surface-hover);" onclick="closeMoveModal()">취소</button>
-	                <button id="fm-move-confirm-btn" style="background: var(--accent); color: #000;">이동하기</button>
-	            </div>
+		    <div class="fm-modal-footer">
+			<button style="background: var(--surface-hover);" onclick="closeMoveModal()">취소</button>
+			<button id="fm-move-confirm-btn" style="background: var(--accent); color: #000;">이동하기</button>
+		    </div>
 	        </div>
 	    </div>
             <div class="fm-body">
@@ -1645,122 +1663,122 @@
         LinkCardBlot.className = 'ql-link-card';
         Quill.register(LinkCardBlot);
 
-	// 🎯 [사용자님 통찰력 적용] 취소선 단위를 문단이 아닌 일반 글자(Inline)로 변경!
-    const Parchment = Quill.import('parchment');
-    const StrikeLineStyle = new Parchment.Attributor.Class('strike-line', 'ql-strike-line', {
-        scope: Parchment.Scope.INLINE // 👈 BLOCK에서 INLINE으로 수정!
-    });
-    Quill.register(StrikeLineStyle, true);
+	    // 🎯 [사용자님 통찰력 적용] 취소선 단위를 문단이 아닌 일반 글자(Inline)로 변경!
+        const Parchment = Quill.import('parchment');
+        const StrikeLineStyle = new Parchment.Attributor.Class('strike-line', 'ql-strike-line', {
+            scope: Parchment.Scope.INLINE // 👈 BLOCK에서 INLINE으로 수정!
+        });
+        Quill.register(StrikeLineStyle, true);
 
-	// [2] 에디터 본체 설정 (조절 기능 포함)
-    const quill = new Quill('#editor', {
-        theme: 'snow',
-        bounds: '.col-center',
-        placeholder: '여기에 지식을 기록하세요...',
-        modules: {
-            syntax: true,
-	        history: { delay: 1000, maxStack: 100, userOnly: true }, // 🎯 1. 에디터 뇌(기억력) 활성화
-            toolbar: {
-                container: [
-		            ['undo', 'redo'], // 🎯 2. 맨 앞줄에 취소/복구 버튼 신설
-                    // 1. 제목 그룹
-                    [{ 'header':[1, 2, 3, false] }],
-                    // 2. 글자 서식 그룹
-                    ['bold', 'italic', 'underline', 'strike'],
-                    // 3. 블록 서식 그룹 (인용구, 코드, 구분선, 완료선 추가!)
-                    ['blockquote', 'code-block', 'divider', 'strike-line'],
-                    // 4. 리스트 그룹
-                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    // 5. 서식 지우기
-                    ['clean'],
-                    // 6. 미디어 삽입 그룹 (링크, 이미지를 가장 오른쪽으로 독립!)
-                    ['link', 'image'] 
-                ],
-                handlers: {
-			        // 🎯 3. 취소/복구 버튼 눌렀을 때 작동할 명령 연결
-                    'undo': function() { this.quill.history.undo(); },
-                    'redo': function() { this.quill.history.redo(); },
-                    'image': function() {
-                        const input = document.createElement('input');
-                        input.setAttribute('type', 'file');
-                        input.setAttribute('accept', 'image/*');
-                        input.click();
-                        input.onchange = () => {
-                            if (input.files[0]) handleImageFiles([input.files[0]]);
-                        };
-                    },
+	    // [2] 에디터 본체 설정 (조절 기능 포함)
+        const quill = new Quill('#editor', {
+            theme: 'snow',
+            bounds: '.col-center',
+            placeholder: '여기에 지식을 기록하세요...',
+            modules: {
+                syntax: true,
+	            history: { delay: 1000, maxStack: 100, userOnly: true }, // 🎯 1. 에디터 뇌(기억력) 활성화
+                toolbar: {
+                    container: [
+		                ['undo', 'redo'], // 🎯 2. 맨 앞줄에 취소/복구 버튼 신설
+                        // 1. 제목 그룹
+                        [{ 'header':[1, 2, 3, false] }],
+                        // 2. 글자 서식 그룹
+                        ['bold', 'italic', 'underline', 'strike'],
+                        // 3. 블록 서식 그룹 (인용구, 코드, 구분선, 완료선 추가!)
+                        ['blockquote', 'code-block', 'divider', 'strike-line'],
+                        // 4. 리스트 그룹
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        // 5. 서식 지우기
+                        ['clean'],
+                        // 6. 미디어 삽입 그룹 (링크, 이미지를 가장 오른쪽으로 독립!)
+                        ['link', 'image'] 
+                    ],
+                    handlers: {
+    			        // 🎯 3. 취소/복구 버튼 눌렀을 때 작동할 명령 연결
+                        'undo': function() { this.quill.history.undo(); },
+                        'redo': function() { this.quill.history.redo(); },
+                        'image': function() {
+                            const input = document.createElement('input');
+                            input.setAttribute('type', 'file');
+                            input.setAttribute('accept', 'image/*');
+                            input.click();
+                            input.onchange = () => {
+                                if (input.files[0]) handleImageFiles([input.files[0]]);
+                            };
+                        },
 
-			        // 🎯 [완벽 교정] 줄 전체 글자(Inline)에 취소선을 긋고 투명 방어막 전개
-                    'strike-line': function() {
-                        const range = this.quill.getSelection();
-                        if (!range) return;
+			            // 🎯 [완벽 교정] 줄 전체 글자(Inline)에 취소선을 긋고 투명 방어막 전개
+                        'strike-line': function() {
+                            const range = this.quill.getSelection();
+                            if (!range) return;
 
-                        // 1. 현재 커서가 있는 '줄'의 시작점과 글자수를 알아냅니다.
-                        const [line, offset] = this.quill.getLine(range.index);
-                        const lineIndex = this.quill.getIndex(line);
-                        const lineLength = line.length() - 1; // 엔터 제외
+                            // 1. 현재 커서가 있는 '줄'의 시작점과 글자수를 알아냅니다.
+                            const [line, offset] = this.quill.getLine(range.index);
+                            const lineIndex = this.quill.getIndex(line);
+                            const lineLength = line.length() - 1; // 엔터 제외
 
-                        // 2. 현재 줄의 첫 글자가 속성을 가졌는지 확인
-                        const isStruck = lineLength === 0 ? this.quill.getFormat(range)['strike-line'] : this.quill.getFormat(lineIndex, 1)['strike-line'];
+                            // 2. 현재 줄의 첫 글자가 속성을 가졌는지 확인
+                            const isStruck = lineLength === 0 ? this.quill.getFormat(range)['strike-line'] : this.quill.getFormat(lineIndex, 1)['strike-line'];
 
-                        if (isStruck) {
-                            // 끄기: 줄 전체 글자의 취소선 속성 제거
-                            if (lineLength > 0) this.quill.formatText(lineIndex, lineLength, 'strike-line', false, Quill.sources.USER);
-                            this.quill.format('strike-line', false, Quill.sources.USER);
-                        } else {
-                            // 켜기:
-                            if (lineLength > 0) {
-                                // 1) 글자가 있으면 줄 전체 글자에 속성을 쫙 바르고
-                                this.quill.formatText(lineIndex, lineLength, 'strike-line', true, Quill.sources.USER);
-                                    
-                                // 2) 🎯 사용자님의 K-마크다운 방어막 전개!
-                                const lineEnd = lineIndex + lineLength;
-                                this.quill.insertText(lineEnd, '\u200B', Quill.sources.USER); // 끝에 투명 문자 삽입
-                                this.quill.setSelection(lineEnd + 1, Quill.sources.SILENT);   // 그 뒤로 커서 피신
-                                this.quill.format('strike-line', false, Quill.sources.USER);  // 서식 강제 해제!
+                            if (isStruck) {
+                                // 끄기: 줄 전체 글자의 취소선 속성 제거
+                                if (lineLength > 0) this.quill.formatText(lineIndex, lineLength, 'strike-line', false, Quill.sources.USER);
+                                this.quill.format('strike-line', false, Quill.sources.USER);
                             } else {
-                                // 빈 줄이면 그냥 커서에만 켬
-                                this.quill.format('strike-line', true, Quill.sources.USER);
+                                // 켜기:
+                                if (lineLength > 0) {
+                                    // 1) 글자가 있으면 줄 전체 글자에 속성을 쫙 바르고
+                                    this.quill.formatText(lineIndex, lineLength, 'strike-line', true, Quill.sources.USER);
+                        
+                                    // 2) 🎯 사용자님의 K-마크다운 방어막 전개!
+                                    const lineEnd = lineIndex + lineLength;
+                                    this.quill.insertText(lineEnd, '\u200B', Quill.sources.USER); // 끝에 투명 문자 삽입
+                                    this.quill.setSelection(lineEnd + 1, Quill.sources.SILENT);   // 그 뒤로 커서 피신
+                                    this.quill.format('strike-line', false, Quill.sources.USER);  // 서식 강제 해제!
+                                } else {
+                                    // 빈 줄이면 그냥 커서에만 켬
+                                    this.quill.format('strike-line', true, Quill.sources.USER);
+                                }
                             }
-                        }
-                    },
+                        },
 
-                    // 🎯 [완벽 교정] 스마트 가로 구분선 (불필요한 줄바꿈 방지)
-                    'divider': function() {
-                        const range = this.quill.getSelection(true);
+                        // 🎯 [완벽 교정] 스마트 가로 구분선 (불필요한 줄바꿈 방지)
+                        'divider': function() {
+                            const range = this.quill.getSelection(true);
                         
-                        // 1. 현재 커서가 있는 줄이 '빈 줄'인지 확인합니다.
-                        const [line, offset] = this.quill.getLine(range.index);
-                        const isLineEmpty = line.length() <= 1;
+                            // 1. 현재 커서가 있는 줄이 '빈 줄'인지 확인합니다.
+                            const [line, offset] = this.quill.getLine(range.index);
+                            const isLineEmpty = line.length() <= 1;
 
-                        // 2. 구분선을 삽입합니다.
-                        this.quill.insertEmbed(range.index, 'divider', true, Quill.sources.USER);
+                            // 2. 구분선을 삽입합니다.
+                            this.quill.insertEmbed(range.index, 'divider', true, Quill.sources.USER);
                         
-                        let nextIndex = range.index + 1;
+                            let nextIndex = range.index + 1;
 
-                        // 3. 빈 줄에 구분선을 넣었을 때 Quill이 오지랖으로 만들어낸 불필요한 \n(엔터) 하나를 강제로 지워버립니다.
-                        if (isLineEmpty) {
-                            this.quill.deleteText(nextIndex, 1, Quill.sources.USER);
+                            // 3. 빈 줄에 구분선을 넣었을 때 Quill이 오지랖으로 만들어낸 불필요한 \n(엔터) 하나를 강제로 지워버립니다.
+                            if (isLineEmpty) {
+                                this.quill.deleteText(nextIndex, 1, Quill.sources.USER);
+                            }
+
+                            // 4. 불필요한 엔터를 지운 후, 문서의 최신 전체 길이를 측정합니다.
+                            const length = this.quill.getLength();
+
+                            // 5. 기획자님 요구사항: "구분선 밑에 아무것도 없을 때(문서 맨 끝일 때)만 강제 줄바꿈 한 줄 추가"
+                            if (nextIndex >= length - 1) {
+                                this.quill.insertText(nextIndex, '\n', Quill.sources.USER);
+                            }
+
+                            // 6. 커서를 구분선 바로 밑으로 부드럽게 이동시킵니다.
+                            this.quill.setSelection(nextIndex, Quill.sources.SILENT);
+                            this.quill.removeFormat(nextIndex, 1, Quill.sources.USER);
                         }
-
-                        // 4. 불필요한 엔터를 지운 후, 문서의 최신 전체 길이를 측정합니다.
-                        const length = this.quill.getLength();
-
-                        // 5. 기획자님 요구사항: "구분선 밑에 아무것도 없을 때(문서 맨 끝일 때)만 강제 줄바꿈 한 줄 추가"
-                        if (nextIndex >= length - 1) {
-                            this.quill.insertText(nextIndex, '\n', Quill.sources.USER);
-                        }
-
-                        // 6. 커서를 구분선 바로 밑으로 부드럽게 이동시킵니다.
-                        this.quill.setSelection(nextIndex, Quill.sources.SILENT);
-                        this.quill.removeFormat(nextIndex, 1, Quill.sources.USER);
                     }
                 }
             }
-        }
-    });
+        });
 
-    // 🎯 [최종보안] 사진이 있으면 HTML은 버리고, '사용자'가 넣은 것으로 간주해 자동 저장 실행!
+        // 🎯 [최종보안] 사진이 있으면 HTML은 버리고, '사용자'가 넣은 것으로 간주해 자동 저장 실행!
         quill.root.addEventListener('paste', function(e) {
             const clipboard = e.clipboardData || window.clipboardData;
             if (!clipboard || !clipboard.files.length) return;
@@ -2074,7 +2092,7 @@
         
         request.onsuccess = async e => {
             db = e.target.result;
-            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.8)"); 
+            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.7)"); 
 
             await initFileSystem(); // 🎯 시스템 폴더 생성 및 마이그레이션 실행
             
@@ -2353,6 +2371,30 @@
             saveTimer = setTimeout(executeSave, 1200);
         }
 
+        // 🎯 [신규] 블록 지정 시 가상 키보드 스마트 통제 엔진
+        quill.on('selection-change', function(range, oldRange, source) {
+            if (range) {
+                if (range.length > 0) {
+                    // 1. 블록이 잡혔을 때 (드래그 했을 때)
+                    // 🎯 기존에 만들어둔 Visual Viewport 센서로 현재 키보드가 켜져 있는지 확인합니다.
+                    const isKeyboardUp = window.visualViewport && (window.visualViewport.height < window.screen.height * 0.75);
+                    
+                    if (!isKeyboardUp) {
+                        // 💡 기획자님 시나리오 A: "키보드가 안 올라온 상태면 안 올라온 그대로 있게 해라"
+                        // 브라우저에게 "나 지금 모바일 키보드 안 쓸 거니까 올리지 마!" 라고 속입니다.
+                        quill.root.setAttribute('inputmode', 'none');
+                    }
+                    // 💡 기획자님 시나리오 B: "키보드가 올라온 상태면 올라온 그대로 둬라"
+                    // (isKeyboardUp이 true이면 inputmode를 건드리지 않으므로 키보드가 유지됩니다!)
+                    
+                } else {
+                    // 2. 단일 커서(클릭)일 때
+                    // 블록을 풀고 글자 사이 특정 위치를 콕 터치했다면 타자를 칠 확률이 높으므로, 차단막을 즉시 해제합니다.
+                    quill.root.removeAttribute('inputmode');
+                }
+            }
+        });
+
         quill.on('text-change', (delta, old, source) => {
             if (source === 'user') triggerAutoSave();
         });
@@ -2503,9 +2545,9 @@
            3. 모바일 환경: 뒤로가기(popstate) 통합 제어
            ========================================== */
         window.addEventListener('popstate', (e) => {
-            // 🎯 [핵심] 우리가 코드로 강제 실행한 '쓰레기 청소용' 뒤로가기라면 UI 변화 없이 조용히 넘어갑니다!
-            if (isProgrammaticBack) {
-                isProgrammaticBack = false;
+            // 🎯 1. 강제 뒤로가기 카운터 처리 (클릭 씹힘 방지)
+            if (programmaticBackCount > 0) {
+                programmaticBackCount--;
                 return;
             }
 
@@ -2514,13 +2556,7 @@
                 const searchInput = document.getElementById('fm-search-input');
                 const isSearching = searchInput && searchInput.value !== '';
 
-                // 🎯 다중 선택 취소 (true를 보내서 청소기가 중복 작동하지 않게 함)
-                if (isFmMultiSelectMode) {
-                    cancelFmMultiSelect(true); 
-                    return; 
-                }
-
-                // 🎯 팝업/메뉴 닫기
+                // 🎯 2. 순서 교정 1순위: 화면 최상단 팝업/메뉴부터 닫기
                 const globalMenu = document.getElementById('fm-global-menu');
                 const itemMenu = document.getElementById('fm-item-menu');
                 const moveModal = document.getElementById('fm-move-modal');
@@ -2535,29 +2571,34 @@
                     if (globalMenu) globalMenu.classList.remove('is-active');
                     if (itemMenu) itemMenu.classList.remove('is-active');
                     
-                    // 🎯 모달 닫기 (true를 보내서 청소기가 중복 작동하지 않게 함)
                     if (moveModal && moveModal.style.display === 'flex') closeMoveModal(true);
                     if (securityModal && securityModal.style.display === 'flex') closeSecurityModal(true);
+                    return; // 팝업만 닫고 멈춤
+                }
+
+                // 🎯 3. 순서 교정 2순위: 팝업이 닫혀있다면 다중 선택 바 닫기
+                if (isFmMultiSelectMode) {
+                    cancelFmMultiSelect(true); 
                     return; 
                 }
 
-		// 🎯 1. 검색 중일 때 뒤로가기: 검색창을 비우고 깨끗한 Home으로 복귀
-		if (isSearching) {
-		    resetFmToHome();
-		    return; 
-		} 
+                // 4. 검색 중일 때 뒤로가기
+                if (isSearching) {
+                    resetFmToHome();
+                    return; 
+                } 
 
-		// 🎯 2. 평상시 폴더 탐색 중일 때 뒤로가기: 브라우저 기록을 역추적하여 '한 단계 위' 폴더로 이동
-		if (e.state && e.state.fmOpen) {
-		    fmPath = e.state.fmPath || [{ id: null, title: 'Home' }];
-		    loadFileManager(e.state.fmFolderId);
-		    return;
-		} else {
-		    // 🎯 3. 더 이상 돌아갈 과거 폴더가 없는 '진짜 초기 Home' 상태라면 창 닫기
-		    closeFileManager();
-		    return;
-		}
-	    }
+                // 5. 평상시 폴더 탐색 중일 때 뒤로가기
+                if (e.state && e.state.fmOpen) {
+                    fmPath = e.state.fmPath || [{ id: null, title: 'Home' }];
+                    loadFileManager(e.state.fmFolderId);
+                    return;
+                } else {
+                    // 6. Home 상태라면 파일관리창 닫기
+                    closeFileManager();
+                    return;
+                }
+            }
 
             const trashPane = document.getElementById('trash-pane');
             const rightPane = document.getElementById('col-right');
@@ -2571,7 +2612,7 @@
                 return;
             }
 
-            // [1순위] 검색창 처리 (글자 유무에 따라 똑똑하게 분기)
+            // [1순위] 검색창 처리
             if (activeId.includes('search-input')) {
                 if (document.activeElement.value !== '') {
                     document.activeElement.value = '';
@@ -2582,7 +2623,7 @@
                 }
             }
 
-            // [2순위] 다중 선택 모드 해제 (실제 상태 변수 기반)
+            // [2순위] 메인/휴지통 다중 선택 모드 해제
             const inMainMulti = isMultiSelectMode || selectedMemos.size > 1;
             const inTrashMulti = isTrashMultiSelectMode || selectedTrashMemos.size > 1;
 
@@ -2602,7 +2643,7 @@
                 return;
             }
 
-	    // [3순위] 패널 닫기 (휴지통 -> 우측/좌측)
+            // [3순위] 패널 닫기 (휴지통 -> 우측/좌측)
             if (trashPane.classList.contains('is-open')) {
                 trashPane.classList.remove('is-open');
                 if (rightPane.classList.contains('is-closed')) {
@@ -2616,11 +2657,11 @@
             }
 
             // [4순위] 서식 블록 탈출
-	    if (escapeFormattingBlock()) {
-	        return;
-	    }
+            if (escapeFormattingBlock()) {
+                return;
+            }
 
-	    // [5순위] 앱 종료 방어 및 최종 정리 (모바일 전용으로 격리)
+            // [5순위] 앱 종료 방어
             if (window.innerWidth <= 768) {
                 const now = Date.now();
                 if (now - backPressTimer < 2000) {
@@ -2629,8 +2670,6 @@
                     history.back(); 
                 } else {
                     backPressTimer = now;
-                    
-                    // ⭐️ 핵심: 브라우저가 이전 상태로 돌아가면서 에디터에 강제로 포커스를 주는 현상 즉각 차단
                     if (document.activeElement) document.activeElement.blur();
                     if (window.quill && quill.hasFocus()) quill.blur();
 
@@ -2638,20 +2677,17 @@
                     history.pushState({ page: 'main' }, '');
                 }
             }
-            // PC 환경(innerWidth > 768)에서는 아무 동작도 하지 않고 
-            // 자연스럽게 브라우저의 기본 뒤로가기(이전 페이지로 이동)가 작동하도록 둡니다.
-
         });
 
 	// ✅ 추가할 함수: 동기화되지 않은 노트(ns) 개수 계산
 	function updateUnsyncedCount() {
 	    if (!db) return;
 	    const lastSync = parseInt(localStorage.getItem('zen_last_sync_time') || '0', 10);
-    
+
 	    db.transaction(['memos'], 'readonly').objectStore('memos').getAll().onsuccess = e => {
 		const memos = e.target.result;
 		const unsyncedCount = memos.filter(m => m.updatedAt > lastSync).length;
-        
+
 		// 🎯 [수정] 모든 상태 텍스트에 '미동기: X' 적용
 		const statusTexts = document.querySelectorAll('.status-text');
 		statusTexts.forEach(t => {
@@ -3287,10 +3323,10 @@
             });
         }
 
-        // 🎯 폴더 위치에 따라 똑똑하게 변하는 맞춤형 글로벌 메뉴
+        // 🎯 [완벽 교정] 위치에 따라 이름이 바뀌는 지능형 글로벌 메뉴
         function toggleFmGlobalMenu(e) {
             e.stopPropagation();
-            cancelFmMultiSelect(); // 메뉴 열 때 다중선택 초기화
+            cancelFmMultiSelect(); 
             const menu = document.getElementById('fm-global-menu');
             let html = '';
 
@@ -3306,15 +3342,26 @@
                     <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
                 `;
             } else if (currentFmFolderId === null) {
+                // 🏠 파일관리창 진짜 Home(0층)
                 html = `
                     <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>
                     <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
                 `;
             } else {
+                // 📁 일반 폴더 내부
                 const isSystemTop = (currentFmFolderId === globalDesktopFolderId || currentFmFolderId === globalSecurityFolderId || currentFmFolderId === globalBackupFolderId);
-                if (!isSystemTop) {
-                    html += `<div class="fm-dropdown-item" onclick="openMoveModal(${currentFmFolderId})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 폴더 이동하기</div>`;
+                
+                if (currentFmFolderId === globalDesktopFolderId) {
+                    // 🎯 바탕 화면 루트일 때만 "전체 백업"
+                    html += `<div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 쓸어 담기로 이동</div>`;
+                } else if (!isSystemTop) {
+                    // 🎯 바탕 화면의 하위 폴더일 때만 "이 폴더를 백업"
+                    html += `
+                        <div class="fm-dropdown-item" onclick="openMoveModal(${currentFmFolderId})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 폴더 이동하기</div>
+                        <div class="fm-dropdown-item" onclick="backupThisFolder()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 이 폴더를 쓸어 담기로</div>
+                    `;
                 }
+                
                 html += `
                     <div class="fm-dropdown-item" onclick="createNewMemoInFolder(${currentFmFolderId})"><i class="fa-solid fa-pen-to-square"></i> 새 노트</div>
                     <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>
@@ -3361,7 +3408,7 @@
             } else if (isTrashMode) {
                 html = `
                     <div class="fm-dropdown-item" onclick="openMoveModal(${id})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 이동하기</div>
-                    <div class="fm-dropdown-item" onclick="fmHardDelete(${id})"><i class="fa-solid fa-xmark" style="color: var(--danger);"></i> 삭제</div>
+                    <div class="fm-dropdown-item" onclick="fmHardDelete(${id})"><i class="fa-solid fa-xmark" style="color: var(--danger);"></i> 영구 삭제</div>
                 `;
             } else {
                 html = `
@@ -3542,17 +3589,17 @@
 			}
 		}
 
-		// 🎯 [유지됨] 보안 팝업 닫기 함수
-		function closeSecurityModal(fromPopstate = false) { 
-	            if (document.getElementById('fm-security-modal').style.display === 'none') return;
-	            document.getElementById('fm-security-modal').style.display = 'none'; 
+		// 🎯 [완벽 교정]
+        function closeSecurityModal(fromPopstate = false) { 
+            if (document.getElementById('fm-security-modal').style.display === 'none') return;
+            document.getElementById('fm-security-modal').style.display = 'none'; 
             
-		    // 🎯 모달이 닫힐 때 유령 방어막 청소
-		    if (!fromPopstate) {
-			isProgrammaticBack = true;
-			history.back();
+            // 모달이 닫힐 때 유령 방어막 청소
+            if (!fromPopstate) {
+                programmaticBackCount++; // 스위치 켜기 대신 숫자를 1 올림
+                history.back();
             }
-	    }
+        }
 
 		// 🎯 비밀번호 제출 및 마스터키/2중 검증 로직
 		async function submitSecurityPassword() {
@@ -3663,8 +3710,15 @@
 
         function enterSecurityFolder() {
             fmPath.push({ id: globalSecurityFolderId, title: '보안 폴더' });
-            // 🎯 [핵심 2] pushState가 아니라 replaceState로, 팝업 방어막을 '보안 폴더 방어막'으로 덮어씁니다!
-            history.replaceState({ fmOpen: true, fmFolderId: globalSecurityFolderId, fmPath: fmPath }, '');
+            
+            // 🚨 [완벽 교정] 기획자님 말씀대로 "다른 일반 폴더랑 똑같이" pushState를 기본으로 씁니다!
+            // 단, 방금 전 비밀번호 팝업창을 거쳐왔을 때(mode === 'modal')만 예외적으로 팝업 기록을 덮어씁니다.
+            if (history.state && history.state.mode === 'modal') {
+                history.replaceState({ fmOpen: true, fmFolderId: globalSecurityFolderId, fmPath: fmPath }, '');
+            } else {
+                history.pushState({ fmOpen: true, fmFolderId: globalSecurityFolderId, fmPath: fmPath }, '');
+            }
+            
             loadFileManager(globalSecurityFolderId);
         }
 
@@ -3724,17 +3778,19 @@
         }
 
         let fmSelectedItems = new Set();
-	let isProgrammaticBack = false; // 👈 쓰레기 청소용 강제 뒤로가기를 구분하는 전원 스위치
+	    // 🎯 [완벽 교정] 여러 겹의 방어막을 동시에 해제할 수 있도록 카운터로 업그레이드!
+        let programmaticBackCount = 0;
 
-	// 🎯 [신규] 파일 관리창 전용 롱프레스(길게 누르기) 다중 선택 진입
+	    // 🎯 [신규] 파일 관리창 전용 롱프레스(길게 누르기) 다중 선택 진입
         function startFmPress(e, m) {
             if (e.target.closest('.memo-actions-wrap')) return; // 메뉴 터치 시 무시
             if (e.type === 'touchstart' && e.touches.length > 1) return; // 멀티터치 무시
 
+            isPressTriggered = false;
+
             // 🎯 4대장(시스템 폴더)은 롱프레스 다중 선택에서 제외
             if (m.isSystem === 'desktop' || m.isSystem === 'security' || m.isSystem === 'trash' || m.isSystem === 'backup') return;
 
-            isPressTriggered = false;
             pressTimer = setTimeout(() => {
                 isPressTriggered = true;
                 if (navigator.vibrate) navigator.vibrate(50); // 햅틱 피드백
@@ -3742,7 +3798,7 @@
                 if (!isFmMultiSelectMode) {
                     fmSelectedItems.clear();
                     isFmMultiSelectMode = true;
-		    history.pushState({ mode: 'multi' }, ''); // 👈 3. 파일관리창 방어막 추가!
+		            history.pushState({ mode: 'multi' }, ''); // 👈 3. 파일관리창 방어막 추가!
                 }
                 
                 fmSelectedItems.add(m.id); // 꾹 누른 녀석을 첫 번째로 선택
@@ -3766,20 +3822,20 @@
                 
                 countLabel.innerText = `${fmSelectedItems.size}개 선택됨`;
                 
-                // 🎯 휴지통 루트이거나 그 하위 폴더일 때 모두 적용
-                if (currentFmFolderId === globalTrashFolderId) {
-                    // 루트에서는 여전히 '복구'
+                // 🎯 휴지통 루트이거나 그 하위 폴더일 때 (휴지통 모드)
+                if (currentFmFolderId === globalTrashFolderId || isCurrentInTrash) {
                     btnGroup.innerHTML = `
                         <button class="fm-bottom-btn" onclick="fmBatchRestore()"><i class="fa-solid fa-rotate-left" style="color: var(--accent);"></i> <span style="color: var(--accent);">복구</span></button>
-                        <button class="fm-bottom-btn" onclick="fmBatchHardDelete()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> <span style="color: var(--danger);">삭제</span></button>
+                        <button class="fm-bottom-btn" onclick="fmBatchDelete()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> <span style="color: var(--danger);">영구 삭제</span></button>
                     `;
                 } else {
-                    // 🎯 하위 폴더에서는 '이동'으로 복구 유도
+                    // 🎯 일반 바탕화면 폴더일 때
                     btnGroup.innerHTML = `
                         <button class="fm-bottom-btn" onclick="openFmBatchMoveModal()"><i class="fa-solid fa-arrows-up-down-left-right" style="color: var(--accent);"></i> <span style="color: var(--accent);">이동</span></button>
-                        <button class="fm-bottom-btn" onclick="fmBatchHardDelete()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> <span style="color: var(--danger);">삭제</span></button>
+                        <button class="fm-bottom-btn" onclick="fmBatchDelete()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> <span style="color: var(--danger);">휴지통으로</span></button>
                     `;
                 }
+
             } else {
                 bar.classList.remove('is-visible');
                 // 🎯 [고스트 해결] 스크롤 숨김 클래스까지 싹 지워야 딸려 올라오지 않습니다.
@@ -3789,19 +3845,55 @@
             }
         }
 
-        // 🎯 일괄 영구 삭제 처리
+        // 🎯 [완벽 교정] 위치에 따른 다중 선택 삭제 분기 로직
         function fmBatchHardDelete() {
             if (fmSelectedItems.size === 0) { showToast("삭제할 항목을 선택해주세요."); return; }
-            if (!confirm(`선택한 ${fmSelectedItems.size}개의 항목을 삭제하시겠습니까?`)) return;
+            
+            // 현재 위치가 휴지통인지 확인 (루트이거나 내부 하위 폴더이거나)
+            const isInsideTrash = (currentFmFolderId === globalTrashFolderId || isCurrentInTrash);
+            const confirmMsg = isInsideTrash ? 
+                `선택한 ${fmSelectedItems.size}개 항목을 영구 삭제(복구 불가) 하시겠습니까?` : 
+                `선택한 ${fmSelectedItems.size}개 항목을 휴지통으로 보낼까요?`;
+
+            if (!confirm(confirmMsg)) return;
+
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
+            const undoPayload = [];
+
             fmSelectedItems.forEach(id => {
                 store.get(id).onsuccess = e => {
                     const m = e.target.result;
-                    if (m) { m.isPermanentlyDeleted = true; m.updatedAt = Date.now(); store.put(m); }
+                    // 시스템 폴더(4대장)는 절대 지워지지 않도록 방어막 유지
+                    if (m && m.isSystem !== 'desktop' && m.isSystem !== 'security' && m.isSystem !== 'trash' && m.isSystem !== 'backup') {
+                        if (isInsideTrash) {
+                            // 1. 휴지통 안에서 삭제 시 -> 영구 삭제 꼬리표 (툼스톤)
+                            m.isPermanentlyDeleted = true;
+                        } else {
+                            // 2. 휴지통 밖에서 삭제 시 -> 휴지통 이동 (1단계)
+                            m.isDeleted = true;
+                            m.deletedAt = Date.now();
+                            undoPayload.push({ id: m.id, action: 'restore' }); // 바탕화면 삭제일 때만 '실행 취소' 기능 활성화
+                        }
+                        m.updatedAt = Date.now();
+                        store.put(m);
+                    }
                 };
             });
-            tx.oncomplete = () => { cancelFmMultiSelect(); loadTrashList(); updateUnsyncedCount(); showToast("삭제되었습니다."); };
+            
+            tx.oncomplete = () => {
+                const count = fmSelectedItems.size;
+                cancelFmMultiSelect(); 
+                loadMemoList(true); // 좌측 메인 목록 동기화
+                updateUnsyncedCount();
+                
+                if (isInsideTrash) {
+                    showToast(`${count}개 항목이 영구 삭제 되었습니다.`);
+                } else {
+                    showToast(`${count}개 항목이 휴지통으로 이동되었습니다.`, undoPayload);
+                }
+                loadFileManager(currentFmFolderId); // 파일 관리창 렌더링 갱신
+            };
         }
 
         function startFmMultiSelect() {
@@ -3822,18 +3914,17 @@
             loadFileManager(currentFmFolderId); 
         }
 
+        // 🎯 [완벽 교정]
         function cancelFmMultiSelect(fromPopstate = false) {
             if (!isFmMultiSelectMode) return;
             isFmMultiSelectMode = false;
             fmSelectedItems.clear();
             
-            // 🎯 이 함수가 실행되면서 2단계에서 만든 클래스 제거 로직이 작동합니다.
             updateFmBottomBar(); 
-            
             loadFileManager(currentFmFolderId);
 
             if (!fromPopstate) {
-                isProgrammaticBack = true;
+                programmaticBackCount++; // 숫자를 1 올림
                 history.back();
             }
         }
@@ -3866,20 +3957,35 @@
             renderDestFolders();
         }
 
-        // 🎯 일괄 삭제 (하단 액션바에서 호출)
+        // 🎯 [완벽 교정] 위치에 따른 다중 선택 삭제 분기 로직
         function fmBatchDelete() {
             if (fmSelectedItems.size === 0) { showToast("삭제할 항목을 선택해주세요."); return; }
-            if (!confirm(`선택한 ${fmSelectedItems.size}개의 항목을 휴지통으로 보냅니다.`)) return;
+            
+            // 현재 위치가 휴지통인지 확인
+            const isInsideTrash = (currentFmFolderId === globalTrashFolderId || isCurrentInTrash);
+            const confirmMsg = isInsideTrash ? 
+                `선택한 ${fmSelectedItems.size}개 항목을 영구 삭제하시겠습니까?` : 
+                `선택한 ${fmSelectedItems.size}개 항목을 휴지통으로 보낼까요?`;
+
+            if (!confirm(confirmMsg)) return;
 
             const tx = db.transaction(['memos'], 'readwrite');
             const store = tx.objectStore('memos');
-            
+            const undoPayload = [];
+
             fmSelectedItems.forEach(id => {
                 store.get(id).onsuccess = e => {
                     const m = e.target.result;
                     if (m && m.isSystem !== 'desktop' && m.isSystem !== 'security' && m.isSystem !== 'trash') {
-                        m.isDeleted = true;
-                        m.deletedAt = Date.now();
+                        if (isInsideTrash) {
+                            // 1. 휴지통 안에서 삭제 시 -> 영구 삭제 꼬리표 (툼스톤)
+                            m.isPermanentlyDeleted = true;
+                        } else {
+                            // 2. 휴지통 밖에서 삭제 시 -> 휴지통 이동 (1단계)
+                            m.isDeleted = true;
+                            m.deletedAt = Date.now();
+                            undoPayload.push({ id: m.id, action: 'restore' });
+                        }
                         m.updatedAt = Date.now();
                         store.put(m);
                     }
@@ -3887,30 +3993,35 @@
             });
             
             tx.oncomplete = () => {
-                // 🎯 복구용 아이디 배열 생성
-                const undoPayload = Array.from(fmSelectedItems).map(id => ({ id: id, action: 'restore' }));
                 const count = fmSelectedItems.size;
-
                 cancelFmMultiSelect(); 
                 loadMemoList(true);
                 updateUnsyncedCount();
-                showToast(`${count}개 항목이 휴지통으로 이동되었습니다.`, undoPayload);
+                
+                if (isInsideTrash) {
+                    showToast(`${count}개 항목이 영구 삭제(숨김) 되었습니다.`);
+                    loadFileManager(currentFmFolderId);
+                } else {
+                    showToast(`${count}개 항목이 휴지통으로 이동되었습니다.`, undoPayload);
+                    loadFileManager(currentFmFolderId);
+                }
             };
         }
 
+        // 🎯 [완벽 교정]
         function closeMoveModal(fromPopstate = false) {
             if (document.getElementById('fm-move-modal').style.display === 'none') return;
             document.getElementById('fm-move-modal').style.display = 'none';
             movingItemIds = [];
             
-            // 🎯 모달이 닫힐 때 유령 방어막 청소
+            // 모달이 닫힐 때 유령 방어막 청소
             if (!fromPopstate) {
-                isProgrammaticBack = true;
+                programmaticBackCount++; // 숫자를 1 올림
                 history.back();
             }
         }
 
-	function renderDestFolders() {
+	    function renderDestFolders() {
             const container = document.getElementById('fm-dest-list');
             container.innerHTML = '<div style="padding:10px; font-size:12px; color:var(--text-muted);">이동할 위치를 선택하세요:</div>';
 
@@ -3922,17 +4033,21 @@
                 const folderMap = new Map();
                 allData.forEach(m => { if (m.type === 'folder') folderMap.set(m.id, m); });
                 
-                // 🎯 2. 목적지 자격 검사 (휴지통 소속이거나, 선택한 항목의 자식이면 안됨)
+                // 🎯 2. 목적지 자격 검사 (휴지통 소속이거나, 영구삭제(유령)이거나, 선택한 항목의 자식이면 안됨)
                 function isValidDestination(folderId) {
                     if (folderId === currentFmFolderId) return false; // 현재 내가 서 있는 폴더는 목적지 후보에서 아예 제외합니다!
                     if (movingItemIds.includes(folderId)) return false; // 내 자신에게 이동 불가
+                    
                     let curr = folderId;
                     while (curr) {
                         if (movingItemIds.includes(curr)) return false; // 내 자식 폴더들 안으로도 이동 불가
+                        
                         const f = folderMap.get(curr);
                         if (!f) break;
-                        // 조상 중에 하나라도 휴지통 소속이거나 삭제 상태면 탈락!
-                        if (f.isDeleted || f.isSystem === 'trash') return false; 
+                        
+                        // 🎯 [완벽 교정] 조상 중에 하나라도 휴지통 소속이거나, 일반 삭제됐거나, '영구 삭제된 유령(isPermanentlyDeleted)'이면 절대 불가!
+                        if (f.isDeleted || f.isPermanentlyDeleted || f.isSystem === 'trash') return false; 
+                        
                         curr = f.parentId;
                     }
                     return true;
@@ -3969,7 +4084,14 @@
                 container.appendChild(document.createElement('hr')).style.cssText = "margin:8px 0; border:none; border-top:1px solid var(--border);";
 
                 // 🎯 5. 유령 폴더를 제외한 '진짜 일반 폴더들' 전체 경로로 출력
-                const validFolders = allData.filter(m => m.type === 'folder' && !m.isSystem && isValidDestination(m.id));
+                // [완벽 교정] 본인 스스로가 지워졌거나(isDeleted) 영구 삭제된 유령(isPermanentlyDeleted)인 경우도 1차로 깐깐하게 걸러냅니다!
+                const validFolders = allData.filter(m => 
+                    m.type === 'folder' && 
+                    !m.isSystem && 
+                    !m.isDeleted && 
+                    !m.isPermanentlyDeleted && 
+                    isValidDestination(m.id)
+                );
                 
                 // 보기 좋게 이름(경로) 알파벳 순으로 정렬
                 validFolders.sort((a, b) => getFolderPath(a.id).localeCompare(getFolderPath(b.id)));
@@ -4072,15 +4194,37 @@
             itemsToMove.forEach(m => putStore.put(m));
 
             putTx.oncomplete = () => {
-                closeMoveModal();
+                let stepsToPop = 0; // 🎯 벗길 방어막 개수
+
+                // 1. 이동 팝업창 닫기
+                document.getElementById('fm-move-modal').style.display = 'none';
+                movingItemIds = [];
+                stepsToPop++;
+
+                // 2. 다중 선택 모드 끄기
+                if (isFmMultiSelectMode) {
+                    isFmMultiSelectMode = false;
+                    fmSelectedItems.clear();
+                    updateFmBottomBar();
+                    stepsToPop++;
+                }
+
+                // 3. 브라우저 히스토리 롤백 (이중 뒤로가기를 한 번에 처리)
+                if (stepsToPop > 0) {
+                    // 🚨 [대참사 원인 해결!] 
+                    // history.go(-N)은 N칸을 점프해도 popstate 이벤트를 무조건 딱 "1번"만 발생시킵니다!
+                    // 따라서 카운터를 stepsToPop만큼 올리면 안 되고, 무조건 1만 올려야 합니다!!
+                    isProgrammaticBack = true;
+                    //programmaticBackCount += 1; 
+                    history.go(-stepsToPop); 
+                }
+
                 if (actualMoveCount > 0) {
-                    // 🚨 국경을 넘은 경우 데이터 꼬임 방지를 위해 '실행 취소(Undo)' 버튼을 숨깁니다.
                     if (needsCrypto) {
                         showToast(`${actualMoveCount}개 항목이 안전하게 변환되어 이동되었습니다.`);
                     } else {
                         showToast(`${actualMoveCount}개 항목이 이동되었습니다.`, undoPayload);
                     }
-                    cancelFmMultiSelect();
                     loadMemoList(true);
                 }
                 loadFileManager(currentFmFolderId);
@@ -4137,27 +4281,25 @@
 	    cancelFmMultiSelect();
         }
 
-	// 🎯 [추가] 파일 관리창을 깨끗한 'Home' 상태로 되돌리는 함수 (타임머신 탑재)
+	    // 🎯 [완벽 교정] 어떤 폴더(특히 보안폴더)에서도 Home으로 안전하게 복귀하는 타임머신
         function resetFmToHome() {
             const searchInput = document.getElementById('fm-search-input');
-            if (searchInput) searchInput.value = ''; // 검색어 삭제
+            if (searchInput) searchInput.value = ''; 
             
-            // UI 찌꺼기 완벽 청소
             if (typeof forceCleanFmUI === 'function') forceCleanFmUI();
             
-            // 🎯 [핵심 4] 목표 층수(1) - 현재 층수 = 음수값으로 단번에 타임머신 롤백!
-            const steps = 1 - fmPath.length; 
-            if (steps < 0) {
-                history.go(steps);
+            // 🎯 핵심: fmPath가 1개(Home) 이상일 때만 뒤로가기 실행
+            if (fmPath.length > 1) {
+                const steps = 1 - fmPath.length;
+                history.go(steps); 
             } else {
-                // 이미 1층이라면 그냥 렌더링만 갱신
-                fmPath = [{ id: null, title: 'Home' }]; 
-                history.replaceState({ fmOpen: true, fmFolderId: null, fmPath: fmPath }, '');
+                // 이미 Home이라면 렌더링만 다시 해서 갇힘 방지
+                fmPath = [{ id: null, title: 'Home' }];
                 loadFileManager(null);
             }
         }
 
-	// 🎯 [추가] 파일 관리창 삼선 버튼 스마트 네비게이션 (폴더 안->홈->닫기)
+	    // 🎯 [추가] 파일 관리창 삼선 버튼 스마트 네비게이션 (폴더 안->홈->닫기)
         function handleFmHamburger() {
             const searchInput = document.getElementById('fm-search-input');
             const isSearching = searchInput && searchInput.value !== '';
@@ -4762,9 +4904,34 @@
             };
         }
 
+        // 🎯 [신규] 특정 폴더 하나만 통째로 '쓸어 담기'로 보내는 기능
+        function backupThisFolder() {
+            if (!currentFmFolderId) return;
+            if (!confirm('이 폴더를 내부 항목과 함께 쓸어 담기로 이동하시겠습니까?')) return;
+
+            const tx = db.transaction(['memos'], 'readwrite');
+            const store = tx.objectStore('memos');
+
+            store.get(currentFmFolderId).onsuccess = e => {
+                const folder = e.target.result;
+                if (folder) {
+                    folder.parentId = globalBackupFolderId; // 🎯 백업 폴더로 족보 변경
+                    folder.updatedAt = Date.now();
+                    store.put(folder);
+                }
+            };
+
+            tx.oncomplete = () => {
+                showToast("폴더가 쓸어 담기로 안전하게 이동되었습니다.");
+                document.getElementById('fm-global-menu').classList.remove('is-active');
+                updateUnsyncedCount();
+                history.back(); // 🎯 이동 후 즉시 상위 폴더(바탕 화면)로 자동 복귀!
+            };
+        }
+
         const getTitle = () => document.getElementById('memo-title-input').value || 'Untitled';
 
-	// 🎯 공통: 패널을 스르륵 닫은 뒤, 0.3초 여유를 주고 무거운 작업을 실행하여 화면 멈춤(프리징) 방지
+	    // 🎯 공통: 패널을 스르륵 닫은 뒤, 0.3초 여유를 주고 무거운 작업을 실행하여 화면 멈춤(프리징) 방지
         function exportHTML() {
             closeAllPanelsMobile();
             setTimeout(() => {
@@ -5285,37 +5452,63 @@
         let toastTimer = null;
         let lastUndoData = null; // 🎯 실행 취소를 위한 기억 장치
 
+        // 🎯 [완벽 교정] 오작동 방지 0.5초 지연 + 유령 버튼(투명 클릭) 완벽 차단 토스트
         function showToast(msg, undoData = null) {
             let toast = document.getElementById('zen-toast');
             if (!toast) {
                 toast = document.createElement('div');
                 toast.id = 'zen-toast';
-                // 🎯 버튼과 텍스트가 가로로 예쁘게 배치되도록 flex 스타일 추가
-                toast.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.95); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:auto;';
+                toast.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.95); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:none;'; 
                 document.body.appendChild(toast);
             }
             
-            // 🎯 실행 취소 데이터가 넘어오면 파란색 예쁜 버튼을 추가 생성
             let html = `<span>${msg}</span>`;
+            
             if (undoData) {
                 lastUndoData = undoData;
-                html += `<button id="zen-undo-btn" style="color:var(--accent); font-weight:700; font-size:14px; padding:10px 12px; background:rgba(120,169,255,0.15); border:none; border-radius:6px; cursor:pointer; transition:background 0.2s; flex-shrink:0;">실행 취소</button>`;
+                // 처음엔 투명하고 터치 불가 상태로 대기
+                html += `<button id="zen-undo-btn" style="color:var(--accent); font-weight:700; font-size:14px; padding:10px 12px; background:rgba(120,169,255,0.15); border:none; border-radius:6px; cursor:pointer; transition:opacity 0.3s ease-in-out, background 0.2s; flex-shrink:0; opacity:0; pointer-events:none;">실행 취소</button>`;
             }
             
             toast.innerHTML = html;
             toast.style.opacity = '1';
+            toast.style.pointerEvents = 'auto'; // 토스트 껍데기 터치 활성화
             
-            // 🎯 취소 버튼 클릭 시 즉각적인 롤백 명령 하달
             if (undoData) {
-                document.getElementById('zen-undo-btn').onclick = () => {
+                const undoBtn = document.getElementById('zen-undo-btn');
+                undoBtn.onclick = () => {
                     executeUndo();
                     toast.style.opacity = '0';
+                    toast.style.pointerEvents = 'none';
+                    undoBtn.style.pointerEvents = 'none'; // 🎯 취소 누르는 즉시 버튼 센서도 파괴!
                 };
+                
+                // 0.5초 뒤에 버튼만 스르륵 나타나면서 터치 활성화
+                setTimeout(() => {
+                    if (undoBtn) {
+                        undoBtn.style.opacity = '1';
+                        undoBtn.style.pointerEvents = 'auto'; 
+                    }
+                }, 500);
             }
             
             if (toastTimer) clearTimeout(toastTimer);
-            // 🎯 실행 취소가 있으면 5초 대기, 일반 알림은 2.5초 대기 후 사라짐
-            toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, undoData ? 5000 : 2500);
+            
+            toastTimer = setTimeout(() => { 
+                toast.style.opacity = '0'; 
+                toast.style.pointerEvents = 'none'; // 토스트 껍데기 터치 투과
+                
+                // 🎯 [유령 퇴마 로직] 자식 버튼의 센서도 확실하게 끄고, 0.3초(투명해지는 시간) 뒤에 알맹이를 아예 삭제!
+                const undoBtn = document.getElementById('zen-undo-btn');
+                if (undoBtn) undoBtn.style.pointerEvents = 'none';
+                
+                setTimeout(() => {
+                    if (toast.style.opacity === '0') {
+                        toast.innerHTML = ''; // 허공에 남은 버튼의 잔해를 물리적으로 완전 삭제
+                    }
+                }, 300);
+                
+            }, undoData ? 5000 : 2500);
         }
 
         // 🎯 [실행 취소] 핵심 DB 롤백 엔진
