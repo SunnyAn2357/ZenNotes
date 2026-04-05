@@ -7,8 +7,8 @@
     <meta name="theme-color" media="(max-width: 768px)" content="#131314">
 
     <title>ZenNotes-ADS</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=1.7">
-    <link rel="manifest" href="manifest.json?v=1.7">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.8">
+    <link rel="manifest" href="manifest.json?v=1.8">
 
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1225,8 +1225,29 @@
         .fm-modal { background: var(--surface); border: 1px solid var(--border); width: 90%; max-width: 400px; border-radius: 16px; display: flex; flex-direction: column; max-height: 80vh; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
         .fm-modal-header { padding: 20px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
         .fm-modal-body { flex: 1; overflow-y: auto; padding: 12px; }
-        .fm-modal-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; gap: 12px; }
-        .fm-modal-footer button { flex: 1; justify-content: center; padding: 12px; border-radius: 8px; font-weight: 600; }
+
+	.fm-modal-footer { 
+            padding: 16px; 
+            border-top: 1px solid var(--border); 
+            display: flex; 
+            gap: 12px; 
+            position: relative; /* 🎯 겹침 방어 기준점 */
+            z-index: 10; 
+        }
+        .fm-modal-footer button { 
+            flex: 1; 
+            display: flex; /* 🎯 버튼 알맹이를 꽉 채우기 위한 설정 */
+            justify-content: center; 
+            align-items: center; /* 🎯 상하 중앙 정렬로 터치 영역 100% 확보 */
+            padding: 12px; 
+            border-radius: 8px; 
+            font-weight: 600; 
+            cursor: pointer;
+            position: relative; 
+            z-index: 10; /* 🎯 스크롤 영역에 덮히지 않게 위로 끌어올림 */
+            height: 48px; /* 🎯 일정한 버튼 높이 보장 */
+        }
+
 	/* 🎯 [No.020] 보안 폴더 비밀번호 팝업 전용 스타일 */
         .sec-input { width: 100%; background: var(--bg); border: 1px solid var(--border); padding: 14px; border-radius: 8px; color: var(--text-main); font-size: 20px; font-weight: 700; margin-bottom: 16px; text-align: center; letter-spacing: 4px; font-family: monospace; transition: border-color 0.2s; }
         .sec-input:focus { border-color: #f59e0b; outline: none; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
@@ -2053,7 +2074,7 @@
         
         request.onsuccess = async e => {
             db = e.target.result;
-            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.7)"); 
+            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.8)"); 
 
             await initFileSystem(); // 🎯 시스템 폴더 생성 및 마이그레이션 실행
             
@@ -2966,21 +2987,6 @@
 
 	function loadFileManager(folderId = null) {
             currentFmFolderId = folderId;
-	    // 🎯 오토-락: 빵부스러기나 뒤로가기로 보안 구역 밖으로 나가면 즉시 문을 걸어 잠금!
-            if (isSecurityUnlocked && currentFmFolderId !== globalSecurityFolderId) {
-                // 진입하려는 폴더가 보안 폴더의 하위 자손인지 확인 (비동기 처리 회피를 위해 전역 함수 재활용)
-                checkIsUnderSecurity(currentFmFolderId).then(isSecure => {
-                    if (!isSecure) {
-                        isSecurityUnlocked = false;
-                        currentSecKey = null; // 🚀 보안 구역 밖으로 나가면 메모리에 있던 열쇠 즉각 분쇄!
-                    }
-                });
-            }
-            if (folderId === null) {
-                isSecurityUnlocked = false; // 홈으로 가면 무조건 잠금
-                currentSecKey = null; // 🚀 열쇠 분쇄
-            }
-            
             const list = document.getElementById('fm-list');
 
             // 1. 경로(Breadcrumb) 업데이트 로직
@@ -3049,13 +3055,6 @@
                         curr = parentFolder.parentId;
                     }
                     return false;
-                }
-
-		// 🎯 오토-락(Auto-Lock): 보안 구역(보안 폴더 본체 또는 그 자손)을 벗어나면 즉시 문을 잠급니다.
-                if (isSecurityUnlocked && currentFmFolderId !== globalSecurityFolderId) {
-                    if (!isDescendantOf(currentFmFolderId, globalSecurityFolderId)) {
-                        isSecurityUnlocked = false;
-                    }
                 }
 
                 if (query) {
@@ -3362,7 +3361,7 @@
             } else if (isTrashMode) {
                 html = `
                     <div class="fm-dropdown-item" onclick="openMoveModal(${id})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 이동하기</div>
-                    <div class="fm-dropdown-item" onclick="fmHardDelete(${id})"><i class="fa-solid fa-xmark" style="color: var(--danger);"></i> 영구 삭제</div>
+                    <div class="fm-dropdown-item" onclick="fmHardDelete(${id})"><i class="fa-solid fa-xmark" style="color: var(--danger);"></i> 삭제</div>
                 `;
             } else {
                 html = `
@@ -5677,6 +5676,35 @@
             // 한국어/영어로 완벽하게 복원!
             return new TextDecoder().decode(decryptedBuffer);
         }
+
+	// ============================================================================
+        // 🚨 [최종 철통 방어막] 화면 최소화 및 백그라운드 전환 시 '은행급 오토-락' 가동
+        // ============================================================================
+        document.addEventListener('visibilitychange', () => {
+            // document.hidden이 true라는 것은: 
+            // PC에서 창을 최소화했거나 다른 탭으로 넘어갔을 때, 
+            // 모바일에서 홈 버튼을 누르거나 다른 앱으로 넘어갔을 때를 완벽히 잡아냅니다.
+            if (document.hidden) {
+                
+                // 1. 메모리에 떠 있는 암호화 열쇠를 즉시 분쇄하여 완벽하게 잠급니다.
+                currentSecKey = null;
+                isSecurityUnlocked = false;
+
+                // 2. 만약 유저가 '보안 노트'를 화면(에디터)에 열어두고 최소화했다면?
+                // 평문 내용이 화면 잔상으로 남지 않도록 에디터의 글을 싹 지우고 새 노트로 덮어버립니다.
+                if (isEditingSecureMemo) {
+                    createNewMemo(); 
+                    showToast("보안을 위해 노트가 닫혔습니다. (비밀번호 재입력 필요)");
+                }
+
+                // 3. 만약 유저가 파일 관리창에서 '보안 폴더 내부'를 구경 중이었다면?
+                // 강제로 안전한 바탕화면(Home) 0층으로 쫓아내서 팝업창과 잔상을 모두 지워버립니다.
+                if (document.getElementById('file-manager-pane').style.display === 'flex') {
+                    if (typeof forceCleanFmUI === 'function') forceCleanFmUI();
+                    resetFmToHome(); 
+                }
+            }
+        });
 
     </script>
 
