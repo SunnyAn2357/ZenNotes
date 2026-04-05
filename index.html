@@ -7,13 +7,15 @@
     <meta name="theme-color" media="(max-width: 768px)" content="#131314">
 
     <title>ZenNotes-ADS</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=1.5">
-    <link rel="manifest" href="manifest.json?v=1.5">
+    <link rel="icon" type="image/png" href="favicon.png?v=2.0">
+    <link rel="manifest" href="manifest.json?v=2.0">
 
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 
     <script>
 
@@ -487,8 +489,9 @@
             display: block;
             margin: 16px 0;
             border-radius: 8px;
-	    -webkit-touch-callout: default !important; /* 🎯 꾹 누르면 뜨는 네이티브 메뉴 강제 활성화 */
-	    user-select: auto !important;
+	        -webkit-touch-callout: default !important;
+	        user-select: auto !important;
+            pointer-events: auto !important;
         }
 
 	/* 다른 기기에서 불러와서 소스가 빈 이미지의 자리 표시자 역할 */
@@ -1873,52 +1876,6 @@
             });
         });
 
-	// 🎯 [신규] 에디터 내 이미지 단독 추출(다운로드) 기능 (외부 웹 이미지 포함 완벽 버전)
-        document.querySelector('.col-center').addEventListener('click', async function(e) {
-            // 1. 클릭한 곳이 <img> 태그인지 확인 (빈 엑박 이미지는 무시)
-            if (e.target.tagName === 'IMG' && e.target.src && !e.target.src.endsWith('html')) {
-                const imgSrc = e.target.src;
-
-                if (confirm('이 이미지를 기기에 저장하시겠습니까?')) {
-                    if (imgSrc.startsWith('data:image')) {
-                        // 🟢 Case A: 우리 앱에 직접 업로드한 로컬(Base64) 이미지 (100% 다운로드 성공)
-                        const link = document.createElement('a');
-                        link.href = imgSrc;
-                        link.download = `ZenNotes_IMG_${Date.now()}.png`;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        showToast('이미지 저장이 완료되었습니다.');
-                    } else {
-                        // 🔵 Case B: 인터넷에서 복사/붙여넣기 한 외부 URL 이미지
-                        try {
-                            showToast("웹 이미지를 다운로드 중입니다...");
-                            // 남의 서버에 사진 데이터를 정중하게 요청(fetch)합니다.
-                            const response = await fetch(imgSrc);
-                            if (!response.ok) throw new Error("네트워크 응답 오류");
-                            
-                            const blob = await response.blob();
-                            const blobUrl = URL.createObjectURL(blob);
-                            
-                            const link = document.createElement('a');
-                            link.href = blobUrl;
-                            link.download = `ZenNotes_Web_IMG_${Date.now()}.png`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            URL.revokeObjectURL(blobUrl); // 찌꺼기 메모리 청소
-                            
-                            showToast('웹 이미지가 저장되었습니다.');
-                        } catch (err) {
-                            console.warn("CORS 보안 에러로 다운로드 실패:", err);
-                            // 🔴 Case C (플랜 B): 상대 서버 보안(CORS)에 막혀서 다운로드가 거부당했을 때
-                            showToast('웹사이트 보안(CORS)으로 자동 저장이 차단되었습니다.\n사진을 꾹~ 길게 눌러 [이미지 저장]을 이용해 주세요!');
-                        }
-                    }
-                }
-            }
-        });
-
         quill.root.addEventListener('drop', (e) => {
             if (e.dataTransfer && e.dataTransfer.files.length > 0) {
                 handleImageFiles(e.dataTransfer.files);
@@ -2042,7 +1999,7 @@
         
         request.onsuccess = async e => {
             db = e.target.result;
-            console.log("✅ 로컬 DB 연결 성공! (v1.5 암호화 및 폴더 시스템 적용)"); 
+            console.log("✅ 로컬 DB 연결 성공!(v2.0)"); 
 
             await initFileSystem(); // 🎯 시스템 폴더 생성 및 마이그레이션 실행
             
@@ -4865,10 +4822,67 @@
                 e.target.value = ''; return;
             }
 
-            // --- [Case 2] PDF 파일일 때: 우선 안내 메시지 출력 ---
-            if (isPdf) {
-                alert("PDF는 현재 '이미지로 변환'하여 삽입하는 엔진을 준비 중입니다.\n텍스트를 직접 넣으시려면 PDF에서 복사해서 붙여넣어 주세요!");
-                e.target.value = ''; return;
+            // 🎯 --- [Case 2] PDF 파일 처리 엔진 (스냅샷 추출 및 최적화)
+            if (file.type === "application/pdf") {
+                // 🎯 안내 문구 및 여백이 개선된 토스트 적용
+                showToast("A4 기준 약 30페지만 불러올 수 있습니다.");
+            
+                setTimeout(() => {
+                    showToast("PDF 문서를 해독하고 있습니다... (잠시만 기다려주세요)");
+                }, 500);
+
+                const reader = new FileReader();
+                reader.onload = async function() {
+                    try {
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+                        const typedarray = new Uint8Array(this.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        const totalPages = pdf.numPages;
+                    
+                        // 🎯 30장으로 상향 조정
+                        const limitPages = Math.min(totalPages, 30); 
+                        if (totalPages > 30) {
+                            alert(`안정적인 저장을 위해 처음 ${limitPages}장만 가져옵니다. (원본: ${totalPages}장)`);
+                        }
+
+                        quill.focus();
+
+                        for (let pageNum = 1; pageNum <= limitPages; pageNum++) {
+                            showToast(`PDF 변환 중... (${pageNum} / ${limitPages}장)`);
+                        
+                            const page = await pdf.getPage(pageNum);
+                            const viewport = page.getViewport({ scale: 1.5 });
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+                        
+                            const renderContext = { canvasContext: ctx, viewport: viewport };
+                            await page.render(renderContext).promise;
+                        
+                            const base64Img = canvas.toDataURL('image/jpeg', 0.8);
+                        
+                            const range = quill.getSelection(true);
+                            quill.insertEmbed(range.index, 'image', base64Img);
+                            quill.insertText(range.index + 1, '\n\n');
+                            quill.setSelection(range.index + 3);
+                        
+                            canvas.width = 0;
+                            canvas.height = 0;
+                        }
+                    
+                        // 🎯 [핵심 추가] 변환 완료 후 DB에 즉시 강제 저장
+                        // 이 코드가 실행되어야 목록에 즉시 나타납니다.
+                        await executeSave(); 
+                    
+                        showToast("✅ PDF 변환 및 저장이 완료되었습니다!");
+                    } catch (err) {
+                        console.error("PDF 파싱 에러:", err);
+                        alert("PDF 변환 중 오류가 발생했습니다.");
+                    }
+                };
+                reader.readAsArrayBuffer(file); 
+                return;
             }
 
             // --- [Case 3] 텍스트 기반 파일들 (JSON, TXT, HTML, MD) ---
