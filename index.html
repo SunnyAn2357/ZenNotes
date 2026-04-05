@@ -7,8 +7,8 @@
     <meta name="theme-color" media="(max-width: 768px)" content="#131314">
 
     <title>ZenNotes-ADS</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=1.6">
-    <link rel="manifest" href="manifest.json?v=1.6">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.7">
+    <link rel="manifest" href="manifest.json?v=1.7">
 
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -600,12 +600,17 @@
 
         @media print {
             body { background: white !important; color: black !important; display: block; }
-            .col-left, .col-right, .trash-pane, .editor-actions, .ql-toolbar.ql-snow { display: none !important; }
+            
+            /* 🎯 [수정됨] 인쇄 시 삼점 버튼, 햄버거 버튼, 오버레이 등 화면에 떠다니는 모든 UI 숨김 */
+            .col-left, .col-right, .trash-pane, .editor-actions, .ql-toolbar.ql-snow, 
+            #global-menu-btn, #mobile-left-menu-btn, #mobile-overlay { display: none !important; }
+            
             .col-center { width: 100%; background: white !important; }
             #memo-title-input { color: black !important; font-size: 32px !important; width: 100%; }
             hr.print-hr { display: block !important; border-bottom: 1px solid #d4d4d4; margin: 0 16px 16px; }
             .ql-editor { color: black !important; }
         }
+
         .ql-editor * { background-color: transparent !important; }
         .ql-editor pre.ql-syntax {
             background-color: #1E222A !important;
@@ -1699,56 +1704,65 @@
                         }
                     },
 
+                    // 🎯 [완벽 교정] 스마트 가로 구분선 (불필요한 줄바꿈 방지)
                     'divider': function() {
                         const range = this.quill.getSelection(true);
+                        
+                        // 1. 현재 커서가 있는 줄이 '빈 줄'인지 확인합니다.
+                        const [line, offset] = this.quill.getLine(range.index);
+                        const isLineEmpty = line.length() <= 1;
+
+                        // 2. 구분선을 삽입합니다.
                         this.quill.insertEmbed(range.index, 'divider', true, Quill.sources.USER);
-                        this.quill.setSelection(range.index + 1, Quill.sources.SILENT);
-                        this.quill.removeFormat(range.index + 1, 1, Quill.sources.USER);
+                        
+                        let nextIndex = range.index + 1;
+
+                        // 3. 빈 줄에 구분선을 넣었을 때 Quill이 오지랖으로 만들어낸 불필요한 \n(엔터) 하나를 강제로 지워버립니다.
+                        if (isLineEmpty) {
+                            this.quill.deleteText(nextIndex, 1, Quill.sources.USER);
+                        }
+
+                        // 4. 불필요한 엔터를 지운 후, 문서의 최신 전체 길이를 측정합니다.
+                        const length = this.quill.getLength();
+
+                        // 5. 기획자님 요구사항: "구분선 밑에 아무것도 없을 때(문서 맨 끝일 때)만 강제 줄바꿈 한 줄 추가"
+                        if (nextIndex >= length - 1) {
+                            this.quill.insertText(nextIndex, '\n', Quill.sources.USER);
+                        }
+
+                        // 6. 커서를 구분선 바로 밑으로 부드럽게 이동시킵니다.
+                        this.quill.setSelection(nextIndex, Quill.sources.SILENT);
+                        this.quill.removeFormat(nextIndex, 1, Quill.sources.USER);
                     }
                 }
             }
         }
     });
 
-    // 🎯 [완벽 보강] 스마트 붙여넣기: 이미지 단독 복사(Base64 진짜 저장) vs 웹 긁기(URL 링크 유지)
-    quill.root.addEventListener('paste', function(e) {
-        const clipboard = e.clipboardData || window.clipboardData;
-        if (!clipboard) return;
+    // 🎯 [최종보안] 사진이 있으면 HTML은 버리고, '사용자'가 넣은 것으로 간주해 자동 저장 실행!
+        quill.root.addEventListener('paste', function(e) {
+            const clipboard = e.clipboardData || window.clipboardData;
+            if (!clipboard || !clipboard.files.length) return;
 
-        // 클립보드 안에 '진짜 파일(File)'이 존재하는지, 그게 '이미지'인지 확인합니다.
-        let hasImageFile = false;
-        if (clipboard.files && clipboard.files.length > 0) {
-            for (let i = 0; i < clipboard.files.length; i++) {
-                if (clipboard.files[i].type.startsWith('image/')) {
-                    hasImageFile = true;
-                    break;
-                }
+            const hasImageFile = Array.from(clipboard.files).some(file => file.type.startsWith('image/'));
+
+            if (hasImageFile) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+
+                Array.from(clipboard.files).forEach(file => {
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = event => {
+                            const range = quill.getSelection(true);
+                            const index = range ? range.index : 0;
+                            quill.insertEmbed(index, 'image', event.target.result, 'user');
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
             }
-        }
-
-        // 🟢 시나리오 1: 단일 이미지 콕 찍어 복사했을 때 (진짜 데이터 저장)
-        if (hasImageFile) {
-            // 브라우저가 HTML(URL)을 중복으로 에디터에 그리는 것을 강제로 막습니다. (2장 방지)
-            e.preventDefault();
-
-            // 진짜 사진 파일만 쏙 빼서 Base64로 변환 후 안전하게 로컬 DB에 박제합니다.
-            Array.from(clipboard.files).forEach(file => {
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = function(event) {
-                        const base64Img = event.target.result;
-                        const range = quill.getSelection(true);
-                        quill.insertEmbed(range.index, 'image', base64Img);
-                        quill.setSelection(range.index + 1); // 커서 뒤로 이동
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        } 
-        // 🔵 시나리오 2: 웹페이지 전체를 긁어서 복사했을 때 (기존 방식 유지)
-        // (클립보드에 파일은 없고 HTML 텍스트만 있으므로, 위 if문이 무시됩니다.)
-        // Quill 에디터가 원래 하던 대로 텍스트 서식을 살리고, 이미지는 URL(껍데기)로 연결되도록 냅둡니다.
-    });
+        }, true);
 
 	// 🎯 [Pro 통합 버전] 마크다운 자동 변환 엔진 (밑줄, 취소선, 코드블록 추가)
 	quill.on('text-change', function(delta, oldDelta, source) {
@@ -1886,8 +1900,8 @@
                         // 2. 🎯 추가됨: 이미지 바로 뒤에 엔터(\n) 강제 삽입 (1칸 차지)
                         quill.insertText(range.index + 1, '\n', Quill.sources.USER);
                         
-                        // 3. 🎯 수정됨: 커서를 이미지(1칸) + 엔터(1칸) = 총 2칸 뒤인 '새로운 줄'로 이동
-                        quill.setSelection(range.index + 2, Quill.sources.SILENT);
+                        // 3. 🎯 수정됨: 커서를 이미지(1칸) + 엔터(1칸) = 총 1칸 뒤인 '새로운 줄'로 이동
+                        quill.setSelection(range.index + 1, Quill.sources.SILENT);
                         
                         triggerAutoSave(); // 자동 저장 강제 실행
                     };
@@ -2039,7 +2053,7 @@
         
         request.onsuccess = async e => {
             db = e.target.result;
-            console.log("✅ 로컬 DB 연결 성공!(v1.6)"); 
+            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.7)"); 
 
             await initFileSystem(); // 🎯 시스템 폴더 생성 및 마이그레이션 실행
             
@@ -4864,7 +4878,14 @@
 
             // 🎯 --- [Case 2] PDF 파일 처리 엔진 (스냅샷 추출 및 최적화)
             if (file.type === "application/pdf") {
-                // 🎯 안내 문구 및 여백이 개선된 토스트 적용
+                // 🎯 [완벽 해결] 기획자님의 만능 함수로 기존 문서 덮어쓰기 원천 차단!
+                createNewMemo(); 
+                isLoading = false; // 에디터 잠금 해제
+                
+                // 파일명을 새 노트의 제목으로 자동 세팅 (확장자 제거)
+                const titleInput = document.getElementById('memo-title-input');
+                if (titleInput) titleInput.value = file.name.replace(/\.[^/.]+$/, "");
+
                 showToast("A4 기준 약 30페지만 불러올 수 있습니다.");
             
                 setTimeout(() => {
@@ -4913,7 +4934,7 @@
                     
                         // 🎯 [핵심 추가] 변환 완료 후 DB에 즉시 강제 저장
                         // 이 코드가 실행되어야 목록에 즉시 나타납니다.
-                        await executeSave(); 
+                        await executeSave();
                     
                         showToast("✅ PDF 변환 및 저장이 완료되었습니다!");
                     } catch (err) {
@@ -4991,7 +5012,7 @@
                             isLoading = false; 
                             document.getElementById('memo-title-input').value = parsed.title || fileName.replace(/\.[^/.]+$/, "");
                             quill.root.innerHTML = parsed.content || '';
-                            executeSave(); 
+                            executeSave();
                         } else {
                             alert('지원하지 않는 JSON 형식입니다.');
                         }
@@ -5014,7 +5035,7 @@
                     isLoading = false; 
                     document.getElementById('memo-title-input').value = fileName.replace(/\.(txt|md)$/i, "");
                     quill.setText(fileContent); // 일반 텍스트로 주입
-                    executeSave(); 
+                    executeSave();
                     showToast("텍스트 문서를 불러왔습니다.");
                 }
                 e.target.value = ''; 
