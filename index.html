@@ -7,8 +7,8 @@
     <meta name="theme-color" media="(max-width: 768px)" content="#131314">
 
     <title>ZenNotes-ADS</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=1.7">
-    <link rel="manifest" href="manifest.json?v=1.7">
+    <link rel="icon" type="image/png" href="favicon.png?v=2.0">
+    <link rel="manifest" href="manifest.json?v=2.0">
 
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -2092,7 +2092,7 @@
         
         request.onsuccess = async e => {
             db = e.target.result;
-            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.7)"); 
+            console.log("✅ 로컬 DB 연결 성공! (앱 버전: v2.0)"); 
 
             await initFileSystem(); // 🎯 시스템 폴더 생성 및 마이그레이션 실행
             
@@ -3323,12 +3323,17 @@
             });
         }
 
-        // 🎯 [완벽 교정] 위치에 따라 이름이 바뀌는 지능형 글로벌 메뉴
+        // 🎯 [완벽 교정] 위치에 따라 이름과 기능이 바뀌는 지능형 글로벌 메뉴
         function toggleFmGlobalMenu(e) {
             e.stopPropagation();
             cancelFmMultiSelect(); 
             const menu = document.getElementById('fm-global-menu');
             let html = '';
+
+            // 🚨 [핵심 교정] 현재 위치가 '바탕 화면' 족보인지 빵부스러기(fmPath)로 정확히 검사합니다!
+            // fmPath[0]은 항상 Home이므로, fmPath[1]이 바탕화면 ID라면 그 하위 폴더임이 증명됩니다.
+            const isDesktopRoot = (currentFmFolderId === globalDesktopFolderId);
+            const isUnderDesktop = (fmPath.length > 1 && fmPath[1].id === globalDesktopFolderId);
 
             if (currentFmFolderId === globalTrashFolderId) {
                 html = `
@@ -3348,18 +3353,21 @@
                     <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
                 `;
             } else {
-                // 📁 일반 폴더 내부
+                // 📁 4대장 루트 또는 일반 폴더 내부
                 const isSystemTop = (currentFmFolderId === globalDesktopFolderId || currentFmFolderId === globalSecurityFolderId || currentFmFolderId === globalBackupFolderId);
                 
-                if (currentFmFolderId === globalDesktopFolderId) {
-                    // 🎯 바탕 화면 루트일 때만 "전체 백업"
+                // 🎯 오직 '바탕 화면' 루트에 있을 때만 노출!
+                if (isDesktopRoot) {
                     html += `<div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 쓸어 담기로 이동</div>`;
-                } else if (!isSystemTop) {
-                    // 🎯 바탕 화면의 하위 폴더일 때만 "이 폴더를 백업"
-                    html += `
-                        <div class="fm-dropdown-item" onclick="openMoveModal(${currentFmFolderId})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 폴더 이동하기</div>
-                        <div class="fm-dropdown-item" onclick="backupThisFolder()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 이 폴더를 쓸어 담기로</div>
-                    `;
+                } 
+                // 그 외 4대장이 아닌 일반 하위 폴더일 때
+                else if (!isSystemTop) {
+                    html += `<div class="fm-dropdown-item" onclick="openMoveModal(${currentFmFolderId})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 폴더 이동하기</div>`;
+                    
+                    // 🎯 오직 조상 폴더가 '바탕 화면'일 때만 "이 폴더를 쓸어 담기" 노출!
+                    if (isUnderDesktop) {
+                        html += `<div class="fm-dropdown-item" onclick="backupThisFolder()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 이 폴더를 쓸어 담기로</div>`;
+                    }
                 }
                 
                 html += `
