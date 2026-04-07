@@ -24,7 +24,7 @@ request.onupgradeneeded = (e) => {
 
 request.onsuccess = async (e) => {
   db = e.target.result;
-  console.log("✅ 로컬 DB 연결 성공! (앱 버전: v1.9)");
+  console.log("✅ 로컬 DB 연결 성공!");
 
   await initFileSystem(); // 🎯 시스템 폴더 생성 및 마이그레이션 실행
 
