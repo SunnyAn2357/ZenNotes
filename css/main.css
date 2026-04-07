@@ -1163,7 +1163,23 @@ button:hover {
     letter-spacing: 0.5px;
     cursor: pointer !important;
     appearance: none !important;
+    -webkit-appearance: none !important;
     z-index: 10 !important;
+
+    /* 🎯 [추가] 브라우저에게 "네이티브 창을 다크 모드로 띄워라"고 강제 명령 */
+    color-scheme: dark !important;
+}
+
+/* 🎯 [신규 추가] 클릭 시 쭈욱 내려오는 목록(옵션)의 다크 테마 세팅 */
+.ql-editor .ql-code-block-container select.ql-ui option {
+    background-color: #1e222a !important;
+    /* 코드 블록 배경과 똑같은 고급진 어두운 색 */
+    color: #e3e3e3 !important;
+    /* 가독성 좋은 밝은 텍스트 */
+    font-size: 14px !important;
+    /* 클릭하기 편하게 폰트 크기 살짝 키움 */
+    padding: 8px 12px !important;
+    /* 항목 사이에 시원한 여백 추가 */
 }
 
 /* 3. 상단 구분선 */
