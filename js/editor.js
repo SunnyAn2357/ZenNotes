@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
 
 const Link = Quill.import('formats/link');
@@ -68,57 +61,87 @@ Quill.register(LinkCardBlot);
 
 // 🎯 [사용자님 통찰력 적용] 취소선 단위를 문단이 아닌 일반 글자(Inline)로 변경!
 const Parchment = Quill.import('parchment');
-const StrikeLineStyle = new Parchment.Attributor.Class('strike-line', 'ql-strike-line', {
+const StrikeLineStyle = new Parchment.ClassAttributor('strike-line', 'ql-strike-line', {
     scope: Parchment.Scope.INLINE // 👈 BLOCK에서 INLINE으로 수정!
 });
 Quill.register(StrikeLineStyle, true);
 
-// [2] 에디터 본체 설정 (조절 기능 포함)
+// ============================================================================
+// 🎯 [정석 해결] 꼼수(setTimeout) 제거! Quill 네이티브 심장에 아이콘 직접 주입
+// ============================================================================
+const icons = Quill.import('ui/icons');
+
+// 1. 커스텀 기능 아이콘 (엔진이 모르는 기능들)
+icons['strike-line'] = '<i class="fa-solid fa-pen-slash" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['divider'] = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
+
+// 2. 표 확장 및 기존 툴바 아이콘 전면 교체
+icons['table'] = '<i class="fa-solid fa-table" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['table-insert-row'] = '<i class="fa-solid fa-arrow-down" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['table-insert-column'] = '<i class="fa-solid fa-arrow-right" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['undo'] = '<i class="fa-solid fa-rotate-left" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['redo'] = '<i class="fa-solid fa-rotate-right" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['code-block'] = '<i class="fa-solid fa-code" style="font-size: 14px; color: var(--text-muted);"></i>';
+
+// 3. 리스트 (체크리스트 포함)
+if (!icons['list']) icons['list'] = {};
+icons['list']['check'] = '<i class="fa-solid fa-list-check" style="font-size: 14px; color: var(--text-muted);"></i>';
+
+// 4. 정렬 개별 버튼 (드롭다운 해체용)
+if (!icons['align']) icons['align'] = {};
+icons['align'][''] = '<i class="fa-solid fa-align-left" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['align']['center'] = '<i class="fa-solid fa-align-center" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['align']['right'] = '<i class="fa-solid fa-align-right" style="font-size: 14px; color: var(--text-muted);"></i>';
+
+// [2] 에디터 본체 설정
 const quill = new Quill('#editor', {
     theme: 'snow',
     bounds: '.col-center',
     placeholder: '여기에 지식을 기록하세요...',
     modules: {
         syntax: true,
-        history: { delay: 1000, maxStack: 100, userOnly: true }, // 🎯 1. 에디터 뇌(기억력) 활성화
-
-        // 🎯 [신규 장착] 엔터 2번으로 블록을 깔끔하게 탈출하는 키보드 통제 엔진
-        keyboard: {
-            bindings: {
-                // 1. 인용구 탈출
-                escapeBlockquote: {
-                    key: 13, // Enter 키
-                    empty: true, // 👈 [핵심] '현재 줄이 비어있을 때'만 작동 (즉, 이미 엔터를 한 번 쳐서 빈 줄인 상태)
-                    format: ['blockquote'], // 인용구 안에서만 발동
-                    handler: function (range, context) {
-                        // 현재 줄의 인용구 서식을 강제로 벗겨버립니다.
-                        this.quill.format('blockquote', false, Quill.sources.USER);
-                        return false; // 기본 엔터(단순 줄바꿈) 동작은 무시
-                    }
-                }
-            }
+        table: true,
+        history: { delay: 1000, maxStack: 100, userOnly: true },
+        // 🎯 [신규 장착] 클립보드 복사/붙여넣기 시 강제 서식 제거 엔진
+        clipboard: {
+            matchers: [
+                // 모든 HTML 요소(Node.ELEMENT_NODE)를 붙여넣을 때 발동
+                [Node.ELEMENT_NODE, function (node, delta) {
+                    delta.ops.forEach(op => {
+                        // 만약 글자에 서식(attributes)이 묻어있다면
+                        if (op.attributes) {
+                            // 글자색과 배경색 서식을 강제로 삭제하여 앱 테마(다크모드)를 따르게 함
+                            delete op.attributes.color;
+                            delete op.attributes.background;
+                        }
+                    });
+                    return delta;
+                }]
+            ]
         },
-
         toolbar: {
+            // 🎯 기획자님의 완벽한 2줄 맞춤형 설계도 적용
             container: [
-                ['undo', 'redo'], // 🎯 2. 맨 앞줄에 취소/복구 버튼 신설
-                // 1. 제목 그룹
+                // --- 1행 ---
+                ['undo', 'redo'],
                 [{ 'header': [1, 2, 3, false] }],
-                // 2. 글자 서식 그룹
-                ['bold', 'italic', 'underline', 'strike'],
-                // 3. 블록 서식 그룹 (인용구, 코드, 구분선, 완료선 추가!)
-                ['blockquote', 'code-block', 'divider', 'strike-line'],
-                // 4. 리스트 그룹
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                // 5. 서식 지우기
-                ['clean'],
-                // 6. 미디어 삽입 그룹 (링크, 이미지를 가장 오른쪽으로 독립!)
-                ['link', 'image']
+                ['bold', 'italic', 'underline', 'strike', 'strike-line', { 'color': [] }, { 'background': [] }],
+                ['table', 'table-insert-row', 'table-insert-column'],
+                [{ 'list': 'check' }, { 'list': 'ordered' }, { 'list': 'bullet' }],
+                [{ 'align': [] }],
+                ['blockquote', 'code-block', 'divider'],
+                ['link', 'image', 'video'],
+                ['clean']
             ],
             handlers: {
-                // 🎯 3. 취소/복구 버튼 눌렀을 때 작동할 명령 연결
+                // 🎯 취소/복구 버튼 눌렀을 때 작동할 명령 연결
                 'undo': function () { this.quill.history.undo(); },
                 'redo': function () { this.quill.history.redo(); },
+                'table-insert-row': function () { this.quill.getModule('table').insertRowBelow(); },
+                'table-insert-column': function () { this.quill.getModule('table').insertColumnRight(); },
+                'video': customVideoHandler,
+
+                // 🎯 아래 3가지는 기획자님의 기존 코드 그대로 유지! (건드리지 마세요)
                 'image': function () {
                     const input = document.createElement('input');
                     input.setAttribute('type', 'file');
@@ -129,7 +152,7 @@ const quill = new Quill('#editor', {
                     };
                 },
 
-                // 🎯 [완벽 교정] 줄 전체 글자(Inline)에 취소선을 긋고 투명 방어막 전개
+                // 🎯 줄 전체 글자(Inline)에 취소선을 긋고 투명 방어막 전개
                 'strike-line': function () {
                     const range = this.quill.getSelection();
                     if (!range) return;
@@ -164,7 +187,7 @@ const quill = new Quill('#editor', {
                     }
                 },
 
-                // 🎯 [완벽 교정] 스마트 가로 구분선 (불필요한 줄바꿈 방지)
+                // 🎯 스마트 가로 구분선 (불필요한 줄바꿈 방지)
                 'divider': function () {
                     const range = this.quill.getSelection(true);
 
@@ -197,9 +220,26 @@ const quill = new Quill('#editor', {
             }
         }
     }
+
 });
 
-// 🎯 [최종보안] 사진이 있으면 HTML은 버리고, '사용자'가 넣은 것으로 간주해 자동 저장 실행!
+// ============================================================================
+// 🎯 [V2.0 복붙 완벽 복구] 외부 사이트 색상/배경색 찌꺼기 완벽 세탁 필터
+// ============================================================================
+quill.clipboard.addMatcher(Node.ELEMENT_NODE, function (node, delta) {
+    delta.ops.forEach(function (op) {
+        if (op.attributes) {
+            // 외부에서 묻어온 글자색(color)과 배경색(background)을 가차 없이 삭제합니다.
+            // 표(Table), 굵게(Bold), 링크(Link) 같은 뼈대 구조는 100% 안전하게 유지됩니다.
+            delete op.attributes.color;
+            delete op.attributes.background;
+            delete op.attributes.font; // 덤으로 굴림체, 돋움체 등 이상한 폰트도 세탁
+        }
+    });
+    return delta;
+});
+
+// 🎯 사진이 있으면 HTML은 버리고, '사용자'가 넣은 것으로 간주해 자동 저장 실행!
 quill.root.addEventListener('paste', function (e) {
     const clipboard = e.clipboardData || window.clipboardData;
     if (!clipboard || !clipboard.files.length) return;
@@ -390,41 +430,12 @@ quill.root.addEventListener('paste', (e) => {
     });
 });
 
-quill.root.addEventListener('drop', (e) => {
-    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
-        handleImageFiles(e.dataTransfer.files);
-    }
-});
 
-document.getElementById('memo-title-input').addEventListener('keydown', e => {
-    if (e.key === 'Tab') {
-        e.preventDefault();
-        quill.focus();
-    }
-});
+// ============================================================================
+// 🎯 [이벤트 로직] 에디터 및 단축키 제어 (순서 무관)
+// ============================================================================
 
-const dividerBtn = document.querySelector('.ql-divider');
-if (dividerBtn) {
-    dividerBtn.innerHTML = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
-}
-
-// 🎯 [신규] 취소/복구 버튼에 FontAwesome 아이콘 예쁘게 입히기
-const undoBtn = document.querySelector('.ql-undo');
-if (undoBtn) {
-    undoBtn.innerHTML = '<i class="fa-solid fa-rotate-left" style="font-size: 14px; color: var(--text-muted);"></i>';
-}
-const redoBtn = document.querySelector('.ql-redo');
-if (redoBtn) {
-    redoBtn.innerHTML = '<i class="fa-solid fa-rotate-right" style="font-size: 14px; color: var(--text-muted);"></i>';
-}
-
-// 🎯 [추가] 줄 전체 취소선 버튼에 FontAwesome '체크박스' 아이콘 입히기 (수정)
-const strikeLineBtn = document.querySelector('.ql-strike-line');
-if (strikeLineBtn) {
-    strikeLineBtn.innerHTML = '<i class="fa-solid fa-square-check" style="font-size: 14px; color: var(--text-muted);"></i>'; // 👈 아이콘 변경됨
-    strikeLineBtn.title = "완료 표시 (줄 전체 취소선)";
-}
-
+// 1. 빈 공간 클릭 시 에디터 포커스 (파일 관리창 열려있을 땐 방어)
 document.querySelector('.col-center').addEventListener('click', e => {
     // 🎯 [수정] 파일 관리창(.file-manager-pane)을 클릭했을 때는 에디터가 포커스를 훔쳐가지 못하게 철벽 방어!
     if (!e.target.closest('.editor-header') && !e.target.closest('.ql-toolbar') && !e.target.closest('.ql-editor') && !e.target.closest('.file-manager-pane')) {
@@ -432,15 +443,23 @@ document.querySelector('.col-center').addEventListener('click', e => {
     }
 });
 
+// 2. 이미지 파일 드래그 앤 드롭 지원
+quill.root.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        handleImageFiles(e.dataTransfer.files);
+    }
+});
+
+// 3. 제목 입력칸에서 Tab 키 누르면 에디터로 자연스럽게 이동
+document.getElementById('memo-title-input').addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        quill.focus();
+    }
+});
 
 // 🎯 [안전장치] 분리된 다른 js 파일들에서 에디터를 읽고 쓸 수 있도록 전역으로 열어줍니다.
 window.quill = quill;
-
-
-
-
-
-
 
 // 🎯 [신규] 블록 지정 시 가상 키보드 스마트 통제 엔진
 quill.on("selection-change", function (range, oldRange, source) {
@@ -481,6 +500,75 @@ if (fmSearchInput) {
     ["keydown", "keyup", "keypress"].forEach((evName) => {
         fmSearchInput.addEventListener(evName, (e) => e.stopPropagation());
     });
+}
+
+// 🎯 [완성본] 만능 동영상 핸들러 (제목 자동 추출 + 빈 노트 폭파 완벽 방어)
+function customVideoHandler() {
+    let input = prompt("동영상 주소(URL) 또는 소스 코드(iframe)를 붙여넣으세요:");
+
+    // 취소를 누르거나 빈칸이면 종료
+    if (!input) return;
+
+    let url = input;
+    let videoTitle = "";
+
+    // 1. 소스 코드(iframe)인 경우: 주소(src)와 제목(title)을 똑똑하게 빼냅니다.
+    if (input.includes("<iframe")) {
+        const srcMatch = input.match(/src=["'](.*?)["']/);
+        if (srcMatch && srcMatch[1]) {
+            url = srcMatch[1];
+        }
+
+        // 🎯 iframe 태그 안에 title 속성이 있다면 제목으로 쏙 빼냅니다!
+        const titleMatch = input.match(/title=["'](.*?)["']/);
+        if (titleMatch && titleMatch[1]) {
+            videoTitle = titleMatch[1];
+            // 유튜브의 무의미한 기본 타이틀("YouTube video player")은 걸러냅니다.
+            if (videoTitle.toLowerCase().includes("youtube video player")) {
+                videoTitle = "";
+            }
+        }
+    }
+
+    // 2. 일반 유튜브 및 쇼츠 주소인 경우 퍼가기 링크로 변환
+    if (url.includes("youtube.com/watch?v=")) {
+        url = url.replace("watch?v=", "embed/").split("&")[0];
+    } else if (url.includes("youtu.be/")) {
+        url = url.replace("youtu.be/", "youtube.com/embed/").split("?")[0];
+    } else if (url.includes("youtube.com/shorts/")) {
+        url = url.replace("youtube.com/shorts/", "youtube.com/embed/").split("?")[0];
+    }
+
+    // 3. 🎯 제목이 추출되지 않았거나 일반 URL만 복사해 온 경우
+    if (!videoTitle) {
+        // 사용자에게 짧게 물어보되, 안 적으면 '첨부된 동영상'이라는 진짜 글자를 억지로 넣습니다.
+        videoTitle = prompt("동영상 제목을 입력해 주세요:\n(비워두면 기본 제목이 들어갑니다.)") || "첨부된 동영상";
+    }
+
+    // 예쁜 슬레이트 이모티콘 추가
+    videoTitle = "🎬 " + videoTitle;
+
+    const range = quill.getSelection(true);
+
+    // 4. [빈 노트 폭파 완벽 방어] 진짜 텍스트(제목)를 먼저 본문에 꽂아넣음
+    quill.insertText(range.index, videoTitle + "\n", Quill.sources.USER);
+
+    // 5. 🎯 삽입한 제목을 예쁘게 만들기 위해 소제목(H3) 서식 자동 적용
+    quill.formatLine(range.index, 1, 'header', 3, Quill.sources.USER);
+
+    // 6. 제목 다음 줄의 커서 위치 계산
+    const nextIndex = range.index + videoTitle.length + 1;
+
+    // 7. 동영상 본문 삽입
+    quill.insertEmbed(nextIndex, 'video', url, Quill.sources.USER);
+
+    // 8. 동영상 아래에 줄바꿈 추가 후 커서 이동
+    quill.insertText(nextIndex + 1, "\n", Quill.sources.USER);
+    quill.setSelection(nextIndex + 2, Quill.sources.SILENT);
+
+    // 9. '진짜 글자'가 생겼으므로 안전하게 자동 저장 통과!
+    triggerAutoSave();
+    showToast("동영상이 삽입되었습니다.");
 }
 
 /* ==========================================

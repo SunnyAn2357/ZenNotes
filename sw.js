@@ -1,5 +1,5 @@
 // 캐시 이름 (앱을 업데이트할 때마다 v2, v3... 로 숫자를 올려주세요!)
-const CACHE_NAME = 'zennotes-cache-v2.0';
+const CACHE_NAME = 'zennotes-cache-v3.0';
 
 // 반드시 캐싱해야 할 내 서버의 기본 파일들
 const STATIC_ASSETS = [
@@ -40,7 +40,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     // 주의: 구글 로그인, 구글 드라이브 API 등은 캐싱하면 에러가 납니다. 그대로 통과시킵니다.
     if (event.request.url.includes('google') || event.request.url.includes('apis.com')) {
-        return; 
+        return;
     }
 
     event.respondWith(
