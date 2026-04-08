@@ -2580,3 +2580,19 @@ button:hover {
         page-break-inside: avoid !important;
     }
 }
+
+/* 🎯 PDF 내보내기 전용 다이어트 모드 (빈 페이지 생성 완벽 차단) */
+body.is-pdf-exporting .ql-editor,
+body.is-pdf-exporting .col-center,
+body.is-pdf-exporting .quill-wrapper {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    min-height: auto !important;
+    height: max-content !important;
+    /* 내용물 길이만큼만 딱 맞춰서 자름 */
+}
+
+/* 문서 맨 끝에 숨어있는 Quill의 기본 빈 줄바꿈 차단 */
+body.is-pdf-exporting .ql-editor>p:last-child {
+    display: none !important;
+}
