@@ -1454,26 +1454,9 @@ function resetFmToHome() {
   }
 }
 
-// 🎯 [추가] 파일 관리창 삼선 버튼 스마트 네비게이션 (폴더 안->홈->닫기)
+// 🎯 [수정됨] 파일 매니저 삼선 버튼: 폴더 위치 상관없이 즉시 에디터로 복귀
 function handleFmHamburger() {
-  const searchInput = document.getElementById("fm-search-input");
-  const isSearching = searchInput && searchInput.value !== "";
-
-  // 🎯 검색 중이거나, 폴더 안쪽이라면 -> 즉시 깨끗한 홈으로 타임머신 이동
-  if (isSearching || currentFmFolderId !== null) {
-    if (searchInput) searchInput.value = "";
-    forceCleanFmUI();
-
-    const steps = 1 - fmPath.length; // 홈은 길이가 1 (인덱스 0)
-    if (steps < 0) {
-      history.go(steps); // 브라우저 기록을 단번에 0층으로 롤백
-    } else {
-      loadFileManager(null); // 제자리에 검색만 끄는 경우
-    }
-  } else {
-    // 🎯 오직 '아무것도 안 하는 홈(0층)' 상태에서만 파일관리창 닫기
-    closeFileManager();
-  }
+  closeFileManager(); // 군더더기 없이 바로 창 닫기!
 }
 
 function createNewMemo(folderId = null) {
