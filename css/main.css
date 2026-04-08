@@ -2106,14 +2106,110 @@ button:hover {
         margin-top: 8px !important;
     }
 
-    /* 🎯 [완벽 수정] 제목, 색상, 배경, 정렬 등 '모든' 드롭다운 메뉴 활성화 시 최상단 노출 */
-    .ql-toolbar.ql-snow.ql-toolbar-dropdown-open,
-    .ql-toolbar.ql-snow:has(.ql-expanded) {
-        /* 👈 마법의 코드 추가! */
-        overflow-x: visible !important;
-        overflow-y: visible !important;
-        z-index: 9999 !important;
+    /* -------------------------------------------------------
+              모바일 팝업 설정
+    ------------------------------------------------------- */
+    /* 🎯 1. 툴바 감옥에 있는 원본 팝업은 폰 화면에서 영원히 투명인간 처리 */
+    .ql-toolbar.ql-snow .ql-picker.ql-expanded .ql-picker-options {
+        display: none !important;
     }
+
+    /* 버튼에 생기던 보기 싫은 사각형 테두리 제거 */
+    .ql-toolbar.ql-snow .ql-picker.ql-expanded .ql-picker-label {
+        border: none !important;
+    }
+
+    /* 🎯 2. Body 최상단에 띄운 자유로운 독립 모달 (키보드, 툴바 다 씹어먹음) */
+    #zen-mobile-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999999;
+    }
+
+    /* 🎯 3. 기획자님 요구사항: 팝업 밑선이 정확히 화면 정중앙(50vh)에 오도록! */
+    #zen-mobile-popup {
+        position: absolute;
+        bottom: 50vh;
+        /* 👈 밑선 중앙 배치 핵심 */
+        left: 50%;
+        transform: translateX(-50%);
+        /* 가로 중앙 정렬 */
+
+        background: var(--surface);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    /* 🎯 4. 색상 팔레트는 확정하신 340px로 고정! */
+    #zen-mobile-popup.ql-color-picker,
+    #zen-mobile-popup.ql-background {
+        width: 340px;
+        justify-content: flex-start;
+    }
+
+    /* 팝업 내부 버튼 공통 스타일 초기화 */
+    #zen-mobile-popup .ql-picker-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none !important;
+        margin: 0 !important;
+        cursor: pointer;
+    }
+
+    /* 색상 버튼 둥글게 */
+    #zen-mobile-popup.ql-color-picker .ql-picker-item,
+    #zen-mobile-popup.ql-background .ql-picker-item {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 1px solid var(--border) !important;
+    }
+
+    /* 정렬 & 헤더(1안) 버튼 큼직하게 */
+    #zen-mobile-popup.ql-align .ql-picker-item,
+    #zen-mobile-popup.ql-header .ql-picker-item {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    /* 헤더 팝업 아이콘 글자(H1, H2) 주입 */
+    #zen-mobile-popup.ql-header .ql-picker-item[data-value="1"]::before {
+        content: 'H1';
+    }
+
+    #zen-mobile-popup.ql-header .ql-picker-item[data-value="2"]::before {
+        content: 'H2';
+    }
+
+    #zen-mobile-popup.ql-header .ql-picker-item[data-value="3"]::before {
+        content: 'H3';
+    }
+
+    #zen-mobile-popup.ql-header .ql-picker-item:not([data-value])::before {
+        content: 'T';
+    }
+
+    /*------------- 모바일 팝업 설정 끝 -------------------- */
+
+
+
+
+
+
 
     /* 🎯 [투명 방석] 맨 밑바닥에 화면 절반(50vh) 크기의 공간을 강제로 만들어, 
        어중간한 길이의 글도 무조건 키보드 위로 시원하게 끌어올릴 수 있게 만듭니다. */
