@@ -137,6 +137,8 @@ function exportHTML() {
 
 // 🎯 PDF는 굽는 데 시간이 걸리므로 진행 중 알림과 완료 알림을 따로 띄움
 function exportPDF() {
+  // 🎯 1. PDF 굽기 직전: 다이어트 모드 ON (여백 쫙 빼기)
+  document.body.classList.add('is-pdf-exporting');
   closeAllPanelsMobile();
   showToast("PDF 변환을 시작합니다...\n(잠시만 기다려주세요)");
 
@@ -174,6 +176,13 @@ function exportPDF() {
         showToast("PDF 파일 저장이 완료되었습니다.");
       });
   }, 300);
+
+  // 🎯 2. PDF 생성이 완료된 후: 다이어트 모드 OFF (다시 화면 원복)
+  // 주의: html2pdf 같은 라이브러리를 쓰신다면, .then() 안이나 setTimeout을 이용해 
+  // PDF가 완전히 구워진 '직후'에 클래스를 빼주셔야 화면이 정상으로 돌아옵니다.
+  setTimeout(() => {
+    document.body.classList.remove('is-pdf-exporting');
+  }, 1000); // PDF 생성에 걸리는 시간 고려 (필요시 조절)
 }
 
 function exportTXT() {
