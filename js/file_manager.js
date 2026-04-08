@@ -393,7 +393,7 @@ function toggleFmGlobalMenu(e) {
 
     // 🎯 오직 '바탕 화면' 루트에 있을 때만 노출!
     if (isDesktopRoot) {
-      html += `<div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 쓸어 담기로 이동</div>`;
+      html += `<div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 쓸어 담기로</div>`;
     }
     // 그 외 4대장이 아닌 일반 하위 폴더일 때
     else if (!isSystemTop) {
@@ -401,7 +401,7 @@ function toggleFmGlobalMenu(e) {
 
       // 🎯 오직 조상 폴더가 '바탕 화면'일 때만 "이 폴더를 쓸어 담기" 노출!
       if (isUnderDesktop) {
-        html += `<div class="fm-dropdown-item" onclick="backupThisFolder()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 이 폴더를 쓸어 담기로</div>`;
+        html += `<div class="fm-dropdown-item" onclick="backupThisFolder()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 쓸어 담기로</div>`;
       }
     }
 
@@ -440,7 +440,7 @@ function openFmItemMenu(e, id, type, isTrashMode, sysType) {
                     <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 쓸어 담기로</div>
                 `;
   } else if (sysType === "backup") {
-    html = `<div class="fm-dropdown-item" onclick="alert('바탕 화면의 모든 노트를 정리하기 전, \\n한꺼번에 쓸어 담는 임시 창고입니다. \\n바탕 화면 폴더의 삼점을 눌러서 \\n쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 정보</div>`;
+    html = `<div class="fm-dropdown-item" onclick="alert('바탕 화면의 모든 항목을 정리하기 전, \\n한꺼번에 쓸어 담는 임시 창고입니다. \\n\\n바탕 화면의 삼점을 눌러서 \\n쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 정보</div>`;
   } else if (sysType === "security") {
     html = `
                     <div class="fm-dropdown-item" onclick="handleSecurityMenuChange()"><i class="fa-solid fa-key"></i> 비번 변경</div>
@@ -2078,7 +2078,7 @@ function fmBatchRestore() {
 
 // 🎯 [신규] 바탕 화면 일괄 백업 함수
 function backupDesktop() {
-  if (!confirm("바탕 화면의 모든 폴더와 파일을 쓸어 담기로 이동하시겠습니까?"))
+  if (!confirm("바탕 화면의 모든 항목을 쓸어 담기로 이동하시겠습니까?"))
     return;
 
   const tx = db.transaction(["memos"], "readwrite");
@@ -2115,7 +2115,7 @@ function backupDesktop() {
   };
 
   tx.oncomplete = () => {
-    showToast("바탕 화면이 깨끗하게 백업되었습니다.");
+    showToast("바탕 화면이 백업되었습니다.");
     loadFileManager(currentFmFolderId); // 현재 바탕화면이면 깨끗해진 화면 렌더링
     loadMemoList(true); // 왼쪽 메인 창도 깨끗하게 동기화
   };
@@ -2124,7 +2124,7 @@ function backupDesktop() {
 // 🎯 [신규] 특정 폴더 하나만 통째로 '쓸어 담기'로 보내는 기능
 function backupThisFolder() {
   if (!currentFmFolderId) return;
-  if (!confirm("이 폴더를 내부 항목과 함께 쓸어 담기로 이동하시겠습니까?"))
+  if (!confirm("이 폴더를 쓸어 담기로 이동하시겠습니까?"))
     return;
 
   const tx = db.transaction(["memos"], "readwrite");
