@@ -440,7 +440,7 @@ function openFmItemMenu(e, id, type, isTrashMode, sysType) {
                     <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 쓸어 담기로</div>
                 `;
   } else if (sysType === "backup") {
-    html = `<div class="fm-dropdown-item" onclick="alert('바탕 화면의 모든 항목을 정리하기 전, \\n한꺼번에 쓸어 담는 임시 창고입니다. \\n\\n바탕 화면의 삼점을 눌러서 \\n쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 정보</div>`;
+    html = `<div class="fm-dropdown-item" onclick="alert('\\n바탕 화면의 모든 항목을 정리하기 전, \\n한꺼번에 쓸어 담는 임시 창고입니다. \\n\\n바탕 화면의 삼점을 눌러서 \\n쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 정보</div>`;
   } else if (sysType === "security") {
     html = `
                     <div class="fm-dropdown-item" onclick="handleSecurityMenuChange()"><i class="fa-solid fa-key"></i> 비번 변경</div>
