@@ -437,10 +437,10 @@ function openFmItemMenu(e, id, type, isTrashMode, sysType) {
   // 🎯 기획하신 4대장 전용 메뉴 세팅!
   if (sysType === "desktop") {
     html = `
-                    <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 쓸어 담기로 이동</div>
+                    <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 쓸어 담기로</div>
                 `;
   } else if (sysType === "backup") {
-    html = `<div class="fm-dropdown-item" onclick="alert('이 폴더는 바탕 화면의 모든 노트를 폴더별로 정리하기 전, \\n일단 몽땅 쓸어 담는 용도의 임시 창고입니다. \\n바탕 화면 폴더의 삼점을 눌러서 쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 폴더 정보</div>`;
+    html = `<div class="fm-dropdown-item" onclick="alert('바탕 화면의 모든 노트를 정리하기 전, \\n한꺼번에 쓸어 담는 임시 창고입니다. \\n바탕 화면 폴더의 삼점을 눌러서 \\n쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 정보</div>`;
   } else if (sysType === "security") {
     html = `
                     <div class="fm-dropdown-item" onclick="handleSecurityMenuChange()"><i class="fa-solid fa-key"></i> 비번 변경</div>
