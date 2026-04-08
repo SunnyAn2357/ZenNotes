@@ -868,6 +868,11 @@ button:hover {
     border-radius: 8px !important;
     padding: 8px 0 !important;
     z-index: 10000 !important;
+
+    /* 🚀 [추가] 하드웨어(GPU) 가속 강제 가동: 모바일 버퍼링/버벅임 해결 */
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .ql-snow .ql-picker-item {
