@@ -2146,6 +2146,7 @@ button:hover {
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         display: flex;
         flex-wrap: wrap;
+        /* 기본은 여러 줄 허용 (색상표용) */
         gap: 8px;
         justify-content: center;
     }
@@ -2155,6 +2156,13 @@ button:hover {
     #zen-mobile-popup.ql-background {
         width: 340px;
         justify-content: flex-start;
+    }
+
+    /* 🎯 5. [여기가 추가되었습니다!] 정렬 & 헤더 팝업: 완벽한 1줄 강제 고정 */
+    #zen-mobile-popup.ql-align,
+    #zen-mobile-popup.ql-header {
+        flex-wrap: nowrap !important;
+        width: max-content !important;
     }
 
     /* 팝업 내부 버튼 공통 스타일 초기화 */
@@ -2176,7 +2184,7 @@ button:hover {
         border: 1px solid var(--border) !important;
     }
 
-    /* 정렬 & 헤더(1안) 버튼 큼직하게 */
+    /* 🎯 6. [여기가 수정되었습니다!] 정렬 & 헤더(1안) 버튼 큼직하게 + 찌그러짐 방지 */
     #zen-mobile-popup.ql-align .ql-picker-item,
     #zen-mobile-popup.ql-header .ql-picker-item {
         width: 44px;
@@ -2184,6 +2192,8 @@ button:hover {
         border-radius: 8px;
         font-size: 16px;
         font-weight: bold;
+        flex-shrink: 0 !important;
+        /* 👈 화면 좁아도 버튼 찌그러짐 방지 핵심 */
     }
 
     /* 헤더 팝업 아이콘 글자(H1, H2) 주입 */
