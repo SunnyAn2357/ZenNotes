@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" media="(min-width: 769px)" content="#282C26">
+    <meta name="theme-color" media="(max-width: 768px)" content="#131314">
+
+    <title>ZenNotes-ADS</title>
+    <link rel="icon" type="image/png" href="favicon.png?v=3.0.2">
+    <link rel="manifest" href="manifest.json?v=3.0.2">
+
+    <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <link rel="stylesheet" href="css/main.css">
+
+</head>
+
+<body>
+
+    <button id="mobile-left-menu-btn" class="toggle-btn mobile-only"
+        style="position: fixed; top: 24px; left: 10px; z-index: 1000;" onclick="toggleLeftPaneMobile()">
+        <i class="fa-solid fa-bars"></i>
+    </button>
+
+    <div id="mobile-overlay" class="mobile-overlay" onclick="closeAllPanelsMobile()"></div>
+
+    <button id="global-menu-btn" class="toggle-btn" style="position: fixed; top: 24px; right: 10px; z-index: 1000;"
+        onclick="toggleRightPane()">
+        <i class="fa-solid fa-ellipsis-vertical"></i>
+    </button>
+
+    <div class="col-left" id="col-left">
+        <div class="nav-header">
+            <button class="toggle-btn" onclick="document.getElementById('col-left').classList.toggle('collapsed')">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <button class="new-note-btn" onclick="createNewMemo()"
+                    style="color: var(--text-main); font-weight: 600;">
+                    <i class="fa-solid fa-pen-to-square"></i> <span class="btn-text">새 노트 작성</span>
+                </button>
+                <button class="file-manager-btn" onclick="openFileManager()"
+                    style="color: var(--text-muted); font-size: 15px; padding: 8px 10px; transition: color 0.2s; cursor: pointer;">
+                    <i class="fa-solid fa-folder-open"></i>
+                </button>
+            </div>
+            <div class="search-bar">
+                <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
+                <input type="text" id="list-search-input" placeholder="바탕 화면 검색..." oninput="triggerMainSearch()">
+            </div>
+        </div>
+        <ul id="memo-list" class="memo-list"></ul>
+    </div>
+
+    <div class="col-center">
+
+        <div id="file-manager-pane" class="file-manager-pane" style="display: none;">
+            <div class="fm-header">
+                <button class="toggle-btn" onclick="handleFmHamburger()"><i class="fa-solid fa-bars"></i></button>
+
+                <button class="fm-nav-btn" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i></button>
+                <button class="fm-nav-btn" onclick="history.forward()"><i class="fa-solid fa-arrow-right"></i></button>
+
+                <div class="fm-search-bar">
+                    <i class="fa-solid fa-magnifying-glass" style="font-size: 12px; color: var(--text-muted);"></i>
+                    <input type="text" id="fm-search-input" placeholder="ZenNotes - ADS 검색..."
+                        oninput="triggerFmSearch()">
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
+                    <div class="status-container" style="position: static; margin-right: 0;">
+                        <span class="status-text" data-ns-text="미동기: 0">미동기: 0</span>
+                        <div class="status-dot logged-out"></div>
+                    </div>
+                    <button class="toggle-btn fm-more-btn" onclick="toggleFmGlobalMenu(event)"><i
+                            class="fa-solid fa-ellipsis-vertical"></i></button>
+                </div>
+            </div>
+
+            <div id="fm-global-menu" class="fm-dropdown">
+                <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중
+                    선택</div>
+                <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더
+                </div>
+            </div>
+            <div id="fm-item-menu" class="fm-dropdown"></div>
+
+            <div id="fm-bottom-bar" class="fm-bottom-bar">
+                <button class="fm-bottom-btn" style="color: var(--text-main);" onclick="cancelFmMultiSelect()"><i
+                        class="fa-solid fa-xmark" style="color: var(--text-muted);"></i> 취소</button>
+                <div id="fm-selected-count" style="font-size: 14px; font-weight: 600; color: var(--accent);">0개 선택됨
+                </div>
+                <div id="fm-bottom-btn-group" style="display: flex; gap: 8px;">
+                    <button class="fm-bottom-btn" style="color: var(--text-main);" onclick="openFmBatchMoveModal()"><i
+                            class="fa-solid fa-arrows-up-down-left-right" style="color: var(--accent);"></i> 이동</button>
+                    <button class="fm-bottom-btn" style="color: var(--text-main);" onclick="fmBatchDelete()"><i
+                            class="fa-solid fa-trash-can" style="color: var(--danger);"></i> 삭제</button>
+                </div>
+            </div>
+
+            <div id="fm-security-modal" class="fm-modal-overlay">
+                <div class="fm-modal" style="max-width: 320px;">
+                    <div class="fm-modal-header" id="sec-modal-title">
+                        <span><i class="fa-solid fa-lock" style="color: #f59e0b;"></i> 보안 폴더</span>
+                        <i class="fa-solid fa-xmark" style="cursor:pointer;" onclick="closeSecurityModal()"></i>
+                    </div>
+                    <div class="fm-modal-body" style="padding: 24px 24px 10px; text-align: center;">
+                        <div id="sec-modal-desc"
+                            style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
+                            비밀번호를 입력하세요.</div>
+                        <input type="password" id="sec-password-input" class="sec-input" placeholder="••••••••"
+                            onkeypress="if(event.key==='Enter') submitSecurityPassword()">
+                    </div>
+                    <div class="fm-modal-footer">
+                        <button style="background: var(--surface-hover);" onclick="closeSecurityModal()">취소</button>
+                        <button id="sec-confirm-btn" style="background: #f59e0b; color: #000;"
+                            onclick="submitSecurityPassword()">확인</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fm-move-modal" class="fm-modal-overlay">
+                <div class="fm-modal">
+                    <div class="fm-modal-header">
+                        <span>항목 이동</span>
+                        <i class="fa-solid fa-xmark" style="cursor:pointer;" onclick="closeMoveModal()"></i>
+                    </div>
+                    <div id="fm-dest-list" class="fm-modal-body">
+                    </div>
+                    <div class="fm-modal-footer">
+                        <button style="background: var(--surface-hover);" onclick="closeMoveModal()">취소</button>
+                        <button id="fm-move-confirm-btn" style="background: var(--accent); color: #000;">이동하기</button>
+                    </div>
+                </div>
+            </div>
+            <div class="fm-body">
+                <div id="fm-breadcrumbs" class="fm-breadcrumbs"></div>
+                <ul id="fm-list" class="fm-list"></ul>
+            </div>
+        </div>
+
+        <div class="editor-header">
+            <input type="text" id="memo-title-input" placeholder="제목 없는 노트">
+            <div class="editor-actions">
+                <div class="status-container">
+                    <span id="status-text" class="status-text" data-ns-text="미동기: 0">미동기: 0</span>
+                    <div id="status-dot" class="status-dot logged-out"></div>
+                </div>
+            </div>
+        </div>
+        <hr class="print-hr">
+        <div class="quill-wrapper">
+            <div id="editor"></div>
+        </div>
+    </div>
+
+    <div class="col-right is-closed" id="col-right">
+        <div style="margin-bottom: -16px; display: flex; justify-content: space-between; align-items: center;">
+            <button class="toggle-btn" onclick="toggleRightPane()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <button class="toggle-btn" id="btn-auth">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+            </button>
+        </div>
+
+        <div class="util-section">
+            <div class="util-title">Export & Print</div>
+            <button class="util-btn" id="btn-read-memo">
+                <i class="fa-solid fa-volume-high"></i> <span class="btn-text">음성으로 듣기</span>
+            </button>
+            <button class="util-btn" onclick="exportHTML();">
+                <i class="fa-brands fa-html5"></i> <span class="btn-text">HTML 저장</span>
+            </button>
+            <button class="util-btn" onclick="exportPDF();">
+                <i class="fa-regular fa-file-pdf"></i> <span class="btn-text">PDF 저장</span>
+            </button>
+            <button class="util-btn" onclick="exportTXT();">
+                <i class="fa-regular fa-file-lines"></i> <span class="btn-text">TXT 저장</span>
+            </button>
+            <button class="util-btn" onclick="exportJSON();">
+                <i class="fa-solid fa-code"></i> <span class="btn-text">JSON 저장</span>
+            </button>
+            <button class="util-btn" onclick="handlePrint();">
+                <i class="fa-solid fa-print"></i> <span class="btn-text">인쇄하기</span>
+            </button>
+        </div>
+
+        <div class="util-section mt-auto">
+            <div class="util-title">Data Management</div>
+            <button class="util-btn" onclick="document.getElementById('import-file').click(); closeAllPanelsMobile();">
+                <i class="fa-solid fa-file-import"></i> <span class="btn-text">불러오기</span>
+            </button>
+            <div style="display: flex; gap: 8px;">
+                <button class="util-btn" style="flex: 1;" onclick="backupAllData();">
+                    <i class="fa-solid fa-database"></i> <span class="btn-text">로컬 백업</span>
+                </button>
+                <button class="util-btn" style="flex: 1; justify-content: center;" onclick="toggleTrashPane();">
+                    <i class="fa-solid fa-trash"></i> <span class="btn-text">휴지통</span>
+                </button>
+            </div>
+            <input type="file" id="import-file" accept=".json, .txt, .html, .md, image/*, .pdf" style="display: none;"
+                onchange="handleFileImport(event)">
+        </div>
+
+        <div class="trash-pane" id="trash-pane">
+            <div class="nav-header">
+                <button class="toggle-btn trash-hamburger" onclick="toggleTrashPane()">
+                    <i class="fa-solid fa-bars"></i>
+                </button> <button class="new-note-btn" onclick="emptyTrash()"
+                    style="color: var(--text-main); font-weight: 600;">
+                    <i class="fa-solid fa-trash-can"></i> <span class="btn-text">비우기 (30일 이후 영구 삭제)</span>
+                </button>
+                <div class="search-bar">
+                    <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
+                    <input type="text" id="trash-search-input" placeholder="바탕 화면 휴지통 검색..."
+                        oninput="triggerTrashSearch()">
+                </div>
+            </div>
+            <ul id="trash-list" class="memo-list"></ul>
+        </div>
+
+        <script src="js/globals.js"></script>
+        <script src="js/db.js"></script>
+        <script src="js/ui.js"></script>
+        <script src="js/io.js"></script>
+        <script src="js/auth.js"></script>
+        <script src="js/file_manager.js"></script>
+        <script src="js/editor.js"></script>
+
+        <div id="update-toast"
+            style="display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: var(--surface-hover); color: var(--text-main); padding: 12px 20px; border-radius: 8px; border: 1px solid var(--accent); box-shadow: 0 10px 25px rgba(0,0,0,0.8); z-index: 10000; align-items: center; gap: 16px;">
+            <span style="font-size: 14px; font-weight: 500;">새로운 버전이 준비되었습니다!</span>
+            <button id="update-btn"
+                style="background: var(--accent); color: #000; padding: 8px 12px; border-radius: 6px; font-weight: 700; font-size: 13px;">새로고침</button>
+        </div>
+
+        <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+        <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+        <script>
+            window.addEventListener('load', () => {
+                console.log("=========================================");
+                console.log("🚀 ZenNotes 앱 로딩 완료!");
+                console.log("✨ 현재 버전: v3.0.2");
+                console.log("=========================================");
+            });
+        </script>
+
+</body>
+
+</html>
