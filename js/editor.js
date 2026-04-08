@@ -47,6 +47,7 @@ if (!icons['align']) icons['align'] = {};
 icons['align'][''] = '<i class="fa-solid fa-align-left" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['align']['center'] = '<i class="fa-solid fa-align-center" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['align']['right'] = '<i class="fa-solid fa-align-right" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['align']['justify'] = '<i class="fa-solid fa-align-justify" style="font-size: 14px; color: var(--text-muted);"></i>';
 
 // [2] 에디터 본체 설정
 const quill = new Quill('#editor', {
@@ -865,16 +866,78 @@ if (window.visualViewport) {
         .addEventListener("blur", () => setTimeout(updateToolbarPosition, 100));
 }
 
-// 🎯 모바일 툴바의 '모든' 드롭다운(색상, 정렬 등) 짤림 방지 이벤트 (구형 기기 대응)
-document.querySelector('.ql-toolbar').addEventListener('click', (e) => {
-    const toolbar = e.currentTarget;
 
-    // 찰나의 시차(10ms)를 두고 Quill이 메뉴를 열었는지 확인 후, 툴바를 최상단으로 끌어올림
+
+
+
+
+
+// 🎯 [완벽본] 툴바 감옥 탈출! 모바일 전용 독립 팝업(Modal) 엔진
+const zenOverlay = document.createElement('div');
+zenOverlay.id = 'zen-mobile-overlay';
+zenOverlay.innerHTML = '<div id="zen-mobile-popup"></div>';
+document.body.appendChild(zenOverlay);
+
+const zenPopup = zenOverlay.querySelector('#zen-mobile-popup');
+let activeQuillPicker = null;
+
+// 1. 툴바 버튼을 누를 때
+document.querySelector('.ql-toolbar').addEventListener('click', (e) => {
+    // PC 화면에서는 작동하지 않음 (기존 드롭다운 유지)
+    if (window.innerWidth > 768) return;
+
+    const label = e.target.closest('.ql-picker-label');
+    if (!label) return;
+
+    const picker = label.closest('.ql-picker');
+
     setTimeout(() => {
-        if (toolbar.querySelector('.ql-expanded')) {
-            toolbar.classList.add('ql-toolbar-dropdown-open');
-        } else {
-            toolbar.classList.remove('ql-toolbar-dropdown-open');
+        // Quill이 툴바 안에 팝업을 열면 (CSS로 화면엔 안 보이게 숨겨둠)
+        if (picker.classList.contains('ql-expanded')) {
+            activeQuillPicker = picker;
+            const options = picker.querySelector('.ql-picker-options');
+
+            // 내용물(색상표 등)을 복사해서 body에 띄운 자유로운 팝업창에 붙여넣기!
+            zenPopup.innerHTML = options.innerHTML;
+
+            // 색상인지, 정렬인지 모양을 맞추기 위해 클래스 이름 복사
+            zenPopup.className = picker.className.replace('ql-picker', '').replace('ql-expanded', '').trim();
+
+            zenOverlay.style.display = 'block'; // 팝업 짠!
         }
     }, 10);
 });
+
+// 2. 분리된 팝업 안에서 색상이나 정렬을 선택했을 때
+zenPopup.addEventListener('click', (e) => {
+    const item = e.target.closest('.ql-picker-item');
+    if (!item || !activeQuillPicker) return;
+
+    const value = item.getAttribute('data-value') || '';
+    let formatType = '';
+
+    // 내가 누른 팝업이 어떤 종류인지 파악
+    if (activeQuillPicker.classList.contains('ql-color-picker')) formatType = 'color';
+    else if (activeQuillPicker.classList.contains('ql-background')) formatType = 'background';
+    else if (activeQuillPicker.classList.contains('ql-align')) formatType = 'align';
+    else if (activeQuillPicker.classList.contains('ql-header')) formatType = 'header';
+
+    // 🚀 원본 에디터에 원격으로 서식 적용 명령! (파란불 안 꺼짐)
+    if (formatType) quill.format(formatType, value === 'selected' ? false : value, Quill.sources.USER);
+
+    closeZenPopup();
+});
+
+// 3. 팝업 뒷배경 빈 곳 누르면 닫기
+zenOverlay.addEventListener('click', (e) => {
+    if (e.target === zenOverlay) closeZenPopup();
+});
+
+// 팝업 닫기 함수
+function closeZenPopup() {
+    zenOverlay.style.display = 'none';
+    if (activeQuillPicker) {
+        activeQuillPicker.classList.remove('ql-expanded'); // 툴바 원본도 같이 닫아줌
+        activeQuillPicker = null;
+    }
+}
