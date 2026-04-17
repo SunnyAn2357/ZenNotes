@@ -306,8 +306,8 @@ async function ensureValidToken() {
       gapi.client.setToken(null);
     }
 
-    // 구름 아이콘을 오프라인(회색)으로 바꿔서 유저에게 알려줍니다.
-    updateUIState("offline-idle");
+    // 🎯 [수정됨] 구름 아이콘을 회색으로 바꾸고 오프라인 상태로 갱신합니다.
+    checkAuthState();
 
     // 검문 실패를 알려서, io.js가 로컬 DB에만 저장하고 클라우드 전송은 시도하지 않게 막습니다.
     return false;
