@@ -100,12 +100,22 @@ async function smartSync() {
       fields: "files(id)"
     });
 
+    let folderId;
+
+    // 🚀 [수정됨] 옛날 에러 메시지를 띄우는 대신, 폴더가 없으면 알아서 새로 만듭니다!
     if (!folderRes.result.files || folderRes.result.files.length === 0) {
-      console.warn("❌ V3 폴더가 없습니다. 우측 메뉴의 [V3 업로드 테스트]를 먼저 실행해주세요.");
-      updateUIState("sync-error");
-      return;
+      console.log("🌱 V3 폴더가 존재하지 않아 새로 생성합니다.");
+      const metadata = { name: 'ZenNotes_Sync_Data', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
+      const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(metadata)
+      });
+      const createdFolder = await createRes.json();
+      folderId = createdFolder.id;
+    } else {
+      folderId = folderRes.result.files[0].id;
     }
-    const folderId = folderRes.result.files[0].id;
 
     // 3. index.json (가벼운 명부) 다운로드
     let cloudIndex = [];
@@ -320,7 +330,7 @@ function triggerBackgroundSync() {
 }
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 자동 마이그레이션 체크 및 실행 엔진
+// 🚀 [ZenNotes V3] 자동 마이그레이션 체크 및 실행 엔진 (독립형)
 // ============================================================================
 async function checkAndMigrateV3() {
   if (!gapi.client || !gapi.client.getToken()) return;
@@ -333,45 +343,82 @@ async function checkAndMigrateV3() {
       fields: "files(id)"
     });
 
-    // 2. 만약 새 폴더가 있다면? 이미 이사한 유저이므로 바로 일반 동기화 실행
     if (folderRes.result.files && folderRes.result.files.length > 0) {
       console.log("✅ V3 유저 확인: 일반 스마트 동기화를 진행합니다.");
       smartSync();
       return;
     }
 
-    // 3. 새 폴더가 없다면? 옛날 백업 파일(V2)이 있는지 확인
+    // 2. 옛날 백업 파일(V2)이 있는지 확인
     const oldFileRes = await gapi.client.drive.files.list({
       q: "name = 'ZenNotes_Backup.json' and trashed = false",
       fields: "files(id)"
     });
 
-    // 4. 옛날 파일이 발견되었다면! 자동 마이그레이션 모드 가동
+    // 3. 옛날 파일이 발견되었다면! 자동 마이그레이션 모드 가동
     if (oldFileRes.result.files && oldFileRes.result.files.length > 0) {
       const confirmMigration = confirm("새로운 동기화 방식(V3)으로 데이터 업그레이드가 필요합니다.\n지금 바로 진행할까요? (약 10~30초 소요)");
 
       if (confirmMigration) {
-        // migration.js에 만들어둔 함수 호출 (이름이 다를 경우 수정 필요)
-        if (typeof runV3MigrationTest === 'function') {
-          await runV3MigrationTest();
+        showToast("🚀 데이터 이사 중입니다. 화면을 닫지 마세요...");
 
-          // 5. 이사 완료 후 옛날 파일 이름 바꿔서 보관 (중복 실행 방지)
-          const oldFileId = oldFileRes.result.files[0].id;
-          await gapi.client.drive.files.update({
-            fileId: oldFileId,
-            resource: { name: 'ZenNotes_Backup_OLD_V2.json' }
-          });
-          console.log("🎊 데이터 이사 및 원본 보관 완료!");
-          smartSync(); // 새 집으로 첫 동기화
+        // 🎯 [신규 이사 로직] 스스로 폴더를 만들고 데이터를 쪼개서 올립니다.
+        const metadata = { name: 'ZenNotes_Sync_Data', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(metadata)
+        });
+        const createdFolder = await createRes.json();
+        const newFolderId = createdFolder.id;
+
+        const allData = await new Promise((resolve) => {
+          db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => resolve(e.target.result);
+        });
+
+        const indexData = [];
+        const filesToUpload = [];
+
+        allData.forEach(memo => {
+          const meta = { ...memo };
+          delete meta.content; delete meta.plainText;
+          indexData.push(meta);
+
+          if (memo.type !== 'folder') {
+            filesToUpload.push({
+              name: `memo_${memo.syncId}.json`,
+              content: JSON.stringify({ syncId: memo.syncId, content: memo.content || "", plainText: memo.plainText || "" })
+            });
+          }
+        });
+
+        // 명부 및 파일 업로드 실행
+        await v3_uploadFile(token, 'index.json', JSON.stringify(indexData), newFolderId);
+
+        for (let i = 0; i < filesToUpload.length; i++) {
+          await v3_uploadFile(token, filesToUpload[i].name, filesToUpload[i].content, newFolderId);
+          await new Promise(r => setTimeout(r, 200)); // 구글 서버 과부하 방지 (0.2초 딜레이)
         }
+
+        // 4. 이사 완료 후 옛날 파일 이름 바꿔서 보관 (중복 실행 방지)
+        const oldFileId = oldFileRes.result.files[0].id;
+        await fetch(`https://www.googleapis.com/drive/v3/files/${oldFileId}`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'ZenNotes_Backup_OLD_V2.json' })
+        });
+
+        console.log("🎊 데이터 이사 및 원본 보관 완료!");
+        showToast("🎊 데이터 이사가 완벽하게 완료되었습니다!");
+        smartSync(); // 새 집으로 첫 동기화
       }
     } else {
-      // 옛날 파일도 없다면? 그냥 신규 유저이므로 빈 폴더 만들고 시작
+      // 옛날 파일도 없다면? 그냥 신규 유저이므로 동기화 실행 (smartSync가 알아서 새 폴더를 만듦)
       console.log("🌱 신규 유저: V3 환경을 구성합니다.");
       smartSync();
     }
   } catch (err) {
     console.error("❌ 이사 체크 중 오류:", err);
-    smartSync(); // 에러 나도 일단 동기화 시도는 해봅니다.
+    smartSync(); // 에러 나도 일단 일반 동기화 시도는 해봅니다.
   }
 }
