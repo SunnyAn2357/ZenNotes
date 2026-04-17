@@ -149,11 +149,25 @@ async function smartSync() {
       }
     }
 
-    // [업로드 대상] 로컬이 더 최신이거나 구글에 없는 경우
+    // [업로드 대상] 로컬이 더 최신이거나 구글에 없는 경우 솎아내기
     for (const lMemo of localData) {
       const cMeta = cloudIndex.find(c => c.syncId === lMemo.syncId);
+
+      // 구글에 없거나, 로컬이 더 최신이면 업로드 후보에 올림
       if (!cMeta || lMemo.updatedAt > cMeta.updatedAt) {
-        toUpload.push(lMemo);
+
+        // 🚀 [핵심 방어막] 단, 폴더이거나 삭제된 파일인데 '본문(content)'이 바뀐 게 아니라면 
+        // 굳이 구글 서버로 30개씩 개별 업로드(memo_xxx.json)를 하지 않고 패스합니다!
+        if ((lMemo.type === 'folder' || lMemo.isDeleted) && cMeta) {
+          // 명부(index.json)만 조용히 업데이트하고 개별 파일 전송은 생략!
+          const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
+          const meta = { ...lMemo };
+          delete meta.content; delete meta.plainText;
+          if (cIdx > -1) cloudIndex[cIdx] = meta;
+          continue;
+        }
+
+        toUpload.push(lMemo); // 진짜로 본문이 수정된 정상 노트만 업로드 대기열에 추가!
       }
     }
 

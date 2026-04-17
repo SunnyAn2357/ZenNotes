@@ -32,18 +32,44 @@ request.onsuccess = async (e) => {
   healDatabase(() => {
     runAutoPurge();
     loadMemoList();
-    // 🎯 [여기부터 추가하세요]
-    const lastOpenedId = localStorage.getItem('zen_last_opened');
-    if (lastOpenedId) {
-      // 마지막에 본 노트가 있으면 숫자로 변환하여 호출
-      if (typeof loadMemo === 'function') loadMemo(Number(lastOpenedId));
-    } else {
-      // 없으면 기존처럼 새 노트로 시작
-      if (typeof createNewMemo === 'function') createNewMemo();
-    }
-    // 🎯 [여기까지 추가]
-    updateUnsyncedCount();
-    handleLaunchParams();
+
+    // 🚀 [V3 완벽 복구] 삭제된 노트 걸러내고 가장 최신 노트 열기
+    const lastOpenedId = Number(localStorage.getItem('zen_last_opened'));
+
+    // DB에서 모든 노트를 꺼내서 검사합니다.
+    const tx = db.transaction(["memos"], "readonly");
+    const store = tx.objectStore("memos");
+
+    store.getAll().onsuccess = (e) => {
+      const allMemos = e.target.result;
+
+      // 1. 폴더가 아니고, 삭제되지도 않은 '진짜 정상 노트'만 걸러냅니다.
+      const validMemos = allMemos.filter(m =>
+        m.type !== 'folder' && !m.isDeleted && !m.isPermanentlyDeleted
+      );
+
+      // 2. 가장 최근에 수정한 순서대로 줄을 세웁니다.
+      validMemos.sort((a, b) => b.updatedAt - a.updatedAt);
+
+      let targetMemoToOpen = null;
+
+      // 3. 마지막으로 열었던 노트가 '정상 노트 목록'에 살아있는지 확인합니다.
+      if (lastOpenedId) {
+        targetMemoToOpen = validMemos.find(m => m.id === lastOpenedId);
+      }
+
+      // 4. 삭제되었거나 없으면? -> 살아있는 것 중 가장 최신(1등) 노트를 선택합니다.
+      if (!targetMemoToOpen && validMemos.length > 0) {
+        targetMemoToOpen = validMemos[0];
+      }
+
+      // 5. 최종 결정된 노트를 엽니다. (살아있는 노트가 아예 0개면 새 노트를 엽니다)
+      if (targetMemoToOpen) {
+        if (typeof loadMemo === 'function') loadMemo(targetMemoToOpen.id);
+      } else {
+        if (typeof createNewMemo === 'function') createNewMemo();
+      }
+    };
   });
 };
 
