@@ -69,7 +69,10 @@ document.getElementById("btn-auth").addEventListener("click", () => {
     icon.classList.add("blink-active");
     setTimeout(() => icon.classList.remove("blink-active"), 1500);
 
-    smartSync(); // 새로 받은 싱싱한 토큰으로 동기화 시작
+    // 🚀 [4단계 핵심] 바로 동기화하지 않고, '이사'가 필요한지 먼저 확인합니다. 마이그레이션
+    await checkAndMigrateV3();
+
+    // smartSync(); // 새로 받은 싱싱한 토큰으로 동기화 시작
   };
 
   tokenClient.requestAccessToken();
@@ -314,4 +317,61 @@ function triggerBackgroundSync() {
       }
     }
   }, 3000); // 👈 3초 (원하시면 5000으로 바꿔서 5초로 설정하셔도 됩니다)
+}
+
+// ============================================================================
+// 🚀 [ZenNotes V3] 자동 마이그레이션 체크 및 실행 엔진
+// ============================================================================
+async function checkAndMigrateV3() {
+  if (!gapi.client || !gapi.client.getToken()) return;
+  const token = gapi.client.getToken().access_token;
+
+  try {
+    // 1. 새 V3 폴더가 이미 있는지 확인
+    const folderRes = await gapi.client.drive.files.list({
+      q: "name = 'ZenNotes_Sync_Data' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      fields: "files(id)"
+    });
+
+    // 2. 만약 새 폴더가 있다면? 이미 이사한 유저이므로 바로 일반 동기화 실행
+    if (folderRes.result.files && folderRes.result.files.length > 0) {
+      console.log("✅ V3 유저 확인: 일반 스마트 동기화를 진행합니다.");
+      smartSync();
+      return;
+    }
+
+    // 3. 새 폴더가 없다면? 옛날 백업 파일(V2)이 있는지 확인
+    const oldFileRes = await gapi.client.drive.files.list({
+      q: "name = 'ZenNotes_Backup.json' and trashed = false",
+      fields: "files(id)"
+    });
+
+    // 4. 옛날 파일이 발견되었다면! 자동 마이그레이션 모드 가동
+    if (oldFileRes.result.files && oldFileRes.result.files.length > 0) {
+      const confirmMigration = confirm("새로운 동기화 방식(V3)으로 데이터 업그레이드가 필요합니다.\n지금 바로 진행할까요? (약 10~30초 소요)");
+
+      if (confirmMigration) {
+        // migration.js에 만들어둔 함수 호출 (이름이 다를 경우 수정 필요)
+        if (typeof runV3MigrationTest === 'function') {
+          await runV3MigrationTest();
+
+          // 5. 이사 완료 후 옛날 파일 이름 바꿔서 보관 (중복 실행 방지)
+          const oldFileId = oldFileRes.result.files[0].id;
+          await gapi.client.drive.files.update({
+            fileId: oldFileId,
+            resource: { name: 'ZenNotes_Backup_OLD_V2.json' }
+          });
+          console.log("🎊 데이터 이사 및 원본 보관 완료!");
+          smartSync(); // 새 집으로 첫 동기화
+        }
+      }
+    } else {
+      // 옛날 파일도 없다면? 그냥 신규 유저이므로 빈 폴더 만들고 시작
+      console.log("🌱 신규 유저: V3 환경을 구성합니다.");
+      smartSync();
+    }
+  } catch (err) {
+    console.error("❌ 이사 체크 중 오류:", err);
+    smartSync(); // 에러 나도 일단 동기화 시도는 해봅니다.
+  }
 }
