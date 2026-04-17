@@ -151,20 +151,20 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   }
   closeAllPanelsMobile();
 
-  // 만약 5초가 안 지나서 권한(토큰)이 살아있을 때 또 눌렀다면 바로 동기화 진행
-  if (gapi.client.getToken() !== null) {
+  // 🎯 [핵심 수정] 토큰이 있고, '50분 만료 시간'도 아직 안 지났을 때만 즉시 동기화
+  if (gapi.client.getToken() !== null && Date.now() < tokenExpiryTime) {
     smartSync();
     return;
   }
 
-  // 권한이 없다면 구글에 조용히 토큰 요청
+  // 🎯 토큰이 없거나, 시간이 지나서 상했다면 구글에 다시 요청 (사용자가 눌렀으니 팝업이 떠도 안전)
   tokenClient.callback = async (resp) => {
     if (resp.error !== undefined) {
       console.warn(">>> 동기화 취소 또는 에러", resp.error);
       return;
     }
 
-    // 🎯 [여기 추가] 로그인 성공 시 만료 시간(현재시간 + 50분)을 globals에 기록
+    // 🚀 로그인/갱신 성공 시 수명을 다시 50분 연장!
     tokenExpiryTime = Date.now() + (50 * 60 * 1000);
 
     // 아이콘 깜빡임 효과
@@ -172,11 +172,11 @@ document.getElementById("btn-auth").addEventListener("click", () => {
     icon.classList.add("blink-active");
     setTimeout(() => icon.classList.remove("blink-active"), 1500);
 
-    smartSync(); // 권한을 받아왔으니 즉시 백업(동기화) 시작
+    smartSync(); // 새로 받은 싱싱한 토큰으로 동기화 시작
   };
 
-  // prompt: 'consent'를 지웠기 때문에, 최초 1회 이후엔 동의 창 없이 스무스하게 넘어갑니다.
-  tokenClient.requestAccessToken();
+  // prompt: '' 옵션을 사용하여 이미 로그인된 경우 동의 절차를 간소화합니다.
+  tokenClient.requestAccessToken({ prompt: '' });
 });
 
 async function smartSync() {
@@ -290,32 +290,29 @@ async function smartSync() {
 }
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 게으른 갱신 (Lazy Token Renewal) 검문소
+// 🚀 [ZenNotes V3] 평화로운 세션 만료 검문소 (사용자 방해 금지)
 // ============================================================================
 async function ensureValidToken() {
   if (!gisInited || !tokenClient) return false;
 
   const currentTime = Date.now();
 
-  // 토큰이 없거나 만료 10분 전(발급 후 50분 경과)이라면 갱신 시도
+  // 토큰이 없거나 수명(50분)이 초과되었다면?
   if (gapi.client.getToken() === null || currentTime >= tokenExpiryTime) {
-    console.log("🔄 토큰 만료 임박! 조용히 새 토큰을 요청합니다...");
+    console.log("⚠️ 토큰 수명(50분) 만료! 글쓰기 방해를 막기 위해 동기화를 일시 정지합니다.");
 
-    return new Promise((resolve) => {
-      tokenClient.callback = (resp) => {
-        if (resp.error) {
-          console.error("❌ 토큰 자동 갱신 실패:", resp.error);
-          updateUIState("offline-idle"); // UI를 오프라인 상태로 변경
-          resolve(false);
-        } else {
-          tokenExpiryTime = Date.now() + (50 * 60 * 1000); // 50분 재설정
-          console.log("✅ 토큰 갱신 성공");
-          resolve(true);
-        }
-      };
-      // prompt: '' 가 핵심입니다. 팝업 없이 진행됩니다.
-      tokenClient.requestAccessToken({ prompt: '' });
-    });
+    // 🚨 억지로 팝업을 띄우지 않습니다! 조용히 클라우드 연결만 끊습니다.
+    if (gapi.client.getToken() !== null) {
+      gapi.client.setToken(null);
+    }
+
+    // 구름 아이콘을 오프라인(회색)으로 바꿔서 유저에게 알려줍니다.
+    updateUIState("offline-idle");
+
+    // 검문 실패를 알려서, io.js가 로컬 DB에만 저장하고 클라우드 전송은 시도하지 않게 막습니다.
+    return false;
   }
+
+  // 아직 50분이 안 지났으면 안전하므로 동기화 통과!
   return true;
 }
