@@ -22,109 +22,6 @@ function gisLoaded() {
   console.log("✅ 구글 인증 준비 완료!");
 }
 
-async function syncDataToCloud() {
-  if (!gapiInited || !gapi.client || gapi.client.getToken() === null) return;
-
-  db
-    .transaction(["memos"], "readonly")
-    .objectStore("memos")
-    .getAll().onsuccess = async (e) => {
-      const allData = e.target.result;
-
-      if (allData.length === 0 && !hasLoadedFromCloud) {
-        console.warn(
-          ">>> [보호장치] 로컬이 비어있어 클라우드에 빈 파일을 올리지 않습니다.",
-        );
-        return;
-      }
-
-      const cloudOptimizedData = allData.map((m) => {
-        let clone = Object.assign({}, m);
-        if (clone.content)
-          clone.content = clone.content.replace(
-            /src="data:image[^"]+"/gi,
-            'src="" data-local-image="true"',
-          );
-        return clone;
-      });
-
-      try {
-        const token = gapi.client.getToken().access_token;
-        const res = await gapi.client.drive.files.list({
-          q: "name = 'ZenNotes_Backup.json' and trashed = false",
-          fields: "files(id)",
-        });
-
-        const file = res.result.files[0];
-
-        const content = JSON.stringify({
-          type: "ZenBackup",
-          data: cloudOptimizedData,
-        });
-
-        updateUIState("syncing");
-
-        if (file) {
-          await fetch(
-            `https://www.googleapis.com/upload/drive/v3/files/${file.id}?uploadType=media`,
-            {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-              body: content,
-            },
-          );
-        } else {
-          const metadata = {
-            name: "ZenNotes_Backup.json",
-            mimeType: "application/json",
-            parents: ["root"],
-          };
-          const boundary = "-------314159265358979323846";
-          const delimiter = `\r\n--${boundary}\r\n`;
-          const close_delim = `\r\n--${boundary}--`;
-
-          const body =
-            delimiter +
-            "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
-            JSON.stringify(metadata) +
-            delimiter +
-            "Content-Type: application/json\r\n\r\n" +
-            content +
-            close_delim;
-
-          await fetch(
-            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": `multipart/related; boundary=${boundary}`,
-              },
-              body: body,
-            },
-          );
-        }
-
-        console.log("✅ 클라우드 동기화 완료");
-        localStorage.setItem("zen_last_sync_time", Date.now()); // 👈 현재 시간을 '마지막 동기화 시간'으로 기록
-        updateUnsyncedCount(); // ns: 0 으로 즉시 초기화
-        updateUIState("synced");
-        // setTimeout(() => {
-        //   if (gapi.client && gapi.client.getToken() !== null) {
-        //     gapi.client.setToken(null);
-        //     localStorage.removeItem("zen_logged_in");
-        //     checkAuthState();
-        //   }
-        // }, 10000); // 10초 뒤 조용히 권한 해제
-      } catch (err) {
-        console.error("❌ 전송 실패:", err);
-        updateUIState("sync-error");
-      }
-    };
-}
 
 function checkAuthState() {
   const hasToken =
@@ -179,113 +76,196 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   tokenClient.requestAccessToken({ prompt: '' });
 });
 
-async function smartSync() {
+// ============================================================================
+// 🚀 [ZenNotes V3] 스마트 증분 동기화(Incremental Sync) 엔진
+// ============================================================================
 
-  // 🎯 [여기 추가] 검문소 통과 시도. 실패(false)하면 여기서 중단.
+async function smartSync() {
+  // 1. 검문소 통과 확인
   const isValid = await ensureValidToken();
   if (!isValid) return;
 
-  if (!gapi.client.getToken() || !db) return;
-  console.log(">>> [데이터 우선 복구] 클라우드 확인 시작...");
+  if (!db) return;
+  updateUIState("syncing");
+  console.log(">>> [V3 엔진] 클라우드 동기화 시작...");
+
   try {
-    const res = await gapi.client.drive.files.list({
-      q: "name = 'ZenNotes_Backup.json' and trashed = false",
-      fields: "files(id, name)",
+    const token = gapi.client.getToken().access_token;
+
+    // 2. V3 전용 폴더 찾기
+    const folderRes = await gapi.client.drive.files.list({
+      q: "name = 'ZenNotes_Sync_Data' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      fields: "files(id)"
     });
 
-    if (!res.result.files || res.result.files.length === 0) {
-      console.warn(
-        ">>> 클라우드에 백업 파일이 없습니다. 로컬 데이터를 업로드합니다.",
-      );
-      hasLoadedFromCloud = true;
-      syncDataToCloud();
+    if (!folderRes.result.files || folderRes.result.files.length === 0) {
+      console.warn("❌ V3 폴더가 없습니다. 우측 메뉴의 [V3 업로드 테스트]를 먼저 실행해주세요.");
+      updateUIState("sync-error");
       return;
     }
+    const folderId = folderRes.result.files[0].id;
 
-    const fileId = res.result.files[0].id;
-    const fileRes = await gapi.client.drive.files.get({
-      fileId: fileId,
-      alt: "media",
+    // 3. index.json (가벼운 명부) 다운로드
+    let cloudIndex = [];
+    let indexFileId = null;
+    const indexRes = await gapi.client.drive.files.list({
+      q: `name = 'index.json' and '${folderId}' in parents and trashed = false`,
+      fields: "files(id)"
     });
 
-    let cloudData = fileRes.result;
-    if (typeof cloudData === "string") {
-      try {
-        cloudData = JSON.parse(cloudData).data || [];
-      } catch (e) {
-        cloudData = [];
-      }
-    } else {
-      cloudData = cloudData.data || [];
+    if (indexRes.result.files && indexRes.result.files.length > 0) {
+      indexFileId = indexRes.result.files[0].id;
+      const indexFile = await gapi.client.drive.files.get({ fileId: indexFileId, alt: "media" });
+      cloudIndex = typeof indexFile.result === 'string' ? JSON.parse(indexFile.result) : indexFile.result;
     }
 
-    const tx = db.transaction(["memos"], "readwrite");
-    const store = tx.objectStore("memos");
+    // 4. 로컬 DB 데이터 모두 읽기
+    const localData = await new Promise((resolve) => {
+      db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => resolve(e.target.result);
+    });
 
-    store.getAll().onsuccess = (e) => {
-      const localData = e.target.result;
-      let needUIUpdate = false;
-      const localMap = new Map(
-        localData.map((m) => [m.syncId || m.id.toString(), m]),
-      );
+    // 5. 비교(Diff) 분석 - 바뀐 놈들만 솎아내기!
+    const localMap = new Map(localData.map(m => [m.syncId, m]));
+    const toDownload = [];
+    const toUpload = [];
 
-      cloudData.forEach((cloudMemo) => {
-        const syncKey = cloudMemo.syncId || cloudMemo.id.toString();
-        const localMemo = localMap.get(syncKey);
+    // [다운로드 대상] 구글이 더 최신이거나 로컬에 없는 경우
+    for (const cMeta of cloudIndex) {
+      const lMemo = localMap.get(cMeta.syncId);
+      if (!lMemo || cMeta.updatedAt > lMemo.updatedAt) {
+        toDownload.push(cMeta);
+      }
+    }
 
-        if (!localMemo) {
-          delete cloudMemo.id;
-          cloudMemo.syncId = syncKey;
-          store.add(cloudMemo);
-          needUIUpdate = true;
-        } else if (cloudMemo.updatedAt > localMemo.updatedAt) {
-          let mergedContent = cloudMemo.content;
-          if (localMemo.content) {
-            const localSrcs = [];
-            localMemo.content.replace(
-              /<img[^>]+src="(data:image[^"]+)"/gi,
-              (match, src) => {
-                localSrcs.push(src);
-              },
-            );
-            let imgIndex = 0;
-            mergedContent = mergedContent.replace(
-              /<img[^>]+data-local-image="true"[^>]*>/gi,
-              (match) => {
-                if (imgIndex < localSrcs.length) {
-                  let restored = match
-                    .replace(/src=""/i, `src="${localSrcs[imgIndex]}"`)
-                    .replace(/ data-local-image="true"/i, "");
-                  imgIndex++;
-                  return restored;
-                }
-                return match;
-              },
-            );
+    // [업로드 대상] 로컬이 더 최신이거나 구글에 없는 경우
+    for (const lMemo of localData) {
+      const cMeta = cloudIndex.find(c => c.syncId === lMemo.syncId);
+      if (!cMeta || lMemo.updatedAt > cMeta.updatedAt) {
+        toUpload.push(lMemo);
+      }
+    }
+
+    let needUIUpdate = false;
+
+    // 6. 다운로드 실행 (변경된 파일만 핀셋 다운로드)
+    if (toDownload.length > 0) {
+      console.log(`⬇️ 클라우드 -> 기기: ${toDownload.length}개 다운로드 중...`);
+      const downloadedMemos = [];
+
+      for (const cMeta of toDownload) {
+        // 폴더나 삭제된 파일은 껍데기(명부)만 가져오면 끝
+        if (cMeta.type === 'folder' || cMeta.isDeleted || cMeta.isPermanentlyDeleted) {
+          downloadedMemos.push({ ...cMeta });
+        } else {
+          // 실제 노트는 본문 파일(memo_xxx.json)을 다운로드하여 합체!
+          const fileRes = await gapi.client.drive.files.list({
+            q: `name = 'memo_${cMeta.syncId}.json' and '${folderId}' in parents and trashed = false`,
+            fields: "files(id)"
+          });
+          if (fileRes.result.files && fileRes.result.files.length > 0) {
+            const bodyFile = await gapi.client.drive.files.get({ fileId: fileRes.result.files[0].id, alt: "media" });
+            const bodyData = typeof bodyFile.result === 'string' ? JSON.parse(bodyFile.result) : bodyFile.result;
+            downloadedMemos.push({ ...cMeta, content: bodyData.content, plainText: bodyData.plainText });
           }
-          cloudMemo.content = mergedContent;
-          cloudMemo.id = localMemo.id;
-          cloudMemo.syncId = syncKey;
-          store.put(cloudMemo);
-          needUIUpdate = true;
+        }
+      }
+
+      // 로컬 DB 덮어쓰기
+      await new Promise((resolve) => {
+        const tx = db.transaction(["memos"], "readwrite");
+        const store = tx.objectStore("memos");
+        downloadedMemos.forEach(m => {
+          const existing = localMap.get(m.syncId);
+          if (existing) m.id = existing.id; // 기존 ID 유지
+          else delete m.id; // 새 파일이면 ID 새로 발급
+          store.put(m);
+        });
+        tx.oncomplete = () => resolve();
+      });
+      needUIUpdate = true;
+    }
+
+    // 7. 업로드 실행 (로컬에서 변경된 파일만 핀셋 업로드)
+    if (toUpload.length > 0) {
+      console.log(`⬆️ 기기 -> 클라우드: ${toUpload.length}개 업로드 중...`);
+
+      for (const lMemo of toUpload) {
+        // 본문이 있는 파일은 개별 파일(memo_xxx.json)로 덮어쓰기
+        if (lMemo.type !== 'folder' && !lMemo.isPermanentlyDeleted) {
+          const fileName = `memo_${lMemo.syncId}.json`;
+          const fileContent = JSON.stringify({
+            syncId: lMemo.syncId,
+            content: lMemo.content || "",
+            plainText: lMemo.plainText || ""
+          });
+          await v3_uploadFile(token, fileName, fileContent, folderId);
+        }
+
+        // 명부(index) 업데이트용 껍데기 제작
+        const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
+        const meta = { ...lMemo };
+        delete meta.content; delete meta.plainText; // 본문 삭제 (경량화)
+
+        if (cIdx > -1) cloudIndex[cIdx] = meta;
+        else cloudIndex.push(meta);
+      }
+
+      // 최신화된 명부(index.json)를 업로드
+      await v3_uploadFile(token, 'index.json', JSON.stringify(cloudIndex), folderId, indexFileId);
+    }
+
+    // 8. 동기화 마무리
+    console.log("✅ [V3 엔진] 증분 동기화 완벽 종료!");
+    localStorage.setItem("zen_last_sync_time", Date.now()); // 마지막 동기화 시간 기록
+    updateUnsyncedCount(); // '미동기' 0으로 초기화
+    updateUIState("synced");
+
+    // 화면 갱신
+    if (needUIUpdate) {
+      healDatabase(() => {
+        loadMemoList();
+        if (document.getElementById("file-manager-pane").style.display === "flex") {
+          loadFileManager(currentFmFolderId);
         }
       });
+    }
 
-      tx.oncomplete = () => {
-        console.log(">>> [동기화 병합 완료] 클라우드 로드 성공");
-        hasLoadedFromCloud = true;
-
-        // 🎯 [수정] 동기화 직후 자가 치유 엔진으로 중복 폴더 싹쓸이 병합
-        healDatabase(() => {
-          if (needUIUpdate) loadMemoList();
-          checkAuthState();
-          syncDataToCloud();
-        });
-      };
-    };
   } catch (err) {
-    console.error(">>> [스마트 동기화 오류] 통신 실패:", err);
-    document.getElementById("status-dot").className = "status-dot unsaved";
+    console.error("❌ V3 동기화 실패:", err);
+    updateUIState("sync-error");
+  }
+}
+
+// 🛠️ [V3 전용 헬퍼] 단일 파일 생성/덮어쓰기 함수
+async function v3_uploadFile(token, fileName, fileContent, folderId, existingFileId = null) {
+  let fileId = existingFileId;
+
+  if (!fileId) {
+    const res = await gapi.client.drive.files.list({
+      q: `name = '${fileName}' and '${folderId}' in parents and trashed = false`,
+      fields: "files(id)"
+    });
+    if (res.result.files && res.result.files.length > 0) fileId = res.result.files[0].id;
+  }
+
+  if (fileId) {
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: fileContent
+    });
+  } else {
+    const metadata = { name: fileName, mimeType: 'application/json', parents: [folderId] };
+    const boundary = '-------314159265358979323846';
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const close_delim = `\r\n--${boundary}--`;
+    const body = delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + delimiter + 'Content-Type: application/json\r\n\r\n' + fileContent + close_delim;
+
+    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body: body
+    });
   }
 }
 
