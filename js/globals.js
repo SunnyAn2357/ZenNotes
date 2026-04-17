@@ -6,9 +6,6 @@ const SCOPES = "https://www.googleapis.com/auth/drive.file";
 let tokenClient, gapiInited = false, gisInited = false;
 let hasLoadedFromCloud = false;
 
-// 🎯 [V3 추가] 토큰 만료 시간 추적용 변수
-let tokenExpiryTime = 0;
-
 // 🎯 [앱 전역 상태]
 let db, currentMemoId = null, saveTimer = null, isSaving = false, pendingSave = false, targetNewMemoFolderId = null;
 let selectedMemos = new Set(), displayedMemos = [], lastSelectedId = null, isLoading = false, typingStartTime = 0;
