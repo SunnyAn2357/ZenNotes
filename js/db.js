@@ -32,6 +32,16 @@ request.onsuccess = async (e) => {
   healDatabase(() => {
     runAutoPurge();
     loadMemoList();
+    // 🎯 [여기부터 추가하세요]
+    const lastOpenedId = localStorage.getItem('zen_last_opened');
+    if (lastOpenedId) {
+      // 마지막에 본 노트가 있으면 숫자로 변환하여 호출
+      if (typeof loadMemo === 'function') loadMemo(Number(lastOpenedId));
+    } else {
+      // 없으면 기존처럼 새 노트로 시작
+      if (typeof createNewMemo === 'function') createNewMemo();
+    }
+    // 🎯 [여기까지 추가]
     updateUnsyncedCount();
     handleLaunchParams();
   });
@@ -673,7 +683,10 @@ async function executeSave() {
         m.content = finalContent;
         m.plainText = finalPlainText;
         m.updatedAt = Date.now();
-        store.put(m);
+        // [수정] 저장이 완료된 후(put) 동기화 트리거 실행
+        store.put(m).onsuccess = () => {
+          if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync(); // 🎯 이 줄을 추가하세요
+        };
       }
     };
   } else {
@@ -691,8 +704,11 @@ async function executeSave() {
           ? targetNewMemoFolderId
           : globalDesktopFolderId,
     };
+
+    // [수정] 저장이 완료된 후(add) 동기화 트리거 실행
     store.add(memoData).onsuccess = (e) => {
       currentMemoId = e.target.result;
+      if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync(); // 🎯 이 줄을 추가하세요
     };
   }
 

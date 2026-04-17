@@ -1509,6 +1509,9 @@ function loadMemoList(queryDB = true) {
 
       // 🎯 유령 파일 퇴마: 조상 폴더가 휴지통에 가 있는지 꼼꼼히 확인
       function isUnderDesktop(parentId) {
+        // 🚀 [핵심 수정 1] 소속이 없거나(null) 바탕화면이면 무조건 통과시켜서 구출!
+        if (!parentId || parentId === globalDesktopFolderId) return true;
+
         let curr = parentId;
         while (curr) {
           if (curr === globalDesktopFolderId) return true;
@@ -1530,6 +1533,9 @@ function loadMemoList(queryDB = true) {
         if (m.type === "folder" || m.isDeleted || m.isPermanentlyDeleted)
           return;
         if (!isUnderDesktop(m.parentId)) return;
+
+        // 🚀 [핵심 수정 2] 간혹 제목이 비어있는 파일이 에러를 일으켜 화면 전체가 백지가 되는 현상 방어
+        const safeTitle = (m.title || "제목 없는 노트").toLowerCase();
 
         // 🚀 [보안 폴더 검색 차단] 암호화된 외계어 텍스트는 검색에서 제외시킵니다.
         const safePlainText =
@@ -1585,6 +1591,9 @@ function loadTrashList() {
     // 🎯 2. 조상 중에 '바탕 화면'이 있는지 끝까지 추적하는 전용 함수
     // (삭제된 폴더 안에 있던 파일이더라도 뿌리만 맞으면 통과시킵니다)
     function isUnderDesktop(parentId) {
+      // 🚀 [핵심 수정] 휴지통에서도 소속이 없던(null) 옛날 파일들을 구출해 냅니다!
+      if (!parentId || parentId === globalDesktopFolderId) return true;
+
       let curr = parentId;
       while (curr) {
         if (curr === globalDesktopFolderId) return true;
@@ -1891,6 +1900,7 @@ async function loadMemo(id) {
         }, 10);
       }
     };
+  localStorage.setItem('zen_last_opened', id);
   closeAllPanelsMobile();
 }
 
