@@ -112,13 +112,13 @@ async function syncDataToCloud() {
         localStorage.setItem("zen_last_sync_time", Date.now()); // 👈 현재 시간을 '마지막 동기화 시간'으로 기록
         updateUnsyncedCount(); // ns: 0 으로 즉시 초기화
         updateUIState("synced");
-        setTimeout(() => {
-          if (gapi.client && gapi.client.getToken() !== null) {
-            gapi.client.setToken(null);
-            localStorage.removeItem("zen_logged_in");
-            checkAuthState();
-          }
-        }, 10000); // 10초 뒤 조용히 권한 해제
+        // setTimeout(() => {
+        //   if (gapi.client && gapi.client.getToken() !== null) {
+        //     gapi.client.setToken(null);
+        //     localStorage.removeItem("zen_logged_in");
+        //     checkAuthState();
+        //   }
+        // }, 10000); // 10초 뒤 조용히 권한 해제
       } catch (err) {
         console.error("❌ 전송 실패:", err);
         updateUIState("sync-error");
@@ -164,6 +164,9 @@ document.getElementById("btn-auth").addEventListener("click", () => {
       return;
     }
 
+    // 🎯 [여기 추가] 로그인 성공 시 만료 시간(현재시간 + 50분)을 globals에 기록
+    tokenExpiryTime = Date.now() + (50 * 60 * 1000);
+
     // 아이콘 깜빡임 효과
     const icon = document.querySelector("#btn-auth i");
     icon.classList.add("blink-active");
@@ -177,6 +180,11 @@ document.getElementById("btn-auth").addEventListener("click", () => {
 });
 
 async function smartSync() {
+
+  // 🎯 [여기 추가] 검문소 통과 시도. 실패(false)하면 여기서 중단.
+  const isValid = await ensureValidToken();
+  if (!isValid) return;
+
   if (!gapi.client.getToken() || !db) return;
   console.log(">>> [데이터 우선 복구] 클라우드 확인 시작...");
   try {
@@ -279,4 +287,35 @@ async function smartSync() {
     console.error(">>> [스마트 동기화 오류] 통신 실패:", err);
     document.getElementById("status-dot").className = "status-dot unsaved";
   }
+}
+
+// ============================================================================
+// 🚀 [ZenNotes V3] 게으른 갱신 (Lazy Token Renewal) 검문소
+// ============================================================================
+async function ensureValidToken() {
+  if (!gisInited || !tokenClient) return false;
+
+  const currentTime = Date.now();
+
+  // 토큰이 없거나 만료 10분 전(발급 후 50분 경과)이라면 갱신 시도
+  if (gapi.client.getToken() === null || currentTime >= tokenExpiryTime) {
+    console.log("🔄 토큰 만료 임박! 조용히 새 토큰을 요청합니다...");
+
+    return new Promise((resolve) => {
+      tokenClient.callback = (resp) => {
+        if (resp.error) {
+          console.error("❌ 토큰 자동 갱신 실패:", resp.error);
+          updateUIState("offline-idle"); // UI를 오프라인 상태로 변경
+          resolve(false);
+        } else {
+          tokenExpiryTime = Date.now() + (50 * 60 * 1000); // 50분 재설정
+          console.log("✅ 토큰 갱신 성공");
+          resolve(true);
+        }
+      };
+      // prompt: '' 가 핵심입니다. 팝업 없이 진행됩니다.
+      tokenClient.requestAccessToken({ prompt: '' });
+    });
+  }
+  return true;
 }
