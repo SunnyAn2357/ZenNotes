@@ -811,3 +811,32 @@ function purgeMemoIfEmpty(memoIdToEvict) {
     }
   };
 }
+
+// 🎯 [신규] 삭제 시 빈 화면 대신 바탕화면 1등 노트를 찾아 여는 함수
+function openTopDesktopMemo() {
+  if (!db) return;
+  const tx = db.transaction(["memos"], "readonly");
+  const store = tx.objectStore("memos");
+
+  store.getAll().onsuccess = (e) => {
+    const allMemos = e.target.result;
+
+    // 1. 바탕 화면(globalDesktopFolderId)에 있는 정상 노트만 솎아냄
+    const desktopMemos = allMemos.filter(m =>
+      m.type !== 'folder' &&
+      !m.isDeleted &&
+      !m.isPermanentlyDeleted &&
+      m.parentId === globalDesktopFolderId
+    );
+
+    // 2. 최신 수정순으로 정렬
+    desktopMemos.sort((a, b) => b.updatedAt - a.updatedAt);
+
+    // 3. 노트가 있으면 1등 열기, 바탕화면이 아예 텅 비었을 때만 최후의 수단으로 새 노트
+    if (desktopMemos.length > 0) {
+      if (typeof loadMemo === 'function') loadMemo(desktopMemos[0].id);
+    } else {
+      if (typeof createNewMemo === 'function') createNewMemo();
+    }
+  };
+}

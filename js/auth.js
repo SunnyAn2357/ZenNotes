@@ -319,7 +319,7 @@ async function smartSync() {
         const currentOpen = ev.target.result;
         if (!currentOpen || currentOpen.isDeleted || currentOpen.isPermanentlyDeleted) {
           console.log("🚨 현재 편집 중인 노트가 다른 기기에서 삭제되었습니다. 화면을 초기화합니다.");
-          if (typeof createNewMemo === 'function') createNewMemo();
+          if (typeof openTopDesktopMemo === 'function') openTopDesktopMemo();
         }
         healDatabase(() => {
           loadMemoList();

@@ -855,11 +855,15 @@ function emergencyDeleteSecurity() {
   };
 
   tx.oncomplete = () => {
-    localStorage.removeItem("zen_sec_hash"); // 비번 초기화
-    isSecurityUnlocked = false; // 잠금 상태 초기화
-    currentSecKey = null; // 🚀 열쇠 분쇄
+    localStorage.removeItem("zen_sec_hash");
+    isSecurityUnlocked = false;
+    currentSecKey = null;
     showToast("보안 폴더 데이터가 삭제되고 비밀 번호가 초기화되었습니다.");
-    resetFmToHome(); // 무조건 안전한 홈으로 쫓아냄
+    resetFmToHome();
+
+    // 🚀 [추가] 보안 폴더 폭파 후, 안전하게 바탕화면 1등 노트를 엽니다!
+    if (typeof openTopDesktopMemo === 'function') openTopDesktopMemo();
+
     if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
@@ -1407,8 +1411,8 @@ function openFileManager() {
   closeAllMemoMenus();
   forceSaveImmediate();
 
-  // 🎯 진입 시 에디터를 '새 노트'로 강제 초기화 (기존 빈 노트 폭파 로직 자동 탑재됨)
-  createNewMemo();
+  // 🚀 [수정] 파일 관리창 뒤쪽(배경)에 텅 빈 노트 대신 바탕화면 1등 노트를 예쁘게 깔아둡니다.
+  if (typeof openTopDesktopMemo === 'function') openTopDesktopMemo();
 
   closeAllPanelsMobile();
 
@@ -1524,8 +1528,9 @@ function loadMemoList(queryDB = true) {
 
       // 🎯 유령 파일 퇴마: 조상 폴더가 휴지통에 가 있는지 꼼꼼히 확인
       function isUnderDesktop(parentId) {
-        // 🚀 [핵심 수정 1] 소속이 없거나(null) 바탕화면이면 무조건 통과시켜서 구출!
-        if (!parentId || parentId === globalDesktopFolderId) return true;
+        // 🚀 [버그 척결] Home(null) 소속은 메인 목록(바탕화면)에 절대 뜨지 못하게 원천 차단!
+        if (!parentId) return false;
+        if (parentId === globalDesktopFolderId) return true;
 
         let curr = parentId;
         while (curr) {
@@ -1952,13 +1957,13 @@ function deleteMemo(id, e) {
   });
 
   tx.oncomplete = () => {
-    // 🎯 버그 수정: 다중 선택 모드 확실히 끄기
     isMultiSelectMode = false;
     targets.forEach((targetId) => selectedMemos.delete(targetId));
 
     if (targets.includes(currentMemoId)) {
-      createNewMemo();
-      loadMemoList(true); // 🎯 버그 수정: 잔상이 남지 않도록 무조건 DB 강제 새로고침
+      // 🚀 [수정] 방금 지운 노트가 현재 화면에 띄워져 있던 노트라면, 새 노트 대신 1등 노트를 엽니다!
+      if (typeof openTopDesktopMemo === 'function') openTopDesktopMemo();
+      loadMemoList(true);
     } else {
       loadMemoList(true);
     }
