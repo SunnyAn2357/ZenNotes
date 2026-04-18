@@ -1,7 +1,7 @@
 {
   "name": "ZenNotes-ADS",
   "short_name": "ZenNotes",
-  "version": "3.0.3",
+  "version": "3.5.0",
   "id": "/ZenNotes/",
   "start_url": "./",
   "display": "standalone",

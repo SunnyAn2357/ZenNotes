@@ -1,5 +1,5 @@
 // 캐시 이름 (앱을 업데이트할 때마다 v2, v3... 로 숫자를 올려주세요!)
-const CACHE_NAME = 'zennotes-cache-v3.0.3';
+const CACHE_NAME = 'zennotes-cache-v3.5.0';
 
 // 반드시 캐싱해야 할 내 서버의 기본 파일들
 const STATIC_ASSETS = [
