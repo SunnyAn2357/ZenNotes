@@ -557,9 +557,8 @@ function runAutoPurge() {
 // 2. 타이머를 기억하는 전역 변수들 (함수 바로 위에 배치)
 let offlineToggleTimer = null; // 🚀 오프라인 교차 출력을 관리할 전역 타이머
 
-// 3. 상태 제어 함수 본체
+// 🎯 [완벽 교정] 공 증발 방지 및 오프라인 판별식 수정
 function updateUIState(state) {
-  // 1. 모든 타이머 초기화 (상태 전환 시 글자 꼬임 방지)
   if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
   if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
 
@@ -567,31 +566,33 @@ function updateUIState(state) {
   const statusTexts = document.querySelectorAll(".status-text");
 
   const applyState = (dotClass, textStr, opacityStr) => {
-    const isOffline = !(window.gapi && window.gapi.client && window.gapi.client.getToken() !== null && Date.now() < (window.tokenExpiryTime || 0));
+    // 🚀 [버그 해결 2] 변수 스코프 문제 제거! 직관적으로 구글 토큰이 있는지만 검사합니다.
+    const hasToken = window.gapi && window.gapi.client && window.gapi.client.getToken();
+    const isOffline = !hasToken;
 
-    // 기본 상태(default)로 돌아가려 할 때 오프라인이면 강제로 회색 고정
+    // 기본 상태로 돌아가려 할 때 오프라인이면
     if (textStr === "default" && isOffline) {
-      dotClass = "offline";
+      dotClass = "saved offline"; // 🚀 [버그 해결 1] "saved"를 남겨둬야 공의 크기(CSS)가 유지됩니다!
     }
 
     statusDots.forEach((dot) => {
+      dot.className = `status-dot ${dotClass}`; // 뼈대 클래스 적용
+
       if (dotClass.includes("offline")) {
-        dot.className = "status-dot";
-        dot.style.backgroundColor = "#888888"; // 오프라인 회색 점
+        dot.style.backgroundColor = "#888888"; // 회색으로 강제 덧칠
+        dot.style.boxShadow = "none"; // 후광(애니메이션) 끄기
       } else {
-        dot.className = `status-dot ${dotClass}`;
-        dot.style.backgroundColor = ""; // 온라인/저장중 색상(CSS)
+        dot.style.backgroundColor = ""; // 원래 색상(파란색/빨간색) 복구
+        dot.style.boxShadow = "";
       }
     });
 
     statusTexts.forEach((t) => {
-      // 🚀 'default'일 때는 dataset에 저장된 최신 미동기 텍스트를 기본으로 사용
       t.innerText = textStr === "default" ? (t.dataset.nsText || "online") : textStr;
       if (opacityStr !== undefined) t.style.opacity = opacityStr;
     });
   };
 
-  // --- 기존 상태 로직 (동일) ---
   if (state === "typing" || state === "saving") {
     if (typingStartTime === 0) typingStartTime = Date.now();
     applyState("unsaved pulse-fast", "saving", "1");
@@ -603,7 +604,7 @@ function updateUIState(state) {
       typingStartTime = 0;
       applyState("saved pulse-slow", "saved", "1");
       statusTextTimer = setTimeout(() => {
-        if (!saveTimer && !isSaving) updateUIState("offline-idle"); // 👈 오프라인이면 교차 출력으로 유도
+        if (!saveTimer && !isSaving) updateUIState("offline-idle"); // 👈 여기서 상태를 다시 묻습니다.
       }, 2000);
     }, remain);
   } else if (state === "syncing") {
@@ -622,27 +623,26 @@ function updateUIState(state) {
   } else if (state === "sync-error") {
     applyState("unsaved", "sync error", "1");
   }
-  // 🚀 [오늘의 핵심] 오프라인 교차 출력 가동
   else if (state === "offline-idle") {
     typingStartTime = 0;
     syncStartTime = 0;
 
     let showOfflineLabel = true;
     const runToggle = () => {
-      // dataset.nsText에는 updateUnsyncedCount()가 실시간으로 계산해준 숫자가 들어있습니다.
       const nsText = document.querySelector(".status-text")?.dataset.nsText || "미동기: 0";
-      applyState("offline", showOfflineLabel ? "offline" : nsText, "0.7");
+      // 🚀 [버그 해결 1] 교차 출력 중에도 "saved" 뼈대를 유지해 줍니다!
+      applyState("saved offline", showOfflineLabel ? "offline" : nsText, "0.7");
       showOfflineLabel = !showOfflineLabel;
     };
 
-    runToggle(); // 즉시 첫 화면 출력
-    offlineToggleTimer = setInterval(runToggle, 3000); // 3초마다 교체
+    runToggle();
+    offlineToggleTimer = setInterval(runToggle, 3000);
   } else {
     applyState("saved", "default", "1");
   }
 }
 
-// 🎯 [완벽 교정] 미동기 개수 계산기 (오프라인 대응)
+// 🎯 [완벽 교정] 미동기 개수 계산기 (오프라인 판별식 동기화)
 function updateUnsyncedCount() {
   if (!db) return;
   const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
@@ -652,13 +652,15 @@ function updateUnsyncedCount() {
     const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
     const statusTexts = document.querySelectorAll(".status-text");
 
-    const isOffline = !(window.gapi && window.gapi.client && window.gapi.client.getToken() !== null && Date.now() < (window.tokenExpiryTime || 0));
+    // 🚀 여기서도 똑같이 안전한 판별식 사용
+    const hasToken = window.gapi && window.gapi.client && window.gapi.client.getToken();
+    const isOffline = !hasToken;
 
     statusTexts.forEach((t) => {
       const displayText = unsyncedCount === 0 ? "online" : `미동기: ${unsyncedCount}`;
-      t.dataset.nsText = displayText; // 🚀 데이터셋에 숫자 저장 (오프라인 교차 출력용)
+      t.dataset.nsText = displayText;
 
-      // 온라인일 때만 즉시 글자를 바꿈 (오프라인은 setInterval이 관리하도록 양보)
+      // 온라인일 때만 즉시 텍스트를 바꿉니다.
       if (!isOffline && (
         t.innerText.startsWith("미동기:") ||
         t.innerText === "online" ||
