@@ -1294,7 +1294,10 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
           m.isSystem !== "trash" &&
           m.isSystem !== "backup"
         ) {
-          if (m.parentId !== selectedDestId) itemsToMove.push(m);
+          // 🚀 [버그 척결] 휴지통에 갇힌 유령(isDeleted)이라면 제자리(같은 폴더)로 이동하더라도 무조건 배열에 넣어서 부활 의식을 치러야 합니다!
+          if (m.parentId !== selectedDestId || m.isDeleted) {
+            itemsToMove.push(m);
+          }
         }
         processed++;
         if (processed === movingItemIds.length) resolve();
