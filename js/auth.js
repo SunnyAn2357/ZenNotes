@@ -98,30 +98,27 @@ document.getElementById("btn-auth").addEventListener("click", () => {
 // 5. checkAndMigrateV3()             : 구형 V2 유저 확인 및 마이그레이션 안내
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 1. V3 동기화 메인 총괄 매니저 (비교, 다운, 업로드)
+// 🚀 [ZenNotes V3] 1. V3 동기화 메인 총괄 매니저 (비교, 다운, 업로드, 삭제)
 // ============================================================================
 
 async function smartSync() {
-  // 1. 검문소 통과 확인
   const isValid = await ensureValidToken();
   if (!isValid) return;
-
   if (!db) return;
+
   updateUIState("syncing");
   console.log(">>> [V3 엔진] 클라우드 동기화 시작...");
 
   try {
     const token = gapi.client.getToken().access_token;
 
-    // 2. V3 전용 폴더 찾기
+    // 1. V3 폴더 확보
     const folderRes = await gapi.client.drive.files.list({
       q: "name = 'ZenNotes_Sync_Data' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
       fields: "files(id)"
     });
 
     let folderId;
-
-    // 🚀 [수정됨] 옛날 에러 메시지를 띄우는 대신, 폴더가 없으면 알아서 새로 만듭니다!
     if (!folderRes.result.files || folderRes.result.files.length === 0) {
       console.log("🌱 V3 폴더가 존재하지 않아 새로 생성합니다.");
       const metadata = { name: 'ZenNotes_Sync_Data', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
@@ -136,116 +133,117 @@ async function smartSync() {
       folderId = folderRes.result.files[0].id;
     }
 
-    // 3. index.json (가벼운 명부) 다운로드
-    let cloudIndex = [];
-    let indexFileId = null;
-    const indexRes = await gapi.client.drive.files.list({
-      q: `name = 'index.json' and '${folderId}' in parents and trashed = false`,
-      fields: "files(id)"
+    // 2. 구글 드라이브 파일 전체 스캔 및 중복 파일 청소 (지도 생성)
+    const allFilesRes = await gapi.client.drive.files.list({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: "files(id, name, modifiedTime)",
+      pageSize: 1000
     });
 
-    if (indexRes.result.files && indexRes.result.files.length > 0) {
-      indexFileId = indexRes.result.files[0].id;
+    const driveFiles = allFilesRes.result.files || [];
+    const cloudFileMap = new Map();
+
+    // 🚀 [핵심 1] 최신 파일이 배열 앞에 오도록 정렬하여 중복 방어
+    driveFiles.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime));
+
+    for (const f of driveFiles) {
+      if (!cloudFileMap.has(f.name)) {
+        // 처음 본 이름(최신 파일)만 지도에 등록
+        cloudFileMap.set(f.name, f.id);
+      } else {
+        // 이미 지도에 이름이 있다면 구글의 랙으로 생긴 과거의 쓰레기(중복) 파일!
+        console.log(`🗑️ 중복 쓰레기 파일 발견 및 구글 서버에서 삭제: ${f.name}`);
+        try {
+          await gapi.client.drive.files.delete({ fileId: f.id });
+        } catch (e) {
+          console.warn("중복 파일 삭제 실패:", e);
+        }
+      }
+    }
+
+    // 3. index.json(명부) 다운로드
+    let cloudIndex = [];
+    const indexFileId = cloudFileMap.get('index.json');
+    if (indexFileId) {
       const indexFile = await gapi.client.drive.files.get({ fileId: indexFileId, alt: "media" });
       cloudIndex = typeof indexFile.result === 'string' ? JSON.parse(indexFile.result) : indexFile.result;
     }
 
-    // 4. 로컬 DB 데이터 모두 읽기
+    // 4. 로컬 DB 읽기 및 싱크 ID 보정
     const localData = await new Promise((resolve) => {
       db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => resolve(e.target.result);
     });
 
-    // 5. 비교(Diff) 분석 - 바뀐 놈들만 솎아내기!
-
-    // 🚀 [유령 노트 36개 완벽 해결] DB에 영구적인 주민등록증(syncId)을 발급합니다.
     const localMap = new Map();
-    const itemsToPatch = []; // 영구 저장이 필요한 옛날 노트들 대기열
-
+    const itemsToPatch = [];
     localData.forEach(m => {
-      // syncId가 없는 옛날 노트들을 발견하면?
-      if (!m.syncId) {
-        m.syncId = m.id.toString();
-        itemsToPatch.push(m); // 임시 발급 후 DB 저장 대기열에 추가
-      }
+      if (!m.syncId) { m.syncId = m.id.toString(); itemsToPatch.push(m); }
       localMap.set(m.syncId, m);
     });
 
-    // 🎯 임시 부여된 ID를 기기(DB)에 영구적으로 박아 넣습니다!
     if (itemsToPatch.length > 0) {
       const patchTx = db.transaction(["memos"], "readwrite");
-      const patchStore = patchTx.objectStore("memos");
-      itemsToPatch.forEach(m => patchStore.put(m));
-      console.log(`🛠️ 옛날 노트 ${itemsToPatch.length}개에 영구 주민등록(syncId) 발급 및 DB 저장 완료!`);
+      itemsToPatch.forEach(m => patchTx.objectStore("memos").put(m));
     }
 
+    // 5. 비교 분석 (다운로드/업로드/삭제 분류)
     const toDownload = [];
     const toUpload = [];
+    const toCloudDelete = []; // 🚀 [핵심 2] 영구 삭제 대상 전용 배열
 
-    // [다운로드 대상] 구글이 더 최신이거나 로컬에 없는 경우
+    // [클라우드 -> 로컬] 구글이 더 최신인 경우
     for (const cMeta of cloudIndex) {
-      if (!cMeta.syncId) continue; // 🚀 과거 제 실수로 올라간 유령 찌꺼기(undefined) 데이터 무시!
-
+      if (!cMeta.syncId) continue;
       const lMemo = localMap.get(cMeta.syncId);
-      if (!lMemo || cMeta.updatedAt > lMemo.updatedAt) {
-        toDownload.push(cMeta);
-      }
+      if (!lMemo || cMeta.updatedAt > lMemo.updatedAt) toDownload.push(cMeta);
     }
 
-    // [업로드 대상] 로컬이 더 최신이거나 구글에 없는 경우 솎아내기
+    // [로컬 -> 클라우드] 기기가 더 최신인 경우
     for (const lMemo of localData) {
       const cMeta = cloudIndex.find(c => c.syncId === lMemo.syncId);
 
-      // 구글에 없거나, 로컬이 더 최신이면 업로드 후보에 올림
-      if (!cMeta || lMemo.updatedAt > cMeta.updatedAt) {
+      // 🚀 [핵심 3] 영구 삭제된 항목은 구글 서버 폭파 리스트로 이동
+      if (lMemo.isPermanentlyDeleted) {
+        toCloudDelete.push(lMemo);
+        continue;
+      }
 
-        // 🚀 [핵심 방어막] 단, 폴더이거나 삭제된 파일인데 '본문(content)'이 바뀐 게 아니라면 
-        // 굳이 구글 서버로 30개씩 개별 업로드(memo_xxx.json)를 하지 않고 패스합니다!
+      if (!cMeta || lMemo.updatedAt > cMeta.updatedAt) {
         if ((lMemo.type === 'folder' || lMemo.isDeleted) && cMeta) {
-          // 명부(index.json)만 조용히 업데이트하고 개별 파일 전송은 생략!
           const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-          const meta = { ...lMemo };
-          delete meta.content; delete meta.plainText;
+          const meta = { ...lMemo }; delete meta.content; delete meta.plainText;
           if (cIdx > -1) cloudIndex[cIdx] = meta;
           continue;
         }
-
-        toUpload.push(lMemo); // 진짜로 본문이 수정된 정상 노트만 업로드 대기열에 추가!
+        toUpload.push(lMemo);
       }
     }
 
     let needUIUpdate = false;
 
-    // 6. 다운로드 실행 (변경된 파일만 핀셋 다운로드)
+    // 6. 다운로드 실행
     if (toDownload.length > 0) {
       console.log(`⬇️ 클라우드 -> 기기: ${toDownload.length}개 다운로드 중...`);
       const downloadedMemos = [];
-
       for (const cMeta of toDownload) {
-        // 폴더나 삭제된 파일은 껍데기(명부)만 가져오면 끝
         if (cMeta.type === 'folder' || cMeta.isDeleted || cMeta.isPermanentlyDeleted) {
           downloadedMemos.push({ ...cMeta });
         } else {
-          // 실제 노트는 본문 파일(memo_xxx.json)을 다운로드하여 합체!
-          const fileRes = await gapi.client.drive.files.list({
-            q: `name = 'memo_${cMeta.syncId}.json' and '${folderId}' in parents and trashed = false`,
-            fields: "files(id)"
-          });
-          if (fileRes.result.files && fileRes.result.files.length > 0) {
-            const bodyFile = await gapi.client.drive.files.get({ fileId: fileRes.result.files[0].id, alt: "media" });
+          const bodyFileId = cloudFileMap.get(`memo_${cMeta.syncId}.json`); // 고유 ID로 다운로드
+          if (bodyFileId) {
+            const bodyFile = await gapi.client.drive.files.get({ fileId: bodyFileId, alt: "media" });
             const bodyData = typeof bodyFile.result === 'string' ? JSON.parse(bodyFile.result) : bodyFile.result;
             downloadedMemos.push({ ...cMeta, content: bodyData.content, plainText: bodyData.plainText });
           }
         }
       }
 
-      // 로컬 DB 덮어쓰기
       await new Promise((resolve) => {
         const tx = db.transaction(["memos"], "readwrite");
         const store = tx.objectStore("memos");
         downloadedMemos.forEach(m => {
           const existing = localMap.get(m.syncId);
-          if (existing) m.id = existing.id; // 기존 ID 유지
-          else delete m.id; // 새 파일이면 ID 새로 발급
+          if (existing) m.id = existing.id; else delete m.id;
           store.put(m);
         });
         tx.oncomplete = () => resolve();
@@ -253,54 +251,66 @@ async function smartSync() {
       needUIUpdate = true;
     }
 
-    // 7. 업로드 실행 (로컬에서 변경된 파일만 핀셋 업로드)
-    if (toUpload.length > 0) {
-      console.log(`⬆️ 기기 -> 클라우드: ${toUpload.length}개 업로드 중...`);
+    // 🚀 [핵심 4] 클라우드 영구 삭제 실행 (DELETE)
+    if (toCloudDelete.length > 0) {
+      for (const lMemo of toCloudDelete) {
+        const fileName = `memo_${lMemo.syncId}.json`;
+        const cloudId = cloudFileMap.get(fileName);
 
-      for (const lMemo of toUpload) {
-        // 본문이 있는 파일은 개별 파일(memo_xxx.json)로 덮어쓰기
-        if (lMemo.type !== 'folder' && !lMemo.isPermanentlyDeleted) {
-          const fileName = `memo_${lMemo.syncId}.json`;
-          const fileContent = JSON.stringify({
-            syncId: lMemo.syncId,
-            content: lMemo.content || "",
-            plainText: lMemo.plainText || ""
-          });
-          await v3_uploadFile(token, fileName, fileContent, folderId);
+        // 구글 서버에서 물리적 삭제
+        if (cloudId) {
+          try { await gapi.client.drive.files.delete({ fileId: cloudId }); }
+          catch (e) { console.warn("클라우드 삭제 실패:", e); }
         }
 
-        // 명부(index) 업데이트용 껍데기 제작
-        const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-        const meta = { ...lMemo };
-        delete meta.content; delete meta.plainText; // 본문 삭제 (경량화)
+        // 명부에서 기록 삭제
+        const idx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
+        if (idx > -1) cloudIndex.splice(idx, 1);
 
-        if (cIdx > -1) cloudIndex[cIdx] = meta;
-        else cloudIndex.push(meta);
+        // 로컬 DB에서도 마침내 물리적 삭제 완료!
+        const delTx = db.transaction(["memos"], "readwrite");
+        delTx.objectStore("memos").delete(lMemo.id);
       }
+    }
 
-      // 최신화된 명부(index.json)를 업로드
+    // 7. 업로드 실행 (PATCH 덮어쓰기 적용)
+    if (toUpload.length > 0) {
+      console.log(`⬆️ 기기 -> 클라우드: ${toUpload.length}개 업로드 중...`);
+      for (const lMemo of toUpload) {
+        if (lMemo.type !== 'folder') {
+          const fileName = `memo_${lMemo.syncId}.json`;
+          const fileContent = JSON.stringify({ syncId: lMemo.syncId, content: lMemo.content || "", plainText: lMemo.plainText || "" });
+
+          // 🚀 [핵심 5] 구글 ID를 넘겨주어 v3_uploadFile이 무조건 덮어쓰기(PATCH)를 하게 만듦!
+          const existingId = cloudFileMap.get(fileName);
+          await v3_uploadFile(token, fileName, fileContent, folderId, existingId);
+        }
+
+        const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
+        const meta = { ...lMemo }; delete meta.content; delete meta.plainText;
+        if (cIdx > -1) cloudIndex[cIdx] = meta; else cloudIndex.push(meta);
+      }
+    }
+
+    // 변경사항이 있었다면 최종 명부(index.json)도 PATCH로 덮어쓰기
+    if (toUpload.length > 0 || toCloudDelete.length > 0) {
       await v3_uploadFile(token, 'index.json', JSON.stringify(cloudIndex), folderId, indexFileId);
     }
 
-    // 8. 동기화 마무리
+    // 8. 마무리
     console.log("✅ [V3 엔진] 증분 동기화 완벽 종료!");
-    localStorage.setItem("zen_last_sync_time", Date.now()); // 마지막 동기화 시간 기록
-    updateUnsyncedCount(); // '미동기' 0으로 초기화
+    localStorage.setItem("zen_last_sync_time", Date.now());
+    updateUnsyncedCount();
     updateUIState("synced");
 
-    // 화면 갱신 및 유령 노트 퇴마
     if (needUIUpdate) {
-      // 🚀 [추가된 방어막] 현재 열려있는 노트가 다른 기기에서 방금 삭제되었다면?
       const checkTx = db.transaction(["memos"], "readonly");
       checkTx.objectStore("memos").get(currentMemoId || -1).onsuccess = (ev) => {
         const currentOpen = ev.target.result;
-
         if (!currentOpen || currentOpen.isDeleted || currentOpen.isPermanentlyDeleted) {
           console.log("🚨 현재 편집 중인 노트가 다른 기기에서 삭제되었습니다. 화면을 초기화합니다.");
-          if (typeof createNewMemo === 'function') createNewMemo(); // 새 노트로 강제 리셋!
+          if (typeof createNewMemo === 'function') createNewMemo();
         }
-
-        // 이후 정상적으로 UI 새로고침 진행
         healDatabase(() => {
           loadMemoList();
           if (document.getElementById("file-manager-pane").style.display === "flex") {
