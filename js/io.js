@@ -392,6 +392,8 @@ function handleFileImport(e) {
             healDatabase(() => {
               loadMemoList();
               alert(`복원이 완료되었습니다.\n(복원노트: ${restoredCount}개 / 중복제외: ${skippedCount}개)`);
+              // 🚀 [스파이 추가] 대규모 복원이 끝났으니 클라우드에 싹 다 올려줍니다!
+              if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
             });
           };
         } else if (parsed.type === "ZenMemo") {

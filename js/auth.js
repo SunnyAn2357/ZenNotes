@@ -22,17 +22,23 @@ function gisLoaded() {
   console.log("✅ 구글 인증 준비 완료!");
 }
 
-
 function checkAuthState() {
-  const hasToken =
-    gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null;
-  const authBtnIcon = document.querySelector("#btn-auth i");
+  const currentTime = Date.now();
 
+  // 🚀 [핵심 수정] 토큰이 존재하고, 50분 수명도 아직 안 지났을 때만 '유효'로 인정!
+  const hasToken =
+    gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null && currentTime < tokenExpiryTime;
+
+  const authBtnIcon = document.querySelector("#btn-auth i");
   if (authBtnIcon) authBtnIcon.style.color = hasToken ? "var(--accent)" : "";
 
   if (hasToken) {
-    updateUIState("online-idle");
+    // 🎯 토큰이 유효할 땐 무조건 online이 아니라, 미동기 개수를 다시 세도록 넘깁니다. 
+    // (미동기가 0일 때 'online'으로 띄우는 세부 로직은 다음 ui.js 수정 시 추가하겠습니다)
+    if (typeof updateUnsyncedCount === 'function') updateUnsyncedCount();
+    else updateUIState("online-idle");
   } else {
+    // 🎯 1시간이 넘어 상한 토큰이면 확실하게 오프라인(회색) 처리!
     updateUIState("offline-idle");
   }
 }
@@ -61,8 +67,8 @@ document.getElementById("btn-auth").addEventListener("click", () => {
       return;
     }
 
-    // 🚀 로그인/갱신 성공 시 수명을 다시 50분 연장!
-    tokenExpiryTime = Date.now() + (50 * 60 * 1000);
+    // 🚀 토큰 수명 59분
+    tokenExpiryTime = Date.now() + (59 * 60 * 1000);
 
     // 🚀 [핵심 추가] 토큰을 정상 발급받았으니, 즉시 계기판(구름)을 파란색으로 켭니다!
     checkAuthState();
@@ -81,8 +87,18 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   tokenClient.requestAccessToken();
 });
 
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+// 🚀 [ZenNotes V3] CLOUD SYNC ENGINE (구글 드라이브 증분 동기화 코어)
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+
+// 1. smartSync()                     : V3 동기화 메인 총괄 매니저 (비교, 다운, 업로드)
+// 2. v3_uploadFile(...)              : 구글 API 파일 전송 헬퍼
+// 3. ensureValidToken()              : 59분 토큰 만료 검문소 (오프라인 전환)
+// 4. triggerBackgroundSync()         : 타자 멈춤 3초 감지 및 백그라운드 동기화 트리거
+// 5. checkAndMigrateV3()             : 구형 V2 유저 확인 및 마이그레이션 안내
+
 // ============================================================================
-// 🚀 [ZenNotes V3] 스마트 증분 동기화(Incremental Sync) 엔진
+// 🚀 [ZenNotes V3] 1. V3 동기화 메인 총괄 매니저 (비교, 다운, 업로드)
 // ============================================================================
 
 async function smartSync() {
@@ -272,14 +288,26 @@ async function smartSync() {
     updateUnsyncedCount(); // '미동기' 0으로 초기화
     updateUIState("synced");
 
-    // 화면 갱신
+    // 화면 갱신 및 유령 노트 퇴마
     if (needUIUpdate) {
-      healDatabase(() => {
-        loadMemoList();
-        if (document.getElementById("file-manager-pane").style.display === "flex") {
-          loadFileManager(currentFmFolderId);
+      // 🚀 [추가된 방어막] 현재 열려있는 노트가 다른 기기에서 방금 삭제되었다면?
+      const checkTx = db.transaction(["memos"], "readonly");
+      checkTx.objectStore("memos").get(currentMemoId || -1).onsuccess = (ev) => {
+        const currentOpen = ev.target.result;
+
+        if (!currentOpen || currentOpen.isDeleted || currentOpen.isPermanentlyDeleted) {
+          console.log("🚨 현재 편집 중인 노트가 다른 기기에서 삭제되었습니다. 화면을 초기화합니다.");
+          if (typeof createNewMemo === 'function') createNewMemo(); // 새 노트로 강제 리셋!
         }
-      });
+
+        // 이후 정상적으로 UI 새로고침 진행
+        healDatabase(() => {
+          loadMemoList();
+          if (document.getElementById("file-manager-pane").style.display === "flex") {
+            loadFileManager(currentFmFolderId);
+          }
+        });
+      };
     }
 
   } catch (err) {
@@ -288,7 +316,9 @@ async function smartSync() {
   }
 }
 
-// 🛠️ [V3 전용 헬퍼] 단일 파일 생성/덮어쓰기 함수
+// ============================================================================
+// 🚀 [ZenNotes V3] 2. 구글 API 파일 전송 헬퍼
+// ============================================================================
 async function v3_uploadFile(token, fileName, fileContent, folderId, existingFileId = null) {
   let fileId = existingFileId;
 
@@ -322,7 +352,7 @@ async function v3_uploadFile(token, fileName, fileContent, folderId, existingFil
 }
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 평화로운 세션 만료 검문소 (사용자 방해 금지)
+// 🚀 [ZenNotes V3] 3. 59분 토큰 만료 검문소 (오프라인 전환)
 // ============================================================================
 async function ensureValidToken() {
   if (!gisInited || !tokenClient) return false;
@@ -331,7 +361,7 @@ async function ensureValidToken() {
 
   // 토큰이 없거나 수명(50분)이 초과되었다면?
   if (gapi.client.getToken() === null || currentTime >= tokenExpiryTime) {
-    console.log("⚠️ 토큰 수명(50분) 만료! 글쓰기 방해를 막기 위해 동기화를 일시 정지합니다.");
+    console.log("⚠️ 토큰 수명(1시간) 만료! 글쓰기 방해를 막기 위해 동기화를 일시 정지합니다.");
 
     // 🚨 억지로 팝업을 띄우지 않습니다! 조용히 클라우드 연결만 끊습니다.
     if (gapi.client.getToken() !== null) {
@@ -345,12 +375,12 @@ async function ensureValidToken() {
     return false;
   }
 
-  // 아직 50분이 안 지났으면 안전하므로 동기화 통과!
+  // 아직 59분이 안 지났으면 안전하므로 동기화 통과!
   return true;
 }
 
 // ============================================================================
-// 🚀 [V3] 타자 멈춤 감지 자동 백그라운드 동기화 (Debouncing)
+// 🚀 [ZenNotes V3] 4. 타자 멈춤 3초 감지 및 백그라운드 동기화 트리거
 // ============================================================================
 function triggerBackgroundSync() {
   // 이미 타이머가 돌고 있다면 취소 (타자를 계속 치고 있다는 뜻)
@@ -370,7 +400,7 @@ function triggerBackgroundSync() {
 }
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 자동 마이그레이션 체크 (명령만 내림)
+// 🚀 [ZenNotes V3] 5. 구형 V2 유저 확인 및 마이그레이션 안내
 // ============================================================================
 async function checkAndMigrateV3() {
   if (!gapi.client || !gapi.client.getToken()) return;

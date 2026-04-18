@@ -304,26 +304,26 @@ quill.on('text-change', function (delta, oldDelta, source) {
 });
 
 // [수정] 모바일 툴바 헤더 드롭다운 메뉴 잘림 방지 로직 (MutationObserver 적용)
-const toolbarElement = document.querySelector('.ql-toolbar.ql-snow');
-const headerPicker = document.querySelector('.ql-header.ql-picker');
+// const toolbarElement = document.querySelector('.ql-toolbar.ql-snow');
+// const headerPicker = document.querySelector('.ql-header.ql-picker');
 
-if (headerPicker && toolbarElement) {
-    const observer = new MutationObserver(function (mutations) {
-        mutations.forEach(function (mutation) {
-            if (mutation.attributeName === 'class') {
-                if (window.innerWidth <= 768) {
-                    if (headerPicker.classList.contains('ql-expanded')) {
-                        toolbarElement.classList.add('ql-toolbar-dropdown-open');
-                    } else {
-                        toolbarElement.classList.remove('ql-toolbar-dropdown-open');
-                    }
-                }
-            }
-        });
-    });
-    // 헤더 픽커의 클래스 변화만 조용히 감시합니다.
-    observer.observe(headerPicker, { attributes: true });
-}
+// if (headerPicker && toolbarElement) {
+//     const observer = new MutationObserver(function (mutations) {
+//         mutations.forEach(function (mutation) {
+//             if (mutation.attributeName === 'class') {
+//                 if (window.innerWidth <= 768) {
+//                     if (headerPicker.classList.contains('ql-expanded')) {
+//                         toolbarElement.classList.add('ql-toolbar-dropdown-open');
+//                     } else {
+//                         toolbarElement.classList.remove('ql-toolbar-dropdown-open');
+//                     }
+//                 }
+//             }
+//         });
+//     });
+//     // 헤더 픽커의 클래스 변화만 조용히 감시합니다.
+//     observer.observe(headerPicker, { attributes: true });
+// }
 
 // [3] 이미지 파일 처리 함수
 const handleImageFiles = (files) => {
@@ -647,9 +647,22 @@ document.addEventListener("keydown", (e) => {
            3. 모바일 환경: 뒤로가기(popstate) 통합 제어
            ========================================== */
 window.addEventListener("popstate", (e) => {
-    // 🎯 1. 강제 뒤로가기 카운터 처리 (클릭 씹힘 방지)
-    if (programmaticBackCount > 0) {
+    // // 🎯 1. 강제 뒤로가기 카운터 처리 (클릭 씹힘 방지)
+    // if (programmaticBackCount > 0) {
+    //     programmaticBackCount--;
+    //     return;
+    // }
+
+    // 1. [1칸 전용 방어막] (기존에 있던 코드)
+    if (typeof programmaticBackCount !== 'undefined' && programmaticBackCount > 0) {
         programmaticBackCount--;
+        return;
+    }
+    // 2. 🚀 [다중 칸 전용 스위치 방어막 추가]
+    // 3칸을 뛰어넘어 popstate가 딱 1번 발생했을 때, 이 스위치가 방어하고 즉시 꺼집니다!
+    // 이렇게 하면 다음번 사용자의 진짜 터치를 절대 씹어먹지 않습니다.
+    if (typeof isProgrammaticBack !== 'undefined' && isProgrammaticBack) {
+        isProgrammaticBack = false;
         return;
     }
 
@@ -917,8 +930,9 @@ zenPopup.addEventListener('click', (e) => {
     let formatType = '';
 
     // 내가 누른 팝업이 어떤 종류인지 파악
-    if (activeQuillPicker.classList.contains('ql-color-picker')) formatType = 'color';
-    else if (activeQuillPicker.classList.contains('ql-background')) formatType = 'background';
+    // 🚀 [완벽 교정] 공통 클래스(ql-color-picker) 대신, Quill이 부여한 고유 기능 클래스로 정확히 분기!
+    if (activeQuillPicker.classList.contains('ql-background')) formatType = 'background';
+    else if (activeQuillPicker.classList.contains('ql-color')) formatType = 'color';
     else if (activeQuillPicker.classList.contains('ql-align')) formatType = 'align';
     else if (activeQuillPicker.classList.contains('ql-header')) formatType = 'header';
 

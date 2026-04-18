@@ -485,7 +485,10 @@ function createNewFolder() {
     isDeleted: false,
   });
   // 🎯 확실히 DB 저장이 끝난 뒤(oncomplete) 화면 새로고침
-  tx.oncomplete = () => loadFileManager(currentFmFolderId);
+  tx.oncomplete = () => {
+    loadFileManager(currentFmFolderId);
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
+  }
 }
 
 // 2. 이름 바꾸기
@@ -505,6 +508,7 @@ function fmRename(id) {
   tx.oncomplete = () => {
     loadFileManager(currentFmFolderId);
     loadMemoList(true);
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -528,6 +532,7 @@ function fmDuplicate(id) {
   tx.oncomplete = () => {
     loadFileManager(currentFmFolderId);
     loadMemoList(true);
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -549,6 +554,7 @@ function fmDelete(id) {
     updateUnsyncedCount();
     // 🎯 삭제 완료 후 토스트에 복구용 기억(payload) 전달
     showToast("휴지통으로 이동되었습니다.", [{ id: id, action: "restore" }]);
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -568,6 +574,7 @@ function fmRestore(id) {
     loadFileManager(currentFmFolderId);
     loadMemoList(true);
     updateUnsyncedCount();
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -585,6 +592,7 @@ function fmHardDelete(id) {
   tx.oncomplete = () => {
     loadFileManager(currentFmFolderId);
     updateUnsyncedCount();
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -852,6 +860,7 @@ function emergencyDeleteSecurity() {
     currentSecKey = null; // 🚀 열쇠 분쇄
     showToast("보안 폴더 데이터가 삭제되고 비밀 번호가 초기화되었습니다.");
     resetFmToHome(); // 무조건 안전한 홈으로 쫓아냄
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -986,6 +995,7 @@ function fmBatchHardDelete() {
       showToast(`${count}개 항목이 휴지통으로 이동되었습니다.`, undoPayload);
     }
     loadFileManager(currentFmFolderId); // 파일 관리창 렌더링 갱신
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -1110,6 +1120,7 @@ function fmBatchDelete() {
       showToast(`${count}개 항목이 휴지통으로 이동되었습니다.`, undoPayload);
       loadFileManager(currentFmFolderId);
     }
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -1383,6 +1394,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
       loadMemoList(true);
     }
     loadFileManager(currentFmFolderId);
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 };
 
@@ -1841,6 +1853,7 @@ function togglePin(id, e) {
 
   tx.oncomplete = () => {
     loadMemoList(true); // 목록 새로고침
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -1947,6 +1960,7 @@ function deleteMemo(id, e) {
       loadMemoList(true);
     }
     updateUnsyncedCount();
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -1979,6 +1993,7 @@ function restoreMemo(id, e) {
     loadTrashList();
     loadMemoList(true); // 🎯 버그 수정: 제가 함부로 지웠던 메인 목록 새로고침 부활!
     updateUnsyncedCount();
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -2016,6 +2031,7 @@ function hardDeleteMemo(id, e) {
     targets.forEach((targetId) => selectedTrashMemos.delete(targetId));
     loadTrashList();
     updateUnsyncedCount(); // 🎯 삭제했다는 사실도 동기화해야 하므로 카운트 업데이트
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -2051,6 +2067,7 @@ function emptyTrash() {
       showToast("휴지통이 완전히 비워졌습니다.");
       // 🎯 현재 휴지통 폴더 안이라면 리스트를 즉시 새로고침합니다.
       loadFileManager(currentFmFolderId);
+      if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
     };
   };
 }
@@ -2083,6 +2100,7 @@ function fmBatchRestore() {
     loadMemoList(true);
     updateUnsyncedCount();
     showToast(`${count}개 항목이 복구되었습니다.`);
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -2128,6 +2146,7 @@ function backupDesktop() {
     showToast("바탕 화면이 백업되었습니다.");
     loadFileManager(currentFmFolderId); // 현재 바탕화면이면 깨끗해진 화면 렌더링
     loadMemoList(true); // 왼쪽 메인 창도 깨끗하게 동기화
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -2154,6 +2173,7 @@ function backupThisFolder() {
     document.getElementById("fm-global-menu").classList.remove("is-active");
     updateUnsyncedCount();
     history.back(); // 🎯 이동 후 즉시 상위 폴더(바탕 화면)로 자동 복귀!
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -2180,6 +2200,7 @@ function restoreCurrentFolder() {
     document.getElementById("fm-global-menu").classList.remove("is-active");
     updateUnsyncedCount();
     history.back(); // 🎯 작업 완료 후 안전하게 부모 폴더로 되돌아갑니다.
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
@@ -2236,5 +2257,6 @@ function emptyCurrentFolder() {
     document.getElementById("fm-global-menu").classList.remove("is-active");
     updateUnsyncedCount();
     history.back(); // 🎯 작업 완료 후 안전하게 부모 폴더로 되돌아갑니다.
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }

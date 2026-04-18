@@ -1,5 +1,17 @@
-const request = indexedDB.open("ZenMemoDB_Ultimate", 2); // 🎯 버전 2로 업그레이드
+// 🟦🟦🟦পণ্ডিত🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
+// 💾 [ZenNotes V3] LOCAL SAVE & CRYPTO ENGINE (로컬 DB 저장 및 군사급 암호화)
+// 🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
 
+// 1. request                         : DB 마스터키 및 초기화 세트 (최상단)
+// 2. executeSave()                   : 에디터 본문 DB 덮어쓰기 및 동기화 스파이 호출
+// 3. forceSaveImmediate()            : 타이머 무시 즉시 저장 (창 닫기 전 등)
+// 4. triggerAutoSave()               : 1.2초 타자 지연 감지 후 저장 트리거
+// 5. getCryptoKey(password)          : AES-GCM 256비트 암호화 열쇠 생성기
+// 6. encryptData(...)                : 평문 -> Base64 외계어 암호화 변환기
+// 7. decryptData(...)                : Base64 외계어 -> 평문 해독기
+
+// 1. DB 마스터키 및 초기화 세트 (최상단)
+const request = indexedDB.open("ZenMemoDB_Ultimate", 2);
 request.onupgradeneeded = (e) => {
   db = e.target.result;
   let store;
@@ -21,7 +33,6 @@ request.onupgradeneeded = (e) => {
     store.createIndex("type", "type", { unique: false }); // 'file' or 'folder'
   }
 };
-
 request.onsuccess = async (e) => {
   db = e.target.result;
   console.log("✅ 로컬 DB 연결 성공!");
@@ -72,14 +83,219 @@ request.onsuccess = async (e) => {
     };
   });
 };
-
-// 👇 이 부분이 추가되었습니다. DB 연결이 막혔을 때 에러를 띄워줍니다.
 request.onerror = (e) => {
   console.error("❌ 로컬 DB 열기 실패:", e.target.error);
   alert(
     "브라우저 저장소(IndexedDB)에 접근할 수 없습니다.\n시크릿 모드이거나 쿠키 차단 설정이 켜져 있는지 확인해 주세요.",
   );
 };
+
+// 2. 에디터 본문 DB 덮어쓰기 및 동기화 스파이 호출
+async function executeSave() {
+  if (isSaving || isLoading) {
+    pendingSave = true;
+    return;
+  }
+  const title =
+    document.getElementById("memo-title-input").value.trim() ||
+    "제목 없는 노트";
+  const content = quill.root.innerHTML,
+    plainText = quill.getText();
+  const hasNoText = plainText.trim() === "";
+  const hasNoImage = !content.includes("<img");
+
+  // 신규 노트인데 내용이 아무것도 없으면 저장하지 않음
+  if (
+    !currentMemoId &&
+    !document.getElementById("memo-title-input").value &&
+    hasNoText &&
+    hasNoImage
+  ) {
+    updateUIState("saved");
+    saveTimer = null;
+    return;
+  }
+
+  isSaving = true;
+  updateUIState("saving");
+
+  // 🎯 1. 현재 편집 중인 노트가 암호화 대상(보안 폴더 소속)인지 검증합니다.
+  const targetParentId = currentMemoId
+    ? await getMemoParentIdDB(currentMemoId)
+    : targetNewMemoFolderId;
+  const isSecure = await checkIsUnderSecurity(targetParentId);
+
+  let finalContent = content;
+  let finalPlainText = plainText;
+
+  // 🎯 2. 보안 구역일 경우 암호화 수행
+  if (isSecure) {
+    if (!currentSecKey) {
+      showToast("보안 세션이 만료되어 변경 사항을 저장할 수 없습니다.");
+      isSaving = false;
+      updateUIState("saved");
+      return; // 열쇠가 없으면 평문 유출 방지를 위해 저장을 차단
+    }
+    // 본문과 순수 텍스트를 모두 AES-GCM 외계어로 변환
+    finalContent = await encryptData(content, currentSecKey);
+    finalPlainText = await encryptData(plainText, currentSecKey);
+  }
+
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+
+  if (currentMemoId) {
+    // 🎯 기존 노트 수정 시
+    store.get(currentMemoId).onsuccess = (e) => {
+      const m = e.target.result;
+      if (m) {
+        m.title = title; // 📌 제목은 검색을 위해 무조건 평문 유지!
+        m.content = finalContent;
+        m.plainText = finalPlainText;
+        m.updatedAt = Date.now();
+        store.put(m); // [수정] 저장이 완료된 후(put) 동기화 트리거 실행
+      }
+    };
+  } else {
+    // 🎯 신규 노트 작성 시
+    const memoData = {
+      title,
+      content: finalContent,
+      plainText: finalPlainText,
+      updatedAt: Date.now(),
+      isDeleted: false,
+      type: "file",
+      syncId: generateSyncId(),
+      parentId:
+        targetNewMemoFolderId !== null
+          ? targetNewMemoFolderId
+          : globalDesktopFolderId,
+    };
+
+    // [수정] 저장이 완료된 후(add) 동기화 트리거 실행
+    store.add(memoData).onsuccess = (e) => {
+      currentMemoId = e.target.result;
+    };
+  }
+
+  tx.oncomplete = () => {
+    isSaving = false;
+    saveTimer = null;
+    updateUIState("saved");
+    loadMemoList(true);
+    updateUnsyncedCount();
+    if (pendingSave) {
+      pendingSave = false;
+      executeSave();
+    }
+    // 🎯 에디터 저장 완료 후 3초 뒤 클라우드 업로드 장전!
+    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
+  };
+}
+
+// 3. 타이머 무시 즉시 저장 (창 닫기 전 등)
+function forceSaveImmediate() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    executeSave();
+  }
+}
+
+// 4. 1.2초 타자 지연 감지 후 저장 트리거
+function triggerAutoSave() {
+  if (isLoading) return;
+  updateUIState("typing");
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(executeSave, 1200);
+}
+
+// ============================================================================
+// 🚀 [암호화 엔진] Web Crypto API (AES-GCM 256bit) - 브라우저 내장 암호화 시스템
+// ============================================================================
+
+// 5. 사용자의 비밀번호(문자열)를 강력한 AES-GCM 256비트 암호화 키로 변환하는 해시 공장
+async function getCryptoKey(password) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits", "deriveKey"],
+  );
+  // 소금(Salt)은 로컬 DB 특성상 기기 간 동기화 후에도 복호화할 수 있도록 강력한 고정값을 사용합니다.
+  const salt = enc.encode("ZenNotes_Ultimate_Crypto_Salt_2026");
+
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"],
+  );
+}
+
+// 6. 평문 텍스트(Base64 이미지 포함) -> 복호화 불가능한 외계어(암호문)로 변환
+async function encryptData(plainText, cryptoKey) {
+  if (!plainText) return "";
+
+  const iv = crypto.getRandomValues(new Uint8Array(12)); // 12바이트 랜덤 IV (초기화 벡터) 생성
+  const enc = new TextEncoder();
+
+  // 본문을 완전히 갈아엎어 암호화 버퍼로 변환합니다.
+  const encryptedBuffer = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: iv },
+    cryptoKey,
+    enc.encode(plainText),
+  );
+
+  // IV와 암호문을 한 덩어리로 합쳐서 Base64 텍스트로 인코딩합니다.
+  const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encryptedBuffer), iv.length);
+
+  // 🎯 대용량 데이터(사진 등) 처리를 위해 Call Stack 크래시를 방지하는 Blob FileReader 기법 적용!
+  return new Promise((resolve) => {
+    const blob = new Blob([combined]);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target.result.split(",")[1];
+      // 외계어 앞에 '이건 암호화된 노트다!'라는 꼬리표(ZENENC::)를 붙여줍니다.
+      resolve("ZENENC::" + base64);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 7. 외계어(암호문) -> 사람이 읽을 수 있는 평문으로 변환 (해독기)
+async function decryptData(encryptedText, cryptoKey) {
+  // 우리가 만든 암호문 형태가 아니면 그냥 그대로 반환(패스)합니다.
+  if (!encryptedText || !encryptedText.startsWith("ZENENC::"))
+    return encryptedText;
+
+  // 꼬리표를 떼어내고 순수 암호문만 분리
+  const base64 = encryptedText.replace("ZENENC::", "");
+  const binaryStr = atob(base64);
+  const bytes = new Uint8Array(binaryStr.length);
+
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  // 합쳐놨던 IV(12바이트)와 실제 암호 데이터를 다시 분리
+  const iv = bytes.slice(0, 12);
+  const data = bytes.slice(12);
+
+  // 열쇠(cryptoKey)를 넣고 자물쇠를 풉니다!
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: iv },
+    cryptoKey,
+    data,
+  );
+
+  // 한국어/영어로 완벽하게 복원!
+  return new TextDecoder().decode(decryptedBuffer);
+}
 
 // 🎯 [신규 함수 추가] 파일 시스템 초기화 및 기존 데이터 바탕화면으로 마이그레이션
 async function initFileSystem() {
@@ -334,27 +550,48 @@ function runAutoPurge() {
   };
 }
 
-const statusDot = document.getElementById("status-dot");
-const statusText = document.getElementById("status-text");
+// ============================================================================
+// 📊 [상태 계기판 UI 제어 구역] 
+// ============================================================================
 
-// 🎯 [수정] 듀얼 상태점(에디터/파일관리창) 동시 제어 및 '미동기' 텍스트 적용
+// 2. 타이머를 기억하는 전역 변수들 (함수 바로 위에 배치)
+let offlineToggleTimer = null; // 🚀 오프라인 교차 출력을 관리할 전역 타이머
+
+// 3. 상태 제어 함수 본체
 function updateUIState(state) {
-  if (statusTextTimer) {
-    clearTimeout(statusTextTimer);
-    statusTextTimer = null;
-  }
+  // 1. 모든 타이머 초기화 (상태 전환 시 글자 꼬임 방지)
+  if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
+  if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
+
   const statusDots = document.querySelectorAll(".status-dot");
   const statusTexts = document.querySelectorAll(".status-text");
 
   const applyState = (dotClass, textStr, opacityStr) => {
-    statusDots.forEach((dot) => (dot.className = `status-dot ${dotClass}`));
+    const isOffline = !(window.gapi && window.gapi.client && window.gapi.client.getToken() !== null && Date.now() < (window.tokenExpiryTime || 0));
+
+    // 기본 상태(default)로 돌아가려 할 때 오프라인이면 강제로 회색 고정
+    if (textStr === "default" && isOffline) {
+      dotClass = "offline";
+    }
+
+    statusDots.forEach((dot) => {
+      if (dotClass.includes("offline")) {
+        dot.className = "status-dot";
+        dot.style.backgroundColor = "#888888"; // 오프라인 회색 점
+      } else {
+        dot.className = `status-dot ${dotClass}`;
+        dot.style.backgroundColor = ""; // 온라인/저장중 색상(CSS)
+      }
+    });
+
     statusTexts.forEach((t) => {
-      t.innerText =
-        textStr === "default" ? t.dataset.nsText || "미동기: 0" : textStr;
+      // 🚀 'default'일 때는 dataset에 저장된 최신 미동기 텍스트를 기본으로 사용
+      t.innerText = textStr === "default" ? (t.dataset.nsText || "online") : textStr;
       if (opacityStr !== undefined) t.style.opacity = opacityStr;
     });
   };
 
+  // --- 기존 상태 로직 (동일) ---
   if (state === "typing" || state === "saving") {
     if (typingStartTime === 0) typingStartTime = Date.now();
     applyState("unsaved pulse-fast", "saving", "1");
@@ -366,7 +603,7 @@ function updateUIState(state) {
       typingStartTime = 0;
       applyState("saved pulse-slow", "saved", "1");
       statusTextTimer = setTimeout(() => {
-        if (!saveTimer && !isSaving) applyState("saved", "default");
+        if (!saveTimer && !isSaving) updateUIState("offline-idle"); // 👈 오프라인이면 교차 출력으로 유도
       }, 2000);
     }, remain);
   } else if (state === "syncing") {
@@ -384,49 +621,54 @@ function updateUIState(state) {
     }, remain);
   } else if (state === "sync-error") {
     applyState("unsaved", "sync error", "1");
-  } else {
+  }
+  // 🚀 [오늘의 핵심] 오프라인 교차 출력 가동
+  else if (state === "offline-idle") {
     typingStartTime = 0;
     syncStartTime = 0;
+
+    let showOfflineLabel = true;
+    const runToggle = () => {
+      // dataset.nsText에는 updateUnsyncedCount()가 실시간으로 계산해준 숫자가 들어있습니다.
+      const nsText = document.querySelector(".status-text")?.dataset.nsText || "미동기: 0";
+      applyState("offline", showOfflineLabel ? "offline" : nsText, "0.7");
+      showOfflineLabel = !showOfflineLabel;
+    };
+
+    runToggle(); // 즉시 첫 화면 출력
+    offlineToggleTimer = setInterval(runToggle, 3000); // 3초마다 교체
+  } else {
     applyState("saved", "default", "1");
   }
 }
 
-function triggerAutoSave() {
-  if (isLoading) return;
-  updateUIState("typing");
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(executeSave, 1200);
-}
-
-// ✅ 추가할 함수: 동기화되지 않은 노트(ns) 개수 계산
+// 🎯 [완벽 교정] 미동기 개수 계산기 (오프라인 대응)
 function updateUnsyncedCount() {
   if (!db) return;
-  const lastSync = parseInt(
-    localStorage.getItem("zen_last_sync_time") || "0",
-    10,
-  );
+  const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
 
-  db
-    .transaction(["memos"], "readonly")
-    .objectStore("memos")
-    .getAll().onsuccess = (e) => {
-      const memos = e.target.result;
-      const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
+  db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => {
+    const memos = e.target.result;
+    const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
+    const statusTexts = document.querySelectorAll(".status-text");
 
-      // 🎯 [수정] 모든 상태 텍스트에 '미동기: X' 적용
-      const statusTexts = document.querySelectorAll(".status-text");
-      statusTexts.forEach((t) => {
-        t.dataset.nsText = `미동기: ${unsyncedCount}`;
-        if (
-          t.innerText.startsWith("미동기:") ||
-          t.innerText.startsWith("ns:") ||
-          t.innerText === "offline"
-        ) {
-          t.innerText = `미동기: ${unsyncedCount}`;
-          t.style.opacity = "1";
-        }
-      });
-    };
+    const isOffline = !(window.gapi && window.gapi.client && window.gapi.client.getToken() !== null && Date.now() < (window.tokenExpiryTime || 0));
+
+    statusTexts.forEach((t) => {
+      const displayText = unsyncedCount === 0 ? "online" : `미동기: ${unsyncedCount}`;
+      t.dataset.nsText = displayText; // 🚀 데이터셋에 숫자 저장 (오프라인 교차 출력용)
+
+      // 온라인일 때만 즉시 글자를 바꿈 (오프라인은 setInterval이 관리하도록 양보)
+      if (!isOffline && (
+        t.innerText.startsWith("미동기:") ||
+        t.innerText === "online" ||
+        t.innerText === "offline"
+      )) {
+        t.innerText = displayText;
+        t.style.opacity = "1";
+      }
+    });
+  };
 }
 
 // 🎯 헬퍼 함수: DB에서 특정 메모의 parentId를 꺼내옵니다.
@@ -468,13 +710,6 @@ async function checkIsUnderSecurity(folderId) {
         resolve(false);
       };
   });
-}
-
-function forceSaveImmediate() {
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-    executeSave();
-  }
 }
 
 window.addEventListener("beforeunload", () => {
@@ -519,6 +754,8 @@ function purgeEmptyMemos() {
     if (isPurged) {
       loadMemoList(true); // 유령화된 메모가 있다면 목록 즉시 갱신
       if (typeof updateUnsyncedCount === "function") updateUnsyncedCount(); // 동기화 카운트 반영
+      // 🚀 스파이는 무조건 지운 게 있을 때만(if문 안에서) 작동해야 합니다!
+      if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
     }
   };
 }
@@ -553,200 +790,8 @@ function purgeMemoIfEmpty(memoIdToEvict) {
       tx.oncomplete = () => {
         loadMemoList(true); // 조용히 목록 새로고침
         if (typeof updateUnsyncedCount === "function") updateUnsyncedCount(); // 동기화 카운트 반영
+        if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
       };
-    }
-  };
-}
-
-// ============================================================================
-// 🚀 [군사급 암호화 엔진] Web Crypto API (AES-GCM 256bit)
-// 상용 보안 앱에 사용되는 최상위 레벨의 브라우저 내장 암호화 시스템입니다.
-// ============================================================================
-
-// 1. 사용자의 비밀번호(문자열)를 강력한 AES-GCM 256비트 암호화 키로 변환하는 해시 공장
-async function getCryptoKey(password) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits", "deriveKey"],
-  );
-  // 소금(Salt)은 로컬 DB 특성상 기기 간 동기화 후에도 복호화할 수 있도록 강력한 고정값을 사용합니다.
-  const salt = enc.encode("ZenNotes_Ultimate_Crypto_Salt_2026");
-
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"],
-  );
-}
-
-// 2. 평문 텍스트(Base64 이미지 포함) -> 복호화 불가능한 외계어(암호문)로 변환
-async function encryptData(plainText, cryptoKey) {
-  if (!plainText) return "";
-
-  const iv = crypto.getRandomValues(new Uint8Array(12)); // 12바이트 랜덤 IV (초기화 벡터) 생성
-  const enc = new TextEncoder();
-
-  // 본문을 완전히 갈아엎어 암호화 버퍼로 변환합니다.
-  const encryptedBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv },
-    cryptoKey,
-    enc.encode(plainText),
-  );
-
-  // IV와 암호문을 한 덩어리로 합쳐서 Base64 텍스트로 인코딩합니다.
-  const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
-  combined.set(iv, 0);
-  combined.set(new Uint8Array(encryptedBuffer), iv.length);
-
-  // 🎯 대용량 데이터(사진 등) 처리를 위해 Call Stack 크래시를 방지하는 Blob FileReader 기법 적용!
-  return new Promise((resolve) => {
-    const blob = new Blob([combined]);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target.result.split(",")[1];
-      // 외계어 앞에 '이건 암호화된 노트다!'라는 꼬리표(ZENENC::)를 붙여줍니다.
-      resolve("ZENENC::" + base64);
-    };
-    reader.readAsDataURL(blob);
-  });
-}
-
-// 3. 외계어(암호문) -> 사람이 읽을 수 있는 평문으로 변환 (해독기)
-async function decryptData(encryptedText, cryptoKey) {
-  // 우리가 만든 암호문 형태가 아니면 그냥 그대로 반환(패스)합니다.
-  if (!encryptedText || !encryptedText.startsWith("ZENENC::"))
-    return encryptedText;
-
-  // 꼬리표를 떼어내고 순수 암호문만 분리
-  const base64 = encryptedText.replace("ZENENC::", "");
-  const binaryStr = atob(base64);
-  const bytes = new Uint8Array(binaryStr.length);
-
-  for (let i = 0; i < binaryStr.length; i++) {
-    bytes[i] = binaryStr.charCodeAt(i);
-  }
-
-  // 합쳐놨던 IV(12바이트)와 실제 암호 데이터를 다시 분리
-  const iv = bytes.slice(0, 12);
-  const data = bytes.slice(12);
-
-  // 열쇠(cryptoKey)를 넣고 자물쇠를 풉니다!
-  const decryptedBuffer = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv },
-    cryptoKey,
-    data,
-  );
-
-  // 한국어/영어로 완벽하게 복원!
-  return new TextDecoder().decode(decryptedBuffer);
-}
-
-async function executeSave() {
-  if (isSaving || isLoading) {
-    pendingSave = true;
-    return;
-  }
-  const title =
-    document.getElementById("memo-title-input").value.trim() ||
-    "제목 없는 노트";
-  const content = quill.root.innerHTML,
-    plainText = quill.getText();
-  const hasNoText = plainText.trim() === "";
-  const hasNoImage = !content.includes("<img");
-
-  // 신규 노트인데 내용이 아무것도 없으면 저장하지 않음
-  if (
-    !currentMemoId &&
-    !document.getElementById("memo-title-input").value &&
-    hasNoText &&
-    hasNoImage
-  ) {
-    updateUIState("saved");
-    saveTimer = null;
-    return;
-  }
-
-  isSaving = true;
-  updateUIState("saving");
-
-  // 🎯 1. 현재 편집 중인 노트가 암호화 대상(보안 폴더 소속)인지 검증합니다.
-  const targetParentId = currentMemoId
-    ? await getMemoParentIdDB(currentMemoId)
-    : targetNewMemoFolderId;
-  const isSecure = await checkIsUnderSecurity(targetParentId);
-
-  let finalContent = content;
-  let finalPlainText = plainText;
-
-  // 🎯 2. 보안 구역일 경우 암호화 수행
-  if (isSecure) {
-    if (!currentSecKey) {
-      showToast("보안 세션이 만료되어 변경 사항을 저장할 수 없습니다.");
-      isSaving = false;
-      updateUIState("saved");
-      return; // 열쇠가 없으면 평문 유출 방지를 위해 저장을 차단
-    }
-    // 본문과 순수 텍스트를 모두 AES-GCM 외계어로 변환
-    finalContent = await encryptData(content, currentSecKey);
-    finalPlainText = await encryptData(plainText, currentSecKey);
-  }
-
-  const tx = db.transaction(["memos"], "readwrite");
-  const store = tx.objectStore("memos");
-
-  if (currentMemoId) {
-    // 🎯 기존 노트 수정 시
-    store.get(currentMemoId).onsuccess = (e) => {
-      const m = e.target.result;
-      if (m) {
-        m.title = title; // 📌 제목은 검색을 위해 무조건 평문 유지!
-        m.content = finalContent;
-        m.plainText = finalPlainText;
-        m.updatedAt = Date.now();
-        // [수정] 저장이 완료된 후(put) 동기화 트리거 실행
-        store.put(m).onsuccess = () => {
-          if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync(); // 🎯 이 줄을 추가하세요
-        };
-      }
-    };
-  } else {
-    // 🎯 신규 노트 작성 시
-    const memoData = {
-      title,
-      content: finalContent,
-      plainText: finalPlainText,
-      updatedAt: Date.now(),
-      isDeleted: false,
-      type: "file",
-      syncId: generateSyncId(),
-      parentId:
-        targetNewMemoFolderId !== null
-          ? targetNewMemoFolderId
-          : globalDesktopFolderId,
-    };
-
-    // [수정] 저장이 완료된 후(add) 동기화 트리거 실행
-    store.add(memoData).onsuccess = (e) => {
-      currentMemoId = e.target.result;
-      if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync(); // 🎯 이 줄을 추가하세요
-    };
-  }
-
-  tx.oncomplete = () => {
-    isSaving = false;
-    saveTimer = null;
-    updateUIState("saved");
-    loadMemoList(true);
-    updateUnsyncedCount();
-    if (pendingSave) {
-      pendingSave = false;
-      executeSave();
     }
   };
 }
