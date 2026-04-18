@@ -652,6 +652,9 @@ function updateUIState(state) {
     runToggle();
     offlineToggleTimer = setInterval(runToggle, 3000);
   }
+  else {
+    applyState("saved", "default", "1");
+  }
 }
 
 // 🎯 [완벽 교정] 오프라인 시 "online" 단어 원천 차단

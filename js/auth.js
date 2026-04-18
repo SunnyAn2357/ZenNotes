@@ -177,7 +177,10 @@ async function smartSync() {
     const localMap = new Map();
     const itemsToPatch = [];
     localData.forEach(m => {
-      if (!m.syncId) { m.syncId = m.id.toString(); itemsToPatch.push(m); }
+      if (!m.syncId) {
+        m.syncId = generateSyncId(); // 🚀 무조건 고유 난수 발급으로 변경!
+        itemsToPatch.push(m);
+      }
       localMap.set(m.syncId, m);
     });
 
@@ -226,14 +229,21 @@ async function smartSync() {
       console.log(`⬇️ 클라우드 -> 기기: ${toDownload.length}개 다운로드 중...`);
       const downloadedMemos = [];
       for (const cMeta of toDownload) {
-        if (cMeta.type === 'folder' || cMeta.isDeleted || cMeta.isPermanentlyDeleted) {
+        // 🚀 cMeta.isDeleted 제거! 휴지통에 있어도 본문은 무조건 다운받습니다!
+        if (cMeta.type === 'folder' || cMeta.isPermanentlyDeleted) {
           downloadedMemos.push({ ...cMeta });
         } else {
-          const bodyFileId = cloudFileMap.get(`memo_${cMeta.syncId}.json`); // 고유 ID로 다운로드
+          const bodyFileId = cloudFileMap.get(`memo_${cMeta.syncId}.json`);
           if (bodyFileId) {
-            const bodyFile = await gapi.client.drive.files.get({ fileId: bodyFileId, alt: "media" });
-            const bodyData = typeof bodyFile.result === 'string' ? JSON.parse(bodyFile.result) : bodyFile.result;
-            downloadedMemos.push({ ...cMeta, content: bodyData.content, plainText: bodyData.plainText });
+            try {
+              const bodyFile = await gapi.client.drive.files.get({ fileId: bodyFileId, alt: "media" });
+              const bodyData = typeof bodyFile.result === 'string' ? JSON.parse(bodyFile.result) : bodyFile.result;
+              // 🚀 껍데기만 덮어쓰는 걸 막기 위해 fallback(|| "") 안전장치 추가
+              downloadedMemos.push({ ...cMeta, content: bodyData.content || "", plainText: bodyData.plainText || "" });
+            } catch (err) {
+              console.warn("본문 다운로드 실패. 빈 껍데기 덮어쓰기 방어!", err);
+              continue; // 에러 시 건너뜀
+            }
           }
         }
       }
