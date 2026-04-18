@@ -64,6 +64,9 @@ document.getElementById("btn-auth").addEventListener("click", () => {
     // 🚀 로그인/갱신 성공 시 수명을 다시 50분 연장!
     tokenExpiryTime = Date.now() + (50 * 60 * 1000);
 
+    // 🚀 [핵심 추가] 토큰을 정상 발급받았으니, 즉시 계기판(구름)을 파란색으로 켭니다!
+    checkAuthState();
+
     // 아이콘 깜빡임 효과
     const icon = document.querySelector("#btn-auth i");
     icon.classList.add("blink-active");
@@ -137,12 +140,35 @@ async function smartSync() {
     });
 
     // 5. 비교(Diff) 분석 - 바뀐 놈들만 솎아내기!
-    const localMap = new Map(localData.map(m => [m.syncId, m]));
+
+    // 🚀 [유령 노트 36개 완벽 해결] DB에 영구적인 주민등록증(syncId)을 발급합니다.
+    const localMap = new Map();
+    const itemsToPatch = []; // 영구 저장이 필요한 옛날 노트들 대기열
+
+    localData.forEach(m => {
+      // syncId가 없는 옛날 노트들을 발견하면?
+      if (!m.syncId) {
+        m.syncId = m.id.toString();
+        itemsToPatch.push(m); // 임시 발급 후 DB 저장 대기열에 추가
+      }
+      localMap.set(m.syncId, m);
+    });
+
+    // 🎯 임시 부여된 ID를 기기(DB)에 영구적으로 박아 넣습니다!
+    if (itemsToPatch.length > 0) {
+      const patchTx = db.transaction(["memos"], "readwrite");
+      const patchStore = patchTx.objectStore("memos");
+      itemsToPatch.forEach(m => patchStore.put(m));
+      console.log(`🛠️ 옛날 노트 ${itemsToPatch.length}개에 영구 주민등록(syncId) 발급 및 DB 저장 완료!`);
+    }
+
     const toDownload = [];
     const toUpload = [];
 
     // [다운로드 대상] 구글이 더 최신이거나 로컬에 없는 경우
     for (const cMeta of cloudIndex) {
+      if (!cMeta.syncId) continue; // 🚀 과거 제 실수로 올라간 유령 찌꺼기(undefined) 데이터 무시!
+
       const lMemo = localMap.get(cMeta.syncId);
       if (!lMemo || cMeta.updatedAt > lMemo.updatedAt) {
         toDownload.push(cMeta);
