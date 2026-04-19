@@ -335,9 +335,10 @@ function updateUIState(state) {
   if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
   if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
 
-  // 이벤트가 끝났거나 신호가 오면 무조건 미동기 카운터(구름 확인 로직)로 넘김
+  // 이벤트가 끝났거나 신호가 오면 기본 상태로 돌림
   if (!state || state === "default" || state === "offline-idle" || state === "online-idle") {
-    updateUnsyncedCount();
+    // 🚀 [핵심 교정] 기본 상태로 돌아갈 때는 방어막을 무시하라고 'true' 특권을 쥐여줍니다!
+    updateUnsyncedCount(true);
     return;
   }
 
@@ -374,7 +375,7 @@ function updateUIState(state) {
   }
 }
 
-// 🎯 기본 상태(Default) 매니저
+// 🎯 기본 상태(Default) 매니저. [핵심 교정] 특권표(forceUpdate) 매개변수를 추가합니다. 기본값은 false입니다.
 function updateUnsyncedCount() {
   if (!db) return;
   const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
@@ -389,7 +390,9 @@ function updateUnsyncedCount() {
     // 화면이 단발성 이벤트(saving 등) 중이면 덮어쓰지 않고 대기
     const currentText = document.querySelector(".status-text")?.innerText || "";
     const isEventRunning = ["saving", "saved", "syncing", "synced", "sync error"].includes(currentText);
-    if (isEventRunning) return;
+
+    // 🚀 [핵심 교정] 특권표(forceUpdate)가 없을 때만 방어막을 작동시킵니다! 특권이 있으면 무조건 통과!
+    if (!forceUpdate && isEventRunning) return;
 
     if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
 
