@@ -3,7 +3,7 @@
 // (이 파일은 V3 업데이트가 완전히 안정화된 후 다음 버전에서 삭제될 임시 스크립트입니다.)
 // ============================================================================
 
-async function runV3MigrationTest() {
+async function runV3MigrationTest(oldFileId) {
     if (!gapiInited || !gapi.client || gapi.client.getToken() === null) {
         alert("구글 클라우드에 연결되어 있지 않습니다.");
         return;

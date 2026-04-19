@@ -308,7 +308,7 @@ let offlineToggleTimer = null;
 
 function checkIsOffline() {
   if (typeof window.isZenOnline === "function") {
-    return !window.isZenOnline(); 
+    return !window.isZenOnline();
   }
   return true;
 }

@@ -25,9 +25,8 @@ function gisLoaded() {
 function checkAuthState() {
   const currentTime = Date.now();
 
-  // 🚀 [핵심 수정] 토큰이 존재하고, 50분 수명도 아직 안 지났을 때만 '유효'로 인정!
-  const hasToken =
-    gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null && currentTime < tokenExpiryTime;
+  // 🚀 [핵심 수정] 토큰이 존재하고, 59분 수명도 아직 안 지났을 때만 '유효'로 인정!
+  const hasToken = window.isZenOnline();
 
   const authBtnIcon = document.querySelector("#btn-auth i");
   if (authBtnIcon) authBtnIcon.style.color = hasToken ? "var(--accent)" : "";
