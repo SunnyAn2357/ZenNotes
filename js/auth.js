@@ -470,22 +470,29 @@ async function checkAndMigrateV3() {
   }
 }
 
-// 🎯 [신규] 공식 인증 상태 확인 창구 (Single Source of Truth)
-// 다른 파일(db.js 등)에서 window.isZenOnline()을 호출하여 현재 연결 상태를 확인할 수 있습니다.
+// // 🎯 [신규] 공식 인증 상태 확인 창구 (Single Source of Truth)
+// // 다른 파일(db.js 등)에서 window.isZenOnline()을 호출하여 현재 연결 상태를 확인할 수 있습니다.
+// window.isZenOnline = function () {
+//   try {
+//     const currentTime = Date.now();
+//     // 1. API 로드 완료 여부 2. 토큰 존재 여부 3. 59분 수명 내인지 여부를 통합 판단
+//     return (
+//       typeof gapiInited !== 'undefined' && gapiInited &&
+//       typeof gisInited !== 'undefined' && gisInited &&
+//       window.gapi && window.gapi.client &&
+//       window.gapi.client.getToken() !== null &&
+//       typeof tokenExpiryTime !== 'undefined' &&
+//       currentTime < tokenExpiryTime
+//     );
+//   } catch (e) {
+//     console.error("인증 상태 확인 중 오류:", e);
+//     return false;
+//   }
+// };
+
+
 window.isZenOnline = function () {
-  try {
-    const currentTime = Date.now();
-    // 1. API 로드 완료 여부 2. 토큰 존재 여부 3. 59분 수명 내인지 여부를 통합 판단
-    return (
-      typeof gapiInited !== 'undefined' && gapiInited &&
-      typeof gisInited !== 'undefined' && gisInited &&
-      window.gapi && window.gapi.client &&
-      window.gapi.client.getToken() !== null &&
-      typeof tokenExpiryTime !== 'undefined' &&
-      currentTime < tokenExpiryTime
-    );
-  } catch (e) {
-    console.error("인증 상태 확인 중 오류:", e);
-    return false;
-  }
+  const currentTime = Date.now();
+  // 🚀 와이파이 연결 상태가 아닌, 오직 '구글 API 토큰'이 살아있는지만 검사합니다!
+  return gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null && currentTime < tokenExpiryTime;
 };
