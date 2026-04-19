@@ -301,10 +301,7 @@ async function decryptData(encryptedText, cryptoKey) {
 // 📊 [상태 계기판 UI 제어 구역] 
 // ============================================================================
 
-let statusTextTimer = null;
 let offlineToggleTimer = null;
-let typingStartTime = 0;
-let syncStartTime = 0;
 
 // 🎯 [핵심] 아무 계산도 하지 않습니다. 오직 auth.js가 꽂아둔 깃발(ZEN_IS_ONLINE)만 쳐다봅니다!
 function checkIsOffline() {
