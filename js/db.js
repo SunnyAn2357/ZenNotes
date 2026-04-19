@@ -306,9 +306,11 @@ async function decryptData(encryptedText, cryptoKey) {
 
 let offlineToggleTimer = null;
 
-// 🎯 [핵심] 아무 계산도 하지 않습니다. 오직 auth.js가 꽂아둔 깃발(ZEN_IS_ONLINE)만 쳐다봅니다!
 function checkIsOffline() {
-  return window.ZEN_IS_ONLINE !== true;
+  if (typeof window.isZenOnline === "function") {
+    return !window.isZenOnline(); 
+  }
+  return true;
 }
 
 // 🎯 상태점 색상 및 텍스트 렌더링 헬퍼
