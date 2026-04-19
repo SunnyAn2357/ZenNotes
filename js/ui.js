@@ -503,16 +503,3 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 });
-
-// ============================================================================
-// 📡 [V3 화룡점정] 기기 Wi-Fi / LTE 실시간 연결 감지 센서
-// ============================================================================
-window.addEventListener('offline', () => {
-  console.log("📡 인터넷 연결이 끊어졌습니다. 오프라인 모드로 전환합니다.");
-  if (typeof updateUIState === 'function') updateUIState("offline-idle");
-});
-
-window.addEventListener('online', () => {
-  console.log("📡 인터넷이 복구되었습니다. 구글 연결 상태를 재확인합니다.");
-  if (typeof checkAuthState === 'function') checkAuthState();
-});
