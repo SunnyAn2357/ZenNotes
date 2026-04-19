@@ -297,6 +297,128 @@ async function decryptData(encryptedText, cryptoKey) {
   return new TextDecoder().decode(decryptedBuffer);
 }
 
+// ============================================================================
+// 📊 [상태 계기판 UI 제어 구역] 
+// ============================================================================
+
+let statusTextTimer = null;
+let offlineToggleTimer = null;
+let typingStartTime = 0;
+let syncStartTime = 0;
+
+// 🎯 [교정] auth.js의 공식 창구(isZenOnline)를 통해 오프라인 여부를 판별합니다.
+function checkIsOffline() {
+  if (typeof window.isZenOnline === "function") {
+    return !window.isZenOnline(); // 온라인이 아니면 오프라인!
+  }
+  return true; // 창구가 없으면 안전하게 오프라인 취급
+}
+
+// 🎯 상태점 UI를 물리적으로 그리는 핵심 헬퍼 함수
+function renderStatusUI(dotClass, textStr, opacityStr, isGray = false) {
+  const statusDots = document.querySelectorAll(".status-dot");
+  const statusTexts = document.querySelectorAll(".status-text");
+
+  statusDots.forEach((dot) => {
+    dot.className = `status-dot ${dotClass}`;
+    if (isGray) {
+      dot.style.backgroundColor = "#888888"; // 강제 회색
+      dot.style.boxShadow = "none";
+    } else {
+      dot.style.backgroundColor = ""; // 원래 CSS 색상 복구
+      dot.style.boxShadow = "";
+    }
+  });
+
+  statusTexts.forEach((t) => {
+    t.innerText = textStr;
+    if (opacityStr !== undefined) t.style.opacity = opacityStr;
+  });
+}
+
+// 🎯 단발성 이벤트(저장/동기화) 전용 일방통행 컨트롤러
+function updateUIState(state) {
+  if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
+  if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
+
+  // 🚀 핵심: 이벤트 종료 신호가 오면, 다시 구름(auth.js)의 상태를 확인하러 갑니다.
+  if (!state || state === "default" || state === "offline-idle" || state === "online-idle") {
+    updateUnsyncedCount();
+    return;
+  }
+
+  // --- 이하 단발성 이벤트 시각 효과 ---
+  if (state === "typing" || state === "saving") {
+    if (typingStartTime === 0) typingStartTime = Date.now();
+    renderStatusUI("unsaved pulse-fast", "saving", "1", false);
+  } else if (state === "saved") {
+    const elapsed = Date.now() - typingStartTime;
+    const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
+    statusTextTimer = setTimeout(() => {
+      if (saveTimer || isSaving) return;
+      typingStartTime = 0;
+      renderStatusUI("saved pulse-slow", "saved", "1", false);
+      statusTextTimer = setTimeout(() => {
+        if (!saveTimer && !isSaving) updateUIState("default");
+      }, 2000);
+    }, remain);
+  } else if (state === "syncing") {
+    syncStartTime = Date.now();
+    renderStatusUI("unsaved pulse-fast", "syncing", "1", false);
+  } else if (state === "synced") {
+    const elapsed = Date.now() - syncStartTime;
+    const remain = syncStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
+    statusTextTimer = setTimeout(() => {
+      syncStartTime = 0;
+      renderStatusUI("saved", "synced", "1", false);
+      statusTextTimer = setTimeout(() => {
+        updateUIState("default");
+      }, 2000);
+    }, remain);
+  } else if (state === "sync-error") {
+    renderStatusUI("unsaved", "sync error", "1", false);
+  }
+}
+
+// 🎯 "기본 상태(Default)" 화면 총괄 매니저
+function updateUnsyncedCount() {
+  if (!db) return;
+  const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
+
+  db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => {
+    const memos = e.target.result;
+    const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
+
+    // ☁️ auth.js가 선언한 진실을 묻습니다.
+    const isOffline = checkIsOffline();
+
+    // 단발성 이벤트가 진행 중이면 UI를 덮어쓰지 않고 조용히 개수만 계산하고 빠집니다.
+    const currentText = document.querySelector(".status-text")?.innerText || "";
+    const isEventRunning = ["saving", "saved", "syncing", "synced", "sync error"].includes(currentText);
+    if (isEventRunning) return;
+
+    if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
+
+    if (isOffline) {
+      // 🚀 오프라인: 공식 창구가 오프라인이라 했으니, 회색점 + 3초 교차 출력을 가동합니다.
+      let showOfflineLabel = true;
+      const nsText = `미동기: ${unsyncedCount}`;
+
+      const runToggle = () => {
+        renderStatusUI("saved offline", showOfflineLabel ? "offline" : nsText, "0.7", true);
+        showOfflineLabel = !showOfflineLabel;
+      };
+      runToggle();
+      offlineToggleTimer = setInterval(runToggle, 3000);
+
+    } else {
+      // 🚀 온라인: 공식 창구가 온라인이라 했으니, 푸른점 + 상태 메시지를 출력합니다.
+      const displayText = unsyncedCount === 0 ? "online" : `미동기: ${unsyncedCount}`;
+      renderStatusUI("saved", displayText, "1", false);
+    }
+  };
+}
+
 // 🎯 [신규 함수 추가] 파일 시스템 초기화 및 기존 데이터 바탕화면으로 마이그레이션
 async function initFileSystem() {
   return new Promise((resolve) => {
@@ -715,128 +837,6 @@ function openTopDesktopMemo() {
       if (typeof loadMemo === 'function') loadMemo(desktopMemos[0].id);
     } else {
       if (typeof createNewMemo === 'function') createNewMemo();
-    }
-  };
-}
-
-// ============================================================================
-// 📊 [상태 계기판 UI 제어 구역] 
-// ============================================================================
-
-let statusTextTimer = null;
-let offlineToggleTimer = null;
-let typingStartTime = 0;
-let syncStartTime = 0;
-
-// 🎯 [교정] auth.js의 공식 창구(isZenOnline)를 통해 오프라인 여부를 판별합니다.
-function checkIsOffline() {
-  if (typeof window.isZenOnline === "function") {
-    return !window.isZenOnline(); // 온라인이 아니면 오프라인!
-  }
-  return true; // 창구가 없으면 안전하게 오프라인 취급
-}
-
-// 🎯 상태점 UI를 물리적으로 그리는 핵심 헬퍼 함수
-function renderStatusUI(dotClass, textStr, opacityStr, isGray = false) {
-  const statusDots = document.querySelectorAll(".status-dot");
-  const statusTexts = document.querySelectorAll(".status-text");
-
-  statusDots.forEach((dot) => {
-    dot.className = `status-dot ${dotClass}`;
-    if (isGray) {
-      dot.style.backgroundColor = "#888888"; // 강제 회색
-      dot.style.boxShadow = "none";
-    } else {
-      dot.style.backgroundColor = ""; // 원래 CSS 색상 복구
-      dot.style.boxShadow = "";
-    }
-  });
-
-  statusTexts.forEach((t) => {
-    t.innerText = textStr;
-    if (opacityStr !== undefined) t.style.opacity = opacityStr;
-  });
-}
-
-// 🎯 단발성 이벤트(저장/동기화) 전용 일방통행 컨트롤러
-function updateUIState(state) {
-  if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
-  if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
-
-  // 🚀 핵심: 이벤트 종료 신호가 오면, 다시 구름(auth.js)의 상태를 확인하러 갑니다.
-  if (!state || state === "default" || state === "offline-idle" || state === "online-idle") {
-    updateUnsyncedCount();
-    return;
-  }
-
-  // --- 이하 단발성 이벤트 시각 효과 ---
-  if (state === "typing" || state === "saving") {
-    if (typingStartTime === 0) typingStartTime = Date.now();
-    renderStatusUI("unsaved pulse-fast", "saving", "1", false);
-  } else if (state === "saved") {
-    const elapsed = Date.now() - typingStartTime;
-    const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
-    statusTextTimer = setTimeout(() => {
-      if (saveTimer || isSaving) return;
-      typingStartTime = 0;
-      renderStatusUI("saved pulse-slow", "saved", "1", false);
-      statusTextTimer = setTimeout(() => {
-        if (!saveTimer && !isSaving) updateUIState("default");
-      }, 2000);
-    }, remain);
-  } else if (state === "syncing") {
-    syncStartTime = Date.now();
-    renderStatusUI("unsaved pulse-fast", "syncing", "1", false);
-  } else if (state === "synced") {
-    const elapsed = Date.now() - syncStartTime;
-    const remain = syncStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
-    statusTextTimer = setTimeout(() => {
-      syncStartTime = 0;
-      renderStatusUI("saved", "synced", "1", false);
-      statusTextTimer = setTimeout(() => {
-        updateUIState("default");
-      }, 2000);
-    }, remain);
-  } else if (state === "sync-error") {
-    renderStatusUI("unsaved", "sync error", "1", false);
-  }
-}
-
-// 🎯 "기본 상태(Default)" 화면 총괄 매니저
-function updateUnsyncedCount() {
-  if (!db) return;
-  const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
-
-  db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => {
-    const memos = e.target.result;
-    const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
-
-    // ☁️ auth.js가 선언한 진실을 묻습니다.
-    const isOffline = checkIsOffline();
-
-    // 단발성 이벤트가 진행 중이면 UI를 덮어쓰지 않고 조용히 개수만 계산하고 빠집니다.
-    const currentText = document.querySelector(".status-text")?.innerText || "";
-    const isEventRunning = ["saving", "saved", "syncing", "synced", "sync error"].includes(currentText);
-    if (isEventRunning) return;
-
-    if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
-
-    if (isOffline) {
-      // 🚀 오프라인: 공식 창구가 오프라인이라 했으니, 회색점 + 3초 교차 출력을 가동합니다.
-      let showOfflineLabel = true;
-      const nsText = `미동기: ${unsyncedCount}`;
-
-      const runToggle = () => {
-        renderStatusUI("saved offline", showOfflineLabel ? "offline" : nsText, "0.7", true);
-        showOfflineLabel = !showOfflineLabel;
-      };
-      runToggle();
-      offlineToggleTimer = setInterval(runToggle, 3000);
-
-    } else {
-      // 🚀 온라인: 공식 창구가 온라인이라 했으니, 푸른점 + 상태 메시지를 출력합니다.
-      const displayText = unsyncedCount === 0 ? "online" : `미동기: ${unsyncedCount}`;
-      renderStatusUI("saved", displayText, "1", false);
     }
   };
 }
