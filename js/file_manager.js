@@ -1493,7 +1493,7 @@ function createNewMemo(folderId = null) {
 
   isLoading = true;
   quill.root.innerHTML = "";
-  updateUIState("idle");
+  updateUIState("default");
 
   loadMemoList(false);
   closeAllPanelsMobile();
@@ -1908,7 +1908,7 @@ async function loadMemo(id) {
 
         quill.root.innerHTML = finalContent;
 
-        updateUIState("idle"); // 조용히 대기 상태 유지
+        updateUIState("default");
 
         if (previousMemoId) purgeMemoIfEmpty(previousMemoId);
 
