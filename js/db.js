@@ -728,23 +728,15 @@ let offlineToggleTimer = null;
 let typingStartTime = 0;
 let syncStartTime = 0;
 
-// 🎯 [신규 1] 단일 진실 공급원: 구름(auth.js)과 100% 똑같은 기준으로 오프라인 여부를 판별합니다.
+// 🎯 [교정] auth.js의 공식 창구(isZenOnline)를 통해 오프라인 여부를 판별합니다.
 function checkIsOffline() {
-  try {
-    const currentTime = Date.now();
-    // auth.js에 있는 전역 변수들을 확인하여, 토큰이 존재하고 59분 수명이 안 지났는지 깐깐하게 검사
-    const hasToken = typeof gapiInited !== 'undefined' && gapiInited &&
-      typeof gisInited !== 'undefined' && gisInited &&
-      typeof gapi !== 'undefined' && gapi.client &&
-      gapi.client.getToken() !== null &&
-      typeof tokenExpiryTime !== 'undefined' && currentTime < tokenExpiryTime;
-    return !hasToken; // 토큰이 없거나 만료되었으면 true(오프라인) 반환
-  } catch (e) {
-    return true; // 에러 시 안전하게 오프라인으로 간주
+  if (typeof window.isZenOnline === "function") {
+    return !window.isZenOnline(); // 온라인이 아니면 오프라인!
   }
+  return true; // 창구가 없으면 안전하게 오프라인 취급
 }
 
-// 🎯 [신규 2] 상태점 UI를 물리적으로 그리는 핵심 헬퍼 함수
+// 🎯 상태점 UI를 물리적으로 그리는 핵심 헬퍼 함수
 function renderStatusUI(dotClass, textStr, opacityStr, isGray = false) {
   const statusDots = document.querySelectorAll(".status-dot");
   const statusTexts = document.querySelectorAll(".status-text");
@@ -755,7 +747,7 @@ function renderStatusUI(dotClass, textStr, opacityStr, isGray = false) {
       dot.style.backgroundColor = "#888888"; // 강제 회색
       dot.style.boxShadow = "none";
     } else {
-      dot.style.backgroundColor = ""; // 원래 CSS 색상 (푸른색/붉은색)
+      dot.style.backgroundColor = ""; // 원래 CSS 색상 복구
       dot.style.boxShadow = "";
     }
   });
@@ -766,14 +758,13 @@ function renderStatusUI(dotClass, textStr, opacityStr, isGray = false) {
   });
 }
 
-// 🎯 [완벽 교정] 단발성 이벤트(저장/동기화) 전용 일방통행 컨트롤러
+// 🎯 단발성 이벤트(저장/동기화) 전용 일방통행 컨트롤러
 function updateUIState(state) {
   if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
   if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
 
-  // 🚀 기획자님 제안의 핵심! 
-  // 이벤트가 끝났거나 기본 상태로 가라는 명령이 오면, 미동기 카운트 함수에게 화면 그리기를 완전히 토스합니다!
-  if (!state || state === "default") {
+  // 🚀 핵심: 이벤트 종료 신호가 오면, 다시 구름(auth.js)의 상태를 확인하러 갑니다.
+  if (!state || state === "default" || state === "offline-idle" || state === "online-idle") {
     updateUnsyncedCount();
     return;
   }
@@ -790,7 +781,7 @@ function updateUIState(state) {
       typingStartTime = 0;
       renderStatusUI("saved pulse-slow", "saved", "1", false);
       statusTextTimer = setTimeout(() => {
-        if (!saveTimer && !isSaving) updateUIState("default"); // 이벤트 끝나면 구름에게 복귀
+        if (!saveTimer && !isSaving) updateUIState("default");
       }, 2000);
     }, remain);
   } else if (state === "syncing") {
@@ -803,7 +794,7 @@ function updateUIState(state) {
       syncStartTime = 0;
       renderStatusUI("saved", "synced", "1", false);
       statusTextTimer = setTimeout(() => {
-        updateUIState("default"); // 이벤트 끝나면 구름에게 복귀
+        updateUIState("default");
       }, 2000);
     }, remain);
   } else if (state === "sync-error") {
@@ -811,7 +802,7 @@ function updateUIState(state) {
   }
 }
 
-// 🎯 [완벽 교정] "기본 상태(Default)" 화면 총괄 매니저
+// 🎯 "기본 상태(Default)" 화면 총괄 매니저
 function updateUnsyncedCount() {
   if (!db) return;
   const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
@@ -820,21 +811,18 @@ function updateUnsyncedCount() {
     const memos = e.target.result;
     const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
 
-    // ☁️ 구름의 진짜 상태(진실)를 묻습니다.
+    // ☁️ auth.js가 선언한 진실을 묻습니다.
     const isOffline = checkIsOffline();
 
-    // 🚨 방어막: 만약 화면이 단발성 이벤트(saving, syncing 등) 중이라면, 
-    // 글자를 덮어쓰지 말고 조용히 개수만 계산하고 빠집니다. (나중에 default로 돌아올 때 그려짐)
+    // 단발성 이벤트가 진행 중이면 UI를 덮어쓰지 않고 조용히 개수만 계산하고 빠집니다.
     const currentText = document.querySelector(".status-text")?.innerText || "";
     const isEventRunning = ["saving", "saved", "syncing", "synced", "sync error"].includes(currentText);
     if (isEventRunning) return;
 
-    // 기존 오프라인 타이머 청소
     if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
 
-    // ☁️ 상태점에 구름의 진실을 그대로 투영합니다.
     if (isOffline) {
-      // 오프라인: 강제 회색점 + 3초 교차 출력
+      // 🚀 오프라인: 공식 창구가 오프라인이라 했으니, 회색점 + 3초 교차 출력을 가동합니다.
       let showOfflineLabel = true;
       const nsText = `미동기: ${unsyncedCount}`;
 
@@ -846,7 +834,7 @@ function updateUnsyncedCount() {
       offlineToggleTimer = setInterval(runToggle, 3000);
 
     } else {
-      // 온라인: 원래 색상(푸른점) + (0개면 online, N개면 미동기: N)
+      // 🚀 온라인: 공식 창구가 온라인이라 했으니, 푸른점 + 상태 메시지를 출력합니다.
       const displayText = unsyncedCount === 0 ? "online" : `미동기: ${unsyncedCount}`;
       renderStatusUI("saved", displayText, "1", false);
     }
