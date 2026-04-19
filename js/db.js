@@ -379,7 +379,7 @@ function updateUIState(state) {
 }
 
 // 🎯 기본 상태(Default) 매니저. [핵심 교정] 특권표(forceUpdate) 매개변수를 추가합니다. 기본값은 false입니다.
-function updateUnsyncedCount() {
+function updateUnsyncedCount(forceUpdate = false) {
   if (!db) return;
   const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
 
