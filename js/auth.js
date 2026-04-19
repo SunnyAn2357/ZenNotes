@@ -32,6 +32,9 @@ function checkAuthState() {
   const authBtnIcon = document.querySelector("#btn-auth i");
   if (authBtnIcon) authBtnIcon.style.color = hasToken ? "var(--accent)" : "";
 
+  // 🚀 [여기 딱 1줄만 추가!] 브라우저 전체에 현재 구름의 진짜 상태를 깃발로 꽂습니다!
+  window.ZEN_IS_ONLINE = hasToken;
+
   if (hasToken) {
     // 🎯 토큰이 유효할 땐 무조건 online이 아니라, 미동기 개수를 다시 세도록 넘깁니다. 
     // (미동기가 0일 때 'online'으로 띄우는 세부 로직은 다음 ui.js 수정 시 추가하겠습니다)
