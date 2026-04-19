@@ -1493,7 +1493,8 @@ function createNewMemo(folderId = null) {
 
   isLoading = true;
   quill.root.innerHTML = "";
-  updateUIState("default");
+
+  if (typeof checkAuthState === 'function') checkAuthState();
 
   loadMemoList(false);
   closeAllPanelsMobile();
@@ -1908,7 +1909,7 @@ async function loadMemo(id) {
 
         quill.root.innerHTML = finalContent;
 
-        updateUIState("default");
+        if (typeof checkAuthState === 'function') checkAuthState();
 
         if (previousMemoId) purgeMemoIfEmpty(previousMemoId);
 
