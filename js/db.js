@@ -44,6 +44,9 @@ request.onsuccess = async (e) => {
     runAutoPurge();
     loadMemoList();
 
+    // 🚀 [여기 딱 1줄 추가!] DB가 무사히 깨어났으니, 아까 무시당했던 계기판 업데이트를 강제로 1회 실행시킵니다!
+    if (typeof updateUIState === 'function') updateUIState("default");
+
     // 🚀 [V3 완벽 복구] 삭제된 노트 걸러내고 가장 최신 노트 열기
     const lastOpenedId = Number(localStorage.getItem('zen_last_opened'));
 
