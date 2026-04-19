@@ -577,8 +577,8 @@ function updateUIState(state) {
   if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
   if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
 
-  const hasToken = window.gapi && window.gapi.client && window.gapi.client.getToken();
-  const isOffline = !hasToken;
+  // 🚀 [수정할 부분] 무의미한 인터넷망 센서 폐기! auth.js와 동일하게 59분 수명(tokenExpiryTime)을 정확히 검사합니다.
+  const isOffline = !(window.gapi && window.gapi.client && window.gapi.client.getToken() !== null && Date.now() < (window.tokenExpiryTime || 0));
 
   // 🚀 [핵심 교정] 앱이 쉬려고(default) 할 때, 오프라인이면 강제로 교차 출력 모드(offline-idle)로 방향을 꺾어버립니다!
   if ((!state || state === "default") && isOffline) {
@@ -667,8 +667,8 @@ function updateUnsyncedCount() {
     const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
     const statusTexts = document.querySelectorAll(".status-text");
 
-    const hasToken = window.gapi && window.gapi.client && window.gapi.client.getToken();
-    const isOffline = !hasToken;
+    // 🚀 [수정할 부분] 여기서도 똑같이 59분 수명을 깐깐하게 검사합니다.
+    const isOffline = !(window.gapi && window.gapi.client && window.gapi.client.getToken() !== null && Date.now() < (window.tokenExpiryTime || 0));
 
     statusTexts.forEach((t) => {
       // 🚀 핵심: 오프라인이면 0개라도 "online" 대신 "미동기: 0"을 저장해둡니다!
