@@ -378,7 +378,7 @@ function updateUIState(state) {
   }
 }
 
-// 🎯 기본 상태(Default) 매니저. [핵심 교정] 특권표(forceUpdate) 매개변수를 추가합니다. 기본값은 false입니다.
+// 🎯 [완벽 교정] 괄호 안에 강제 업데이트 특권(forceUpdate = false)이 반드시 있어야 합니다!
 function updateUnsyncedCount(forceUpdate = false) {
   if (!db) return;
   const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
@@ -387,19 +387,20 @@ function updateUnsyncedCount(forceUpdate = false) {
     const memos = e.target.result;
     const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
 
-    // ☁️ 계산은 버리고, auth.js의 깃발을 확인합니다.
+    // ☁️ auth.js가 선언한 진실을 묻습니다.
     const isOffline = checkIsOffline();
 
-    // 화면이 단발성 이벤트(saving 등) 중이면 덮어쓰지 않고 대기
+    // 단발성 이벤트가 진행 중인지 확인합니다.
     const currentText = document.querySelector(".status-text")?.innerText || "";
     const isEventRunning = ["saving", "saved", "syncing", "synced", "sync error"].includes(currentText);
 
-    // 🚀 [핵심 교정] 특권표(forceUpdate)가 없을 때만 방어막을 작동시킵니다! 특권이 있으면 무조건 통과!
+    // 🚀 [에러 해결 구역] 특권(forceUpdate)이 없을 때만 화면 덮어쓰기를 방어합니다!
     if (!forceUpdate && isEventRunning) return;
 
     if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
 
     if (isOffline) {
+      // 🚀 오프라인: 회색점 + 3초 교차 출력을 가동합니다.
       let showOfflineLabel = true;
       const nsText = `미동기: ${unsyncedCount}`;
 
@@ -409,7 +410,9 @@ function updateUnsyncedCount(forceUpdate = false) {
       };
       runToggle();
       offlineToggleTimer = setInterval(runToggle, 3000);
+
     } else {
+      // 🚀 온라인: 푸른점 + 상태 메시지를 출력합니다.
       const displayText = unsyncedCount === 0 ? "online" : `미동기: ${unsyncedCount}`;
       renderStatusUI("saved", displayText, "1", false);
     }
