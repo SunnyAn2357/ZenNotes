@@ -195,13 +195,37 @@ async function smartSync() {
     const toDownload = [];
     const toUpload = [];
     const toCloudDelete = [];
-    let needIndexPatch = false; // 🚀 [추가] 명부 강제 덮어쓰기 깃발
-    let needUIUpdate = false;   // 🚀 [이사] 화면 새로고침 깃발을 친구들 옆으로 모아둠!
+    let needIndexPatch = false; // 명부 강제 덮어쓰기 깃발
+    let needUIUpdate = false;   // 화면 새로고침 깃발을 친구들 옆으로 모아둠!
+    const toLocalDelete = [];   // 사망진단서를 보고 내 기기에서 치울 명단
+
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const originalLength = cloudIndex.length;
+
+    // [30일 청소기] 명부를 훑으면서 30일 지난 진단서는 파쇄(제외)합니다.
+    cloudIndex = cloudIndex.filter(cMeta => {
+      if (cMeta.isPermanentlyDeleted && (now - cMeta.updatedAt > THIRTY_DAYS)) {
+        return false; // 30일 지났으면 파쇄! (배열에서 제거됨)
+      }
+      return true;
+    });
+
+    if (cloudIndex.length !== originalLength) needIndexPatch = true; // 청소했으면 덮어쓰기 예약
 
     // [클라우드 -> 로컬] 구글이 더 최신인 경우
     for (const cMeta of cloudIndex) {
       if (!cMeta.syncId) continue;
       const lMemo = localMap.get(cMeta.syncId);
+
+      // 🚀 [신규: 시체 치우기] 구글 명부에 사망진단서가 붙어있다면?
+      if (cMeta.isPermanentlyDeleted) {
+        if (lMemo && cMeta.updatedAt > lMemo.updatedAt) {
+          toLocalDelete.push(lMemo.id); // 내 기기의 시체를 사형 큐에 넣음
+        }
+        continue; // 진단서는 다운로드(toDownload) 안 함!
+      }
+
       if (!lMemo || cMeta.updatedAt > lMemo.updatedAt) toDownload.push(cMeta);
     }
 
@@ -241,6 +265,13 @@ async function smartSync() {
         }
         toUpload.push(lMemo);
       }
+    }
+
+    // 🚀 [신규: 시체 치우기 실행] 진단서 확인 후 로컬 기기 물리적 폭파!
+    if (toLocalDelete.length > 0) {
+      const delTx = db.transaction(["memos"], "readwrite");
+      toLocalDelete.forEach(id => delTx.objectStore("memos").delete(id));
+      needUIUpdate = true;
     }
 
     // 6. 다운로드 실행
@@ -292,17 +323,24 @@ async function smartSync() {
             await gapi.client.drive.files.delete({ fileId: cloudId });
           }
 
-          // 2. 🎯 [수정됨] 구글이 "삭제 성공"이라고 회신했을 때만 아래 코드가 실행됩니다!
-          // 명부에서 기록 삭제
+          // 🚀 [수정됨] 명부에서 파내지 않고 사망진단서를 덮어씁니다.
           const idx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-          if (idx > -1) cloudIndex.splice(idx, 1);
+          const tombstone = {
+            syncId: lMemo.syncId,
+            isPermanentlyDeleted: true, // 사망 판정
+            updatedAt: Date.now()
+          };
 
-          // 로컬 DB에서도 마침내 물리적 삭제 완료!
+          if (idx > -1) cloudIndex[idx] = tombstone;
+          else cloudIndex.push(tombstone);
+
+          needIndexPatch = true; // 명부 덮어쓰기 예약!
+
+          // 로컬 DB에서도 물리적 삭제 완료
           const delTx = db.transaction(["memos"], "readwrite");
           delTx.objectStore("memos").delete(lMemo.id);
 
         } catch (e) {
-          // 3. 만약 구글이 "삭제 실패"라고 회신하면, 로컬 삭제를 건너뛰고 이곳으로 탈출합니다.
           console.warn("클라우드 삭제 실패 (로컬 파일은 보존됩니다):", e);
         }
       }
