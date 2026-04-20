@@ -697,6 +697,11 @@ function runAutoPurge() {
         m.updatedAt = Date.now();
         store.put(m);
 
+        // 🚀 [추가] 지우려는 대상이 폴더면, 그 안의 식구들도 전부 영구 삭제 예약!
+        if (m.type === 'folder') {
+          markDescendantsPermanentlyDeleted(store, m.id);
+        }
+
         isPurged = true; // 🚀 [추가] "지울 파일 찾았다!" 하고 깃발을 듭니다.
       }
     });
@@ -866,3 +871,22 @@ function openTopDesktopMemo() {
   };
 }
 
+// 🚀 [신규] 폴더 삭제 시 그 하위의 모든 자식들도 함께 영구 삭제 상태로 만듭니다.
+async function markDescendantsPermanentlyDeleted(store, parentId) {
+  return new Promise((resolve) => {
+    store.index("parentId").getAll(Number(parentId)).onsuccess = async (e) => {
+      const children = e.target.result;
+      for (const child of children) {
+        child.isPermanentlyDeleted = true;
+        child.updatedAt = Date.now();
+        store.put(child);
+
+        // 만약 자식이 폴더라면, 그 밑의 자식들도 또 찾으러 내려갑니다 (재귀)
+        if (child.type === 'folder') {
+          await markDescendantsPermanentlyDeleted(store, child.id);
+        }
+      }
+      resolve();
+    };
+  });
+}

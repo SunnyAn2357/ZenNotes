@@ -1411,9 +1411,6 @@ function openFileManager() {
   closeAllMemoMenus();
   forceSaveImmediate();
 
-  // 🚀 [수정] 파일 관리창 뒤쪽(배경)에 텅 빈 노트 대신 바탕화면 1등 노트를 예쁘게 깔아둡니다.
-  if (typeof openTopDesktopMemo === 'function') openTopDesktopMemo();
-
   closeAllPanelsMobile();
 
   isMultiSelectMode = false;
@@ -1473,9 +1470,9 @@ function resetFmToHome() {
   }
 }
 
-// 🎯 [수정됨] 파일 매니저 삼선 버튼: 폴더 위치 상관없이 즉시 에디터로 복귀
+// 🎯 [완벽 복구] 파일 매니저 삼선 버튼: 그냥 창만 닫으면 끝! (원래 보던 노트가 그대로 있음)
 function handleFmHamburger() {
-  closeFileManager(); // 군더더기 없이 바로 창 닫기!
+  closeFileManager();
 }
 
 function createNewMemo(folderId = null) {
@@ -1884,6 +1881,11 @@ async function loadMemo(id) {
     async (e) => {
       const m = e.target.result;
       if (m) {
+        // 🚀 [리턴 방어막 1] 방금 동기화로 지워진 노트라면 절대 화면에 띄우지 않고 컷!
+        if (m.isDeleted || m.isPermanentlyDeleted) {
+          isLoading = false;
+          return;
+        }
         currentMemoId = m.id;
         document.getElementById("memo-title-input").value = m.title;
         document.title = m.title;
@@ -2032,6 +2034,11 @@ function hardDeleteMemo(id, e) {
         memo.isPermanentlyDeleted = true;
         memo.updatedAt = Date.now();
         store.put(memo);
+
+        // 🚀 [추가] 지우는 대상이 폴더라면 자식들도 함께 영구 삭제 처리!
+        if (memo.type === 'folder') {
+          markDescendantsPermanentlyDeleted(store, memo.id);
+        }
       }
     };
   });
@@ -2067,6 +2074,11 @@ function emptyTrash() {
       memo.isPermanentlyDeleted = true;
       memo.updatedAt = Date.now();
       store.put(memo);
+
+      // 🚀 [추가] 휴지통에 있던 게 폴더라면 자식들도 함께 영구 삭제 처리!
+      if (memo.type === 'folder') {
+        markDescendantsPermanentlyDeleted(store, memo.id);
+      }
     });
 
     tx.oncomplete = () => {
