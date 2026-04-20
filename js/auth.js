@@ -269,19 +269,25 @@ async function smartSync() {
         const fileName = `memo_${lMemo.syncId}.json`;
         const cloudId = cloudFileMap.get(fileName);
 
-        // 구글 서버에서 물리적 삭제
-        if (cloudId) {
-          try { await gapi.client.drive.files.delete({ fileId: cloudId }); }
-          catch (e) { console.warn("클라우드 삭제 실패:", e); }
+        try {
+          // 1. 구글 서버에 물리적 삭제 요청
+          if (cloudId) {
+            await gapi.client.drive.files.delete({ fileId: cloudId });
+          }
+
+          // 2. 🎯 [수정됨] 구글이 "삭제 성공"이라고 회신했을 때만 아래 코드가 실행됩니다!
+          // 명부에서 기록 삭제
+          const idx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
+          if (idx > -1) cloudIndex.splice(idx, 1);
+
+          // 로컬 DB에서도 마침내 물리적 삭제 완료!
+          const delTx = db.transaction(["memos"], "readwrite");
+          delTx.objectStore("memos").delete(lMemo.id);
+
+        } catch (e) {
+          // 3. 만약 구글이 "삭제 실패"라고 회신하면, 로컬 삭제를 건너뛰고 이곳으로 탈출합니다.
+          console.warn("클라우드 삭제 실패 (로컬 파일은 보존됩니다):", e);
         }
-
-        // 명부에서 기록 삭제
-        const idx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-        if (idx > -1) cloudIndex.splice(idx, 1);
-
-        // 로컬 DB에서도 마침내 물리적 삭제 완료!
-        const delTx = db.transaction(["memos"], "readwrite");
-        delTx.objectStore("memos").delete(lMemo.id);
       }
     }
 
