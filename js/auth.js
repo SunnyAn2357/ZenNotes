@@ -194,7 +194,9 @@ async function smartSync() {
     // 5. 비교 분석 (다운로드/업로드/삭제 분류)
     const toDownload = [];
     const toUpload = [];
-    const toCloudDelete = []; // 🚀 [핵심 2] 영구 삭제 대상 전용 배열
+    const toCloudDelete = [];
+    let needIndexPatch = false; // 🚀 [추가] 명부 강제 덮어쓰기 깃발
+    let needUIUpdate = false;   // 🚀 [이사] 화면 새로고침 깃발을 친구들 옆으로 모아둠!
 
     // [클라우드 -> 로컬] 구글이 더 최신인 경우
     for (const cMeta of cloudIndex) {
@@ -207,24 +209,39 @@ async function smartSync() {
     for (const lMemo of localData) {
       const cMeta = cloudIndex.find(c => c.syncId === lMemo.syncId);
 
-      // 🚀 [핵심 3] 영구 삭제된 항목은 구글 서버 폭파 리스트로 이동
       if (lMemo.isPermanentlyDeleted) {
         toCloudDelete.push(lMemo);
         continue;
       }
 
+      // 🚀 [핵심 방어막] 파일은 안 바뀌었지만 구글 명부에 족보(parentSyncId)가 빠져있다면?
+      if (cMeta && cMeta.parentSyncId === undefined && lMemo.parentId !== null) {
+        const pNode = localData.find(d => d.id === lMemo.parentId);
+        if (pNode) {
+          cMeta.parentSyncId = pNode.syncId; // 명부에 몰래 족보를 적어줍니다.
+          needIndexPatch = true; // 명부 강제 덮어쓰기 예약!
+        }
+      }
+
       if (!cMeta || lMemo.updatedAt > cMeta.updatedAt) {
         if ((lMemo.type === 'folder' || lMemo.isDeleted) && cMeta) {
           const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-          const meta = { ...lMemo }; delete meta.content; delete meta.plainText;
+
+          let pSyncId = null;
+          if (lMemo.parentId !== null) {
+            const pNode = localData.find(d => d.id === lMemo.parentId);
+            if (pNode) pSyncId = pNode.syncId;
+          }
+
+          const meta = { ...lMemo, parentSyncId: pSyncId };
+          delete meta.content; delete meta.plainText;
           if (cIdx > -1) cloudIndex[cIdx] = meta;
+          needIndexPatch = true; // 🚀 [추가]
           continue;
         }
         toUpload.push(lMemo);
       }
     }
-
-    let needUIUpdate = false;
 
     // 6. 다운로드 실행
     if (toDownload.length > 0) {
@@ -291,27 +308,51 @@ async function smartSync() {
       }
     }
 
-    // 7. 업로드 실행 (PATCH 덮어쓰기 적용)
+    // 7. 업로드 실행 (글로벌 족보 시스템 적용 버전)
+
     if (toUpload.length > 0) {
       console.log(`⬆️ 기기 -> 클라우드: ${toUpload.length}개 업로드 중...`);
       for (const lMemo of toUpload) {
+
+        // 🚀 [신규] 내 부모의 '글로벌 주민번호(syncId)'를 찾아내는 통역 과정
+        let pSyncId = null;
+        if (lMemo.parentId !== null) {
+          // 로컬 DB 데이터를 뒤져서 부모의 syncId를 확보합니다.
+          const pNode = localData.find(d => d.id === lMemo.parentId);
+          if (pNode) pSyncId = pNode.syncId;
+        }
+
         if (lMemo.type !== 'folder') {
           const fileName = `memo_${lMemo.syncId}.json`;
-          const fileContent = JSON.stringify({ syncId: lMemo.syncId, content: lMemo.content || "", plainText: lMemo.plainText || "" });
 
-          // 🚀 [핵심 5] 구글 ID를 넘겨주어 v3_uploadFile이 무조건 덮어쓰기(PATCH)를 하게 만듦!
+          // 🚀 본문 파일 내용물에 parentSyncId를 추가하여 업로드
+          const fileContent = JSON.stringify({
+            syncId: lMemo.syncId,
+            parentSyncId: pSyncId,
+            content: lMemo.content || "",
+            plainText: lMemo.plainText || ""
+          });
+
           const existingId = cloudFileMap.get(fileName);
           await v3_uploadFile(token, fileName, fileContent, folderId, existingId);
         }
 
+        // 명부(index.json) 업데이트 준비
         const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-        const meta = { ...lMemo }; delete meta.content; delete meta.plainText;
-        if (cIdx > -1) cloudIndex[cIdx] = meta; else cloudIndex.push(meta);
+
+        // 🚀 명부 데이터에도 parentSyncId를 포함시켜서 나중에 검색/복원을 돕습니다.
+        const meta = { ...lMemo, parentSyncId: pSyncId };
+        delete meta.content;
+        delete meta.plainText;
+
+        if (cIdx > -1) cloudIndex[cIdx] = meta;
+        else cloudIndex.push(meta);
       }
     }
 
     // 변경사항이 있었다면 최종 명부(index.json)도 PATCH로 덮어쓰기
-    if (toUpload.length > 0 || toCloudDelete.length > 0) {
+    // 🚀 [교정] needIndexPatch 깃발이 올라갔을 때도 덮어쓰도록 추가!
+    if (toUpload.length > 0 || toCloudDelete.length > 0 || needIndexPatch) {
       await v3_uploadFile(token, 'index.json', JSON.stringify(cloudIndex), folderId, indexFileId);
     }
 
