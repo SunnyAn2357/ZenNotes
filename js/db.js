@@ -152,6 +152,12 @@ async function executeSave() {
     store.get(currentMemoId).onsuccess = (e) => {
       const m = e.target.result;
       if (m) {
+        // 🚀 [리턴 방어막 2] 이미 다른 기기에서 삭제된 노트라면 덮어쓰기 절대 금지!
+        if (m.isDeleted || m.isPermanentlyDeleted) {
+          isSaving = false;
+          saveTimer = null;
+          return;
+        }
         m.title = title; // 📌 제목은 검색을 위해 무조건 평문 유지!
         m.content = finalContent;
         m.plainText = finalPlainText;
@@ -631,10 +637,22 @@ function healDatabase(callback) {
 
     // 4. 가짜 폴더에 갇혀있던 파일이나 부모를 잃어버린 파일 구출 작전
     allData.forEach((m) => {
-      if (duplicateIds.has(m.id)) return; // 폭파된 가짜 폴더는 무시
+      if (duplicateIds.has(m.id)) return;
 
       let currentParent = m.parentId;
       let changed = false;
+
+      // 🚀 [신규 작전 S 추가: 글로벌 족보 번역기]
+      // 구글에서 막 다운로드되어 parentSyncId를 달고 온 녀석이라면?
+      if (m.parentSyncId) {
+        // 내 기기에서 그 글로벌 번호를 가진 진짜 부모 폴더를 찾습니다.
+        const realParent = allData.find(f => f.syncId === m.parentSyncId);
+        // 🚀 [수정됨] 양쪽 다 숫자로 바꿔서 엄격하게 비교!
+        if (realParent && Number(m.parentId) !== realParent.id) {
+          m.parentId = realParent.id;
+          changed = true;
+        }
+      }
 
       // 작전 A: 가짜 폴더에 들어있던 파일들을 진짜 폴더(원본)로 무사히 이동
       if (dupToMasterMap.has(currentParent)) {
@@ -643,8 +661,11 @@ function healDatabase(callback) {
       }
       // 작전 B: 동기화 오류로 부모 폴더를 잃어버려 허공에 뜬 미아 파일들을 바탕화면으로 안전하게 착륙
       else if (currentParent !== null && !validIds.has(currentParent)) {
-        m.parentId = globalDesktopFolderId;
-        changed = true;
+        // 🚀 [수정] 방금 전 '작전 S'에서 부모를 찾은 녀석은 바탕화면으로 쫓겨나지 않도록 방어!
+        if (!changed) {
+          m.parentId = globalDesktopFolderId;
+          changed = true;
+        }
       }
 
       if (changed) {
@@ -788,6 +809,8 @@ function purgeMemoIfEmpty(memoIdToEvict) {
   store.get(memoIdToEvict).onsuccess = (e) => {
     const m = e.target.result;
     if (!m) return;
+    // 🚀 [리턴 방어막 3] 이미 지워진 유령이면 무시하고 돌아감!
+    if (m.isDeleted || m.isPermanentlyDeleted) return;
 
     const title = (m.title || "").trim();
     const isTitleEmptyOrAuto =

@@ -240,7 +240,8 @@ async function smartSync() {
 
       // 🚀 [핵심 방어막] 파일은 안 바뀌었지만 구글 명부에 족보(parentSyncId)가 빠져있다면?
       if (cMeta && cMeta.parentSyncId === undefined && lMemo.parentId !== null) {
-        const pNode = localData.find(d => d.id === lMemo.parentId);
+        // 🚀 [수정됨] String()으로 감싸서 타입 불일치 에러 완벽 차단!
+        const pNode = localData.find(d => String(d.id) === String(lMemo.parentId));
         if (pNode) {
           cMeta.parentSyncId = pNode.syncId; // 명부에 몰래 족보를 적어줍니다.
           needIndexPatch = true; // 명부 강제 덮어쓰기 예약!
@@ -253,7 +254,8 @@ async function smartSync() {
 
           let pSyncId = null;
           if (lMemo.parentId !== null) {
-            const pNode = localData.find(d => d.id === lMemo.parentId);
+            // 🚀 [수정됨] 여기도 String() 방어막 적용!
+            const pNode = localData.find(d => String(d.id) === String(lMemo.parentId));
             if (pNode) pSyncId = pNode.syncId;
           }
 
