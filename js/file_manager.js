@@ -1897,7 +1897,16 @@ async function loadMemo(id) {
           if (!currentSecKey) {
             showToast("보안 세션이 만료되었습니다. 폴더를 다시 열어주세요.");
             closeFileManager();
-            createNewMemo();
+
+            // 🚀 [최종 교정] 보안 만료 시, 가장 최근에 봤던 일반 노트 또는 1등 노트를 엽니다!
+            const lastId = localStorage.getItem('zen_last_opened');
+            if (lastId && lastId !== id.toString()) { // 방금 열려다 실패한 보안 노트가 아닐 때만
+              loadMemo(Number(lastId));
+            } else if (typeof openTopDesktopMemo === 'function') {
+              openTopDesktopMemo();
+            } else {
+              createNewMemo();
+            }
             return;
           }
           try {
