@@ -387,14 +387,13 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// 👇 추가: 앱 숏컷 & 공유 타겟 처리 함수
+// 👇 수정: 앱 숏컷 & 공유 타겟 처리 함수 (기본 기능 복구)
 function handleLaunchParams() {
   const urlParams = new URLSearchParams(window.location.search);
 
   // 1. 앱 숏컷(새 노트 작성)으로 앱을 켰을 때
   if (urlParams.get("action") === "new") {
     createNewMemo();
-    // 새로고침 시 다시 새 노트가 켜지지 않도록 URL에서 ?action=new 를 조용히 지웁니다.
     window.history.replaceState({}, document.title, window.location.pathname);
     return;
   }
@@ -407,15 +406,23 @@ function handleLaunchParams() {
   if (sharedTitle || sharedText || sharedUrl) {
     createNewMemo(); // 빈 노트를 하나 열고
 
-    if (sharedTitle)
+    // 제목 세팅
+    if (sharedTitle) {
       document.getElementById("memo-title-input").value = sharedTitle;
+    }
 
-    if (sharedUrl) {
-      // 🎯 단순 텍스트 링크 삽입 대신, 예쁜 '리치 링크 카드' 생성 엔진 가동!
-      insertRichLinkCard(sharedUrl, sharedTitle, sharedText);
-    } else if (sharedText) {
-      quill.root.innerHTML = sharedText + "<br><br>";
-      triggerAutoSave();
+    // 본문 세팅 (텍스트와 URL을 조합하여 삽입)
+    if (sharedUrl || sharedText) {
+      let content = "";
+      if (sharedText) content += sharedText + "<br><br>";
+
+      // URL이 있으면 클릭 가능한 링크 형태로 삽입
+      if (sharedUrl) {
+        content += `<a href="${sharedUrl}" target="_blank">${sharedUrl}</a><br><br>`;
+      }
+
+      quill.root.innerHTML = content;
+      triggerAutoSave(); // 안전하게 자동 저장 실행
     }
 
     // 새로고침 방지를 위해 URL을 깔끔하게 정리합니다.
@@ -508,3 +515,124 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 });
+
+// ============================================================================
+// 📊 [상태 계기판 UI 제어 구역] 
+// ============================================================================
+
+let offlineToggleTimer = null;
+
+function checkIsOffline() {
+  if (typeof window.isZenOnline === "function") {
+    return !window.isZenOnline();
+  }
+  return true;
+}
+
+// 🎯 상태점 색상 및 텍스트 렌더링 헬퍼
+function renderStatusUI(dotClass, textStr, opacityStr, isGray = false) {
+  const statusDots = document.querySelectorAll(".status-dot");
+  const statusTexts = document.querySelectorAll(".status-text");
+
+  statusDots.forEach((dot) => {
+    dot.className = `status-dot ${dotClass}`;
+    if (isGray) {
+      dot.style.backgroundColor = "#888888";
+      dot.style.boxShadow = "none";
+    } else {
+      dot.style.backgroundColor = "";
+      dot.style.boxShadow = "";
+    }
+  });
+
+  statusTexts.forEach((t) => {
+    t.innerText = textStr;
+    if (opacityStr !== undefined) t.style.opacity = opacityStr;
+  });
+}
+
+// 🎯 이벤트(저장/동기화) 컨트롤러
+function updateUIState(state) {
+  if (statusTextTimer) { clearTimeout(statusTextTimer); statusTextTimer = null; }
+  if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
+
+  // 이벤트가 끝났거나 신호가 오면 기본 상태로 돌림
+  if (!state || state === "default" || state === "offline-idle" || state === "online-idle") {
+    // 🚀 [핵심 교정] 기본 상태로 돌아갈 때는 방어막을 무시하라고 'true' 특권을 쥐여줍니다!
+    updateUnsyncedCount(true);
+    return;
+  }
+
+  // --- 이하 단발성 이벤트 애니메이션 ---
+  if (state === "typing" || state === "saving") {
+    if (typingStartTime === 0) typingStartTime = Date.now();
+    renderStatusUI("unsaved pulse-fast", "saving", "1", false);
+  } else if (state === "saved") {
+    const elapsed = Date.now() - typingStartTime;
+    const remain = typingStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
+    statusTextTimer = setTimeout(() => {
+      if (saveTimer || isSaving) return;
+      typingStartTime = 0;
+      renderStatusUI("saved pulse-slow", "saved", "1", false);
+      statusTextTimer = setTimeout(() => {
+        if (!saveTimer && !isSaving) updateUIState("default");
+      }, 2000);
+    }, remain);
+  } else if (state === "syncing") {
+    syncStartTime = Date.now();
+    renderStatusUI("unsaved pulse-fast", "syncing", "1", false);
+  } else if (state === "synced") {
+    const elapsed = Date.now() - syncStartTime;
+    const remain = syncStartTime > 0 ? Math.max(0, 2000 - elapsed) : 0;
+    statusTextTimer = setTimeout(() => {
+      syncStartTime = 0;
+      renderStatusUI("saved", "synced", "1", false);
+      statusTextTimer = setTimeout(() => {
+        updateUIState("default");
+      }, 2000);
+    }, remain);
+  } else if (state === "sync-error") {
+    renderStatusUI("unsaved", "sync error", "1", false);
+  }
+}
+
+// 🎯 [완벽 교정] 괄호 안에 강제 업데이트 특권(forceUpdate = false)이 반드시 있어야 합니다!
+function updateUnsyncedCount(forceUpdate = false) {
+  if (!db) return;
+  const lastSync = parseInt(localStorage.getItem("zen_last_sync_time") || "0", 10);
+
+  db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => {
+    const memos = e.target.result;
+    const unsyncedCount = memos.filter((m) => m.updatedAt > lastSync).length;
+
+    // ☁️ auth.js가 선언한 진실을 묻습니다.
+    const isOffline = checkIsOffline();
+
+    // 단발성 이벤트가 진행 중인지 확인합니다.
+    const currentText = document.querySelector(".status-text")?.innerText || "";
+    const isEventRunning = ["saving", "saved", "syncing", "synced", "sync error"].includes(currentText);
+
+    // 🚀 [에러 해결 구역] 특권(forceUpdate)이 없을 때만 화면 덮어쓰기를 방어합니다!
+    if (!forceUpdate && isEventRunning) return;
+
+    if (offlineToggleTimer) { clearInterval(offlineToggleTimer); offlineToggleTimer = null; }
+
+    if (isOffline) {
+      // 🚀 오프라인: 회색점 + 3초 교차 출력을 가동합니다.
+      let showOfflineLabel = true;
+      const nsText = `미동기: ${unsyncedCount}`;
+
+      const runToggle = () => {
+        renderStatusUI("saved offline", showOfflineLabel ? "offline" : nsText, "0.7", true);
+        showOfflineLabel = !showOfflineLabel;
+      };
+      runToggle();
+      offlineToggleTimer = setInterval(runToggle, 3000);
+
+    } else {
+      // 🚀 온라인: 푸른점 + 상태 메시지를 출력합니다.
+      const displayText = unsyncedCount === 0 ? "online" : `미동기: ${unsyncedCount}`;
+      renderStatusUI("saved", displayText, "1", false);
+    }
+  };
+}

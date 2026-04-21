@@ -667,7 +667,7 @@ function closeSecurityModal(fromPopstate = false) {
   }
 }
 
-// 🎯 비밀번호 제출 및 마스터키/2중 검증 로직
+// 🎯 비밀번호 제출 및 검증 로직
 async function submitSecurityPassword() {
   const input = document.getElementById("sec-password-input");
   const desc = document.getElementById("sec-modal-desc");
@@ -683,16 +683,9 @@ async function submitSecurityPassword() {
   const step = input.dataset.step;
 
   // ----------------------------------------------------
-  // 1. 잠금 해제 (Enter) & 마스터키 로직
+  // 1. 잠금 해제 (Enter)
   // ----------------------------------------------------
   if (securityMode === "enter") {
-    // 🚨 마스터키 감지 (최우선 실행)
-    if (pw === "abcde12345") {
-      showToast("마스터키가 확인되었습니다. 새 비밀번호를 설정해주세요.");
-      openSecurityModal("setup"); // 새 비번 설정 창으로 즉시 전환
-      return;
-    }
-
     const hash = await hashPassword(pw);
     if (hash === savedHash) {
       isSecurityUnlocked = true;
