@@ -491,7 +491,12 @@ document.addEventListener('visibilitychange', () => {
     // 2. 만약 유저가 '보안 노트'를 화면(에디터)에 열어두고 최소화했다면?
     // 평문 내용이 화면 잔상으로 남지 않도록 에디터의 글을 싹 지우고 새 노트로 덮어버립니다.
     if (isEditingSecureMemo) {
-      createNewMemo();
+      // 🚀 [최종 교정] 긴급 대피! 무조건 가장 안전한 바탕화면 1등 노트로 피신시킵니다.
+      if (typeof openTopDesktopMemo === 'function') {
+        openTopDesktopMemo();
+      } else {
+        createNewMemo();
+      }
       showToast("보안을 위해 노트가 닫혔습니다. (비밀번호 재입력 필요)");
     }
 
