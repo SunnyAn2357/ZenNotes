@@ -497,7 +497,7 @@ document.addEventListener('visibilitychange', () => {
       } else {
         createNewMemo();
       }
-      showToast("보안을 위해 노트가 닫혔습니다. (비밀번호 재입력 필요)");
+      showToast("보안을 위해 노트가 닫혔습니다.");
     }
 
     // 3. 만약 유저가 파일 관리창에서 '보안 폴더 내부'를 구경 중이었다면?
