@@ -1264,6 +1264,14 @@ button:hover {
     position: absolute !important;
     top: 12px !important;
     left: 16px !important;
+
+    /* 드롭다운 너비를 내용물 크기에 딱 맞춤 (복사 버튼과 겹침 완벽 방지) */
+    width: max-content !important;
+    /* 우측 복사 영역 침범 금지 */
+    max-width: 70% !important;
+    /* 터치하기 쉽도록 최소 너비 확보 */
+    min-width: 100px !important;
+
     background: transparent !important;
     color: #9da5b4 !important;
     border: none !important;
@@ -1275,21 +1283,63 @@ button:hover {
     appearance: none !important;
     -webkit-appearance: none !important;
     z-index: 10 !important;
-
-    /* 🎯 [추가] 브라우저에게 "네이티브 창을 다크 모드로 띄워라"고 강제 명령 */
     color-scheme: dark !important;
+
+    /* 🎯 [추가] 클릭 시 생기는 진한 기본 테두리(외곽선) 완벽 제거 */
+    outline: none !important;
+
+    /* 드롭다운 화살표 (SVG) */
+    padding-right: 18px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239da5b4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0px center !important;
+    background-size: 14px !important;
 }
 
-/* 🎯 [신규 추가] 클릭 시 쭈욱 내려오는 목록(옵션)의 다크 테마 세팅 */
+/* 🎯 [추가] 포커스 상태일 때 생기는 그림자 및 테두리 철통 방어 */
+.ql-editor .ql-code-block-container select.ql-ui:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* 클릭 시 쭈욱 내려오는 목록(옵션)의 다크 테마 세팅 */
 .ql-editor .ql-code-block-container select.ql-ui option {
     background-color: #1e222a !important;
-    /* 코드 블록 배경과 똑같은 고급진 어두운 색 */
     color: #e3e3e3 !important;
-    /* 가독성 좋은 밝은 텍스트 */
     font-size: 14px !important;
-    /* 클릭하기 편하게 폰트 크기 살짝 키움 */
-    padding: 8px 12px !important;
-    /* 항목 사이에 시원한 여백 추가 */
+}
+
+/* 우측 상단 복사 아이콘 (가상 요소) */
+.ql-editor .ql-code-block-container::after {
+    content: '\f0c5';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 400;
+    position: absolute !important;
+
+    top: 10px !important;
+    right: 16px !important;
+    color: #9da5b4 !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+
+    cursor: pointer !important;
+    transition: color 0.2s ease !important;
+    z-index: 10 !important;
+    pointer-events: auto !important;
+}
+
+/* 복사 아이콘 호버 시 포인트 컬러 적용 */
+.ql-editor .ql-code-block-container:hover::after {
+    color: var(--text-main) !important;
+}
+
+/* 복사 완료 시 체크 아이콘으로 전환하는 클래스 */
+.ql-editor .ql-code-block-container.is-copied::after {
+    content: '\f00c' !important;
+    /* FontAwesome fa-check 아이콘 */
+    font-weight: 900 !important;
+    /* Solid 스타일 */
+    color: var(--accent) !important;
 }
 
 /* 3. 상단 구분선 */
@@ -1698,7 +1748,7 @@ button:hover {
     margin-right: 24px;
 }
 
-/* 🎯 [신규] 삼점 버튼 터치 반경 1.25배 확대 및 원형 호버 효과 */
+/* 삼점 버튼 터치 반경 1.25배 확대 및 원형 호버 효과 */
 .fm-item-more {
     padding: 12px;
     margin-right: -4px;
