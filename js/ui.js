@@ -636,3 +636,14 @@ function updateUnsyncedCount(forceUpdate = false) {
     }
   };
 }
+
+/* ==========================================
+   🎯 브라우저 기본 저장(Ctrl+S) 차단
+   ========================================== */
+window.addEventListener('keydown', function (e) {
+  // Ctrl + S (또는 Mac의 Cmd + S) 감지
+  if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+    // 1. 브라우저의 "다른 이름으로 저장" 창이 뜨는 것 방지
+    e.preventDefault();
+  }
+});
