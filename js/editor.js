@@ -955,3 +955,48 @@ function closeZenPopup() {
         activeQuillPicker = null;
     }
 }
+
+/* ==========================================
+   🎯 코드블록 전용: 스마트 복사 버튼 로직
+   ========================================== */
+document.querySelector('.ql-editor').addEventListener('click', function (e) {
+    // 1. 클릭된 곳이 코드블록 컨테이너 내부인지 확인
+    const container = e.target.closest('.ql-code-block-container');
+    if (!container) return;
+
+    // 2. 클릭한 좌표 계산 (컨테이너의 왼쪽 상단 0,0 기준)
+    const rect = container.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // 3. 우측 상단 가상요소(::after) 영역인지 판별 (터치하기 쉽도록 여유 공간 40x40px 할당)
+    const isCopyArea = (clickX > rect.width - 40) && (clickY < 40);
+
+    if (isCopyArea) {
+        e.preventDefault();
+        e.stopPropagation(); // 에디터 커서 이동 및 다른 이벤트 차단
+
+        // 4. 컨테이너 안의 실제 코드(.ql-code-block) 텍스트만 추출
+        const codeLines = container.querySelectorAll('.ql-code-block');
+        const codeText = Array.from(codeLines).map(line => line.textContent).join('\n');
+
+        // 5. 클립보드에 복사 및 시각적 피드백
+        navigator.clipboard.writeText(codeText).then(() => {
+            // CSS를 통해 우측 상단 아이콘을 '체크(Check)' 표시로 변경
+            container.classList.add('is-copied');
+
+            // 앱에 이미 내장된 토스트 알림 활용
+            if (typeof showToast === 'function') {
+                showToast("코드블록이 클립보드에 복사되었습니다.");
+            }
+
+            // 2초 뒤에 원래 '복사' 아이콘으로 원복
+            setTimeout(() => {
+                container.classList.remove('is-copied');
+            }, 2000);
+        }).catch(err => {
+            console.error("복사 실패:", err);
+            if (typeof showToast === 'function') showToast("복사에 실패했습니다.");
+        });
+    }
+});
