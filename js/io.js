@@ -781,6 +781,9 @@ function showPdfPageRangeModal(totalPages) {
       input.placeholder = "입력 예: 1-30, 1~30";
     }
     modal.style.display = "flex";
+    if (window.innerWidth <= 768) {
+      history.pushState({ modal: "pdf-import" }, "");
+    }
 
     setTimeout(() => {
       if (input) input.focus();
@@ -794,6 +797,10 @@ function showPdfPageRangeModal(totalPages) {
       if (splitAllBtn) splitAllBtn.onclick = null;
       modal.onclick = null;
       if (input) input.onkeydown = null;
+      if (window.innerWidth <= 768 && window.history.state && window.history.state.modal === "pdf-import") {
+        if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+        history.back();
+      }
     }
 
     function doConfirm() {

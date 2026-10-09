@@ -167,6 +167,48 @@ const quill = new Quill('#editor', {
                 'markdown-help': function () {
                     openMarkdownHelpModal();
                 },
+                // 🎯 [V3.4.1] 하이퍼링크 커스텀 핸들러: 선택 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
+                'link': function (value) {
+                    if (value) {
+                        let range = this.quill.getSelection();
+                        if (!range || range.length === 0) {
+                            range = this.quill.selection ? this.quill.selection.savedRange : null;
+                        }
+                        if (!range || range.length === 0) {
+                            showToast("링크를 적용할 텍스트를 먼저 드래그하여 선택해주세요.");
+                            return;
+                        }
+
+                        // 1. 선택된 블록 영역을 시각적으로 선명하게 표시 (포커스 이동 후에도 영역 유지)
+                        showLinkSelectionHighlight(range);
+
+                        const formats = this.quill.getFormat(range);
+                        let preview = formats.link || '';
+                        if (!preview) {
+                            const text = this.quill.getText(range.index, range.length).trim();
+                            if (/^https?:\/\//i.test(text) || /^\S+@\S+\.\S+$/.test(text)) {
+                                preview = /^\S+@\S+\.\S+$/.test(text) && !text.startsWith('mailto:') ? 'mailto:' + text : text;
+                            }
+                        }
+
+                        const { tooltip } = this.quill.theme;
+                        tooltip.edit('link', preview);
+
+                        // 2. 모바일 가상 키보드가 즉시 튀어나오지 않도록 blur 처리 (사용자가 입력란 터치 시에만 오픈)
+                        if (window.innerWidth <= 768) {
+                            if (tooltip.textbox) tooltip.textbox.blur();
+                            if (document.activeElement) document.activeElement.blur();
+                            setTimeout(() => {
+                                if (tooltip.textbox) tooltip.textbox.blur();
+                                if (document.activeElement) document.activeElement.blur();
+                            }, 0);
+                            history.pushState({ modal: 'ql-tooltip' }, '');
+                        }
+                    } else {
+                        this.quill.format('link', false);
+                        removeLinkSelectionHighlight();
+                    }
+                },
                 'undo': function () { this.quill.history.undo(); },
                 'redo': function () { this.quill.history.redo(); },
                 'table': function () {
@@ -272,44 +314,141 @@ const quill = new Quill('#editor', {
 
 });
 
-// 🎯 [V3.3.2] 편집기 스크롤 감지 및 플로팅 버튼 동기화
+// 🎯 [V3.4.1] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
+let linkHighlightContainer = null;
+
+function showLinkSelectionHighlight(range) {
+    removeLinkSelectionHighlight();
+    if (!range || range.length === 0) return;
+
+    linkHighlightContainer = document.createElement('div');
+    linkHighlightContainer.id = 'zen-link-highlight-container';
+    linkHighlightContainer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:90;';
+
+    let rects = [];
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+        const domRange = sel.getRangeAt(0);
+        const clientRects = domRange.getClientRects();
+        if (clientRects && clientRects.length > 0) {
+            rects = Array.from(clientRects).filter(r => r.width > 0 && r.height > 0);
+        }
+    }
+
+    if (rects.length === 0 && quill && quill.container) {
+        const bounds = quill.getBounds(range.index, range.length);
+        if (bounds) {
+            const containerRect = quill.container.getBoundingClientRect();
+            rects = [{
+                top: containerRect.top + bounds.top,
+                left: containerRect.left + bounds.left,
+                width: bounds.width,
+                height: bounds.height
+            }];
+        }
+    }
+
+    rects.forEach(r => {
+        const box = document.createElement('div');
+        box.className = 'zen-link-selection-box';
+        box.style.cssText = `
+            position: fixed;
+            top: ${r.top}px;
+            left: ${r.left}px;
+            width: ${r.width}px;
+            height: ${r.height}px;
+            background-color: rgba(56, 189, 248, 0.35);
+            border: 1.5px solid rgba(56, 189, 248, 0.9);
+            border-radius: 3px;
+            box-sizing: border-box;
+            pointer-events: none;
+            box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+        `;
+        linkHighlightContainer.appendChild(box);
+    });
+
+    document.body.appendChild(linkHighlightContainer);
+}
+
+function removeLinkSelectionHighlight() {
+    if (linkHighlightContainer && linkHighlightContainer.parentNode) {
+        linkHighlightContainer.parentNode.removeChild(linkHighlightContainer);
+    }
+    linkHighlightContainer = null;
+}
+window.removeLinkSelectionHighlight = removeLinkSelectionHighlight;
+
+// 🎯 툴팁 닫힘 시 하이라이트 자동 해제 및 모바일 히스토리 정리 훅
+if (quill && quill.theme && quill.theme.tooltip) {
+    const origTooltipHide = quill.theme.tooltip.hide.bind(quill.theme.tooltip);
+    quill.theme.tooltip.hide = function () {
+        removeLinkSelectionHighlight();
+        if (window.innerWidth <= 768 && window.history.state && window.history.state.modal === 'ql-tooltip') {
+            if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+            history.back();
+        }
+        origTooltipHide();
+    };
+}
+
+// 🎯 [V3.3.2] 편집기 스크롤 감지 및 플로팅 버튼 동기화 / 하이라이트 박스 해제
 if (quill && quill.root) {
     quill.root.addEventListener("scroll", () => {
+        removeLinkSelectionHighlight();
         if (typeof window.updateScrollToTopBtn === "function") {
             window.updateScrollToTopBtn();
         }
     }, { passive: true });
 }
 
-// 🎯 [V3.3.3] 마크다운 문법 안내 모달 제어 함수
+// 🎯 [V3.4.1] 마크다운 문법 안내 모달 제어 함수
 function openMarkdownHelpModal() {
+    // 1. 모바일 가상 키보드가 올라오지 않도록 에디터 및 활성 요소의 포커스를 완벽히 해제
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+    }
+    if (window.quill && typeof quill.blur === 'function') {
+        quill.blur();
+    }
+    setTimeout(() => {
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+        if (window.quill && typeof quill.blur === 'function') {
+            quill.blur();
+        }
+    }, 0);
+
     const modal = document.getElementById('markdown-help-modal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+        modal.style.display = 'flex';
+        // 모바일 뒤로가기(popstate) 대응용 히스토리 추가
+        if (window.innerWidth <= 768) {
+            history.pushState({ modal: 'markdown-help' }, '');
+        }
+    }
 }
 
-function closeMarkdownHelpModal() {
+function closeMarkdownHelpModal(fromPopstate = false) {
     const modal = document.getElementById('markdown-help-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal && modal.style.display === 'flex') {
+        modal.style.display = 'none';
+        if (!fromPopstate && window.innerWidth <= 768 && window.history.state && window.history.state.modal === 'markdown-help') {
+            if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+            history.back();
+        }
+    }
 }
 
 window.openMarkdownHelpModal = openMarkdownHelpModal;
 window.closeMarkdownHelpModal = closeMarkdownHelpModal;
 
-// 툴바 마크다운 버튼 툴팁 및 ESC 닫기 이벤트 등록
+// 툴바 마크다운 버튼 툴팁 등록
 const mdHelpBtn = document.querySelector('.ql-markdown-help');
 if (mdHelpBtn) {
     mdHelpBtn.setAttribute('title', '마크다운 문법 (MD)');
     mdHelpBtn.setAttribute('aria-label', '마크다운 문법 안내');
 }
-
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        const mdModal = document.getElementById('markdown-help-modal');
-        if (mdModal && mdModal.style.display === 'flex') {
-            closeMarkdownHelpModal();
-        }
-    }
-});
 
 // 🎯 [통합 완료] 이미지 붙여넣기 완벽 제어 엔진
 // (HTML 찌꺼기 차단 + 깔끔한 줄바꿈 및 커서 이동 적용)
@@ -674,10 +813,31 @@ quill.on("selection-change", (range) => {
            ========================================== */
 document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-        // [0순위] 에디터 툴팁 및 일반 노트 메뉴 닫기 (히스토리를 쓰지 않는 순수 UI)
+        // [0순위] 에디터 툴팁, 모바일 색상표/서식 팝업, 마크다운 안내 모달, PDF 모달 및 일반 노트 메뉴 닫기
+        const zenOverlayEl = document.getElementById("zen-mobile-overlay");
+        if (zenOverlayEl && zenOverlayEl.style.display !== "none" && zenOverlayEl.style.display !== "") {
+            if (typeof window.closeZenPopup === "function") window.closeZenPopup();
+            else zenOverlayEl.style.display = "none";
+            return;
+        }
+
+        const mdModal = document.getElementById("markdown-help-modal");
+        if (mdModal && mdModal.style.display === "flex") {
+            closeMarkdownHelpModal();
+            return;
+        }
+
+        const pdfModal = document.getElementById("pdf-import-modal");
+        if (pdfModal && pdfModal.style.display === "flex") {
+            const cancelBtn = document.getElementById("pdf-modal-cancel-btn");
+            if (cancelBtn) cancelBtn.click();
+            return;
+        }
+
         const tooltip = document.querySelector(".ql-tooltip");
         if (tooltip && !tooltip.classList.contains("ql-hidden")) {
             tooltip.classList.add("ql-hidden");
+            removeLinkSelectionHighlight();
             return;
         }
         const openMenus = document.querySelectorAll(
@@ -803,6 +963,34 @@ window.addEventListener("popstate", (e) => {
         return;
     }
 
+    // 🎯 [0순위 최우선] 모바일 색상표/서식 팝업, 마크다운 안내 모달, PDF 모달, 에디터 툴팁 닫기
+    const zenOverlayEl = document.getElementById("zen-mobile-overlay");
+    if (zenOverlayEl && zenOverlayEl.style.display !== "none" && zenOverlayEl.style.display !== "") {
+        if (typeof window.closeZenPopup === "function") window.closeZenPopup(true);
+        else zenOverlayEl.style.display = "none";
+        return;
+    }
+
+    const mdModal = document.getElementById("markdown-help-modal");
+    if (mdModal && mdModal.style.display === "flex") {
+        closeMarkdownHelpModal(true);
+        return;
+    }
+
+    const pdfModal = document.getElementById("pdf-import-modal");
+    if (pdfModal && pdfModal.style.display === "flex") {
+        const cancelBtn = document.getElementById("pdf-modal-cancel-btn");
+        if (cancelBtn) cancelBtn.click();
+        return;
+    }
+
+    const tooltip = document.querySelector(".ql-tooltip");
+    if (tooltip && !tooltip.classList.contains("ql-hidden")) {
+        tooltip.classList.add("ql-hidden");
+        removeLinkSelectionHighlight();
+        return;
+    }
+
     const fmPane = document.getElementById("file-manager-pane");
     if (fmPane && fmPane.style.display === "flex") {
         const searchInput = document.getElementById("fm-search-input");
@@ -859,13 +1047,6 @@ window.addEventListener("popstate", (e) => {
     const rightPane = document.getElementById("col-right");
     const leftPane = document.getElementById("col-left");
     const activeId = document.activeElement ? document.activeElement.id : "";
-
-    // [0순위] 에디터 내부 팝업 닫기
-    const tooltip = document.querySelector(".ql-tooltip");
-    if (tooltip && !tooltip.classList.contains("ql-hidden")) {
-        tooltip.classList.add("ql-hidden");
-        return;
-    }
 
     // [1순위] 검색창 처리
     if (activeId.includes("search-input")) {
@@ -1044,6 +1225,22 @@ document.querySelector('.ql-toolbar').addEventListener('click', (e) => {
     setTimeout(() => {
         // Quill이 툴바 안에 팝업을 열면 (CSS로 화면엔 안 보이게 숨겨둠)
         if (picker.classList.contains('ql-expanded')) {
+            // 모바일 가상 키보드가 올라와 있다면 포커스 해제하여 내리기
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+            if (window.quill && typeof quill.blur === 'function') {
+                quill.blur();
+            }
+            setTimeout(() => {
+                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                    document.activeElement.blur();
+                }
+                if (window.quill && typeof quill.blur === 'function') {
+                    quill.blur();
+                }
+            }, 0);
+
             activeQuillPicker = picker;
             const options = picker.querySelector('.ql-picker-options');
 
@@ -1054,6 +1251,7 @@ document.querySelector('.ql-toolbar').addEventListener('click', (e) => {
             zenPopup.className = picker.className.replace('ql-picker', '').replace('ql-expanded', '').trim();
 
             zenOverlay.style.display = 'block'; // 팝업 짠!
+            history.pushState({ modal: 'zen-picker' }, '');
         }
     }, 10);
 });
@@ -1076,22 +1274,30 @@ zenPopup.addEventListener('click', (e) => {
     // 🚀 원본 에디터에 원격으로 서식 적용 명령! (파란불 안 꺼짐)
     if (formatType) quill.format(formatType, value === 'selected' ? false : value, Quill.sources.USER);
 
-    closeZenPopup();
+    closeZenPopup(false);
 });
 
 // 3. 팝업 뒷배경 빈 곳 누르면 닫기
 zenOverlay.addEventListener('click', (e) => {
-    if (e.target === zenOverlay) closeZenPopup();
+    if (e.target === zenOverlay) closeZenPopup(false);
 });
 
 // 팝업 닫기 함수
-function closeZenPopup() {
+function closeZenPopup(fromPopstate = false) {
+    if (zenOverlay.style.display === 'none') return;
     zenOverlay.style.display = 'none';
     if (activeQuillPicker) {
         activeQuillPicker.classList.remove('ql-expanded'); // 툴바 원본도 같이 닫아줌
         activeQuillPicker = null;
     }
+    if (!fromPopstate && window.innerWidth <= 768) {
+        if (window.history.state && window.history.state.modal === 'zen-picker') {
+            if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+            history.back();
+        }
+    }
 }
+window.closeZenPopup = closeZenPopup;
 
 /* ==========================================
    🎯 코드블록 전용: 스마트 복사 버튼 로직

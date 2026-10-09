@@ -32,3 +32,6 @@ let statusTextTimer = null, syncStartTime = 0, backPressTimer = 0, toastTimer = 
 
 // 🎯 [보안 폴더 상태]
 let currentSecKey = null, isEditingSecureMemo = false, isSecurityUnlocked = false;
+
+// 🎯 [히스토리 방어막]
+var programmaticBackCount = 0, isProgrammaticBack = false;

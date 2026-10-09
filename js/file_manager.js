@@ -864,8 +864,8 @@ function emergencyDeleteSecurity() {
 }
 
 let fmSelectedItems = new Set();
-// 🎯 [완벽 교정] 여러 겹의 방어막을 동시에 해제할 수 있도록 카운터로 업그레이드!
-let programmaticBackCount = 0;
+// 🎯 [완벽 교정] 여러 겹의 방어막을 동시에 해제할 수 있도록 카운터로 업그레이드! (globals.js에서 전역 관리)
+programmaticBackCount = 0;
 
 // 🎯 [신규] 파일 관리창 전용 롱프레스(길게 누르기) 다중 선택 진입
 function startFmPress(e, m) {
@@ -1324,7 +1324,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     return;
   }
 
-  // 🎯 [V3.4.0] 대상 폴더의 syncId 확보 (글로벌 족보 동기화용)
+  // 🎯 [V3.4.1] 대상 폴더의 syncId 확보 (글로벌 족보 동기화용)
   let destSyncId = null;
   if (selectedDestId !== null) {
     const destFolder = await new Promise((res) => {
@@ -1350,7 +1350,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     }
 
     m.parentId = selectedDestId;
-    m.parentSyncId = destSyncId; // 🎯 [V3.4.0 핵심] 새 부모의 글로벌 족보 동기화!
+    m.parentSyncId = destSyncId; // 🎯 [V3.4.1 핵심] 새 부모의 글로벌 족보 동기화!
     m.updatedAt = Date.now();
     if (m.isDeleted) {
       m.isDeleted = false;
@@ -2169,7 +2169,7 @@ function backupDesktop() {
           !m.isPermanentlyDeleted
         ) {
           m.parentId = newBackupFolderId;
-          m.parentSyncId = newFolderSyncId; // 🎯 [V3.4.0]
+          m.parentSyncId = newFolderSyncId; // 🎯 [V3.4.1]
           m.updatedAt = Date.now();
           store.put(m);
         }
@@ -2198,7 +2198,7 @@ function backupThisFolder() {
     const folder = e.target.result;
     if (folder) {
       folder.parentId = globalBackupFolderId; // 🎯 백업 폴더로 족보 변경
-      folder.parentSyncId = "sys_backup"; // 🎯 [V3.4.0]
+      folder.parentSyncId = "sys_backup"; // 🎯 [V3.4.1]
       folder.updatedAt = Date.now();
       store.put(folder);
     }
