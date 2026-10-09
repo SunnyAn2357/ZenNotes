@@ -743,7 +743,8 @@ button:hover {
 .ql-toolbar.ql-snow .ql-formats:nth-child(5)::after,
 .ql-toolbar.ql-snow .ql-formats:nth-child(6)::after,
 .ql-toolbar.ql-snow .ql-formats:nth-child(7)::after,
-.ql-toolbar.ql-snow .ql-formats:nth-child(8)::after {
+.ql-toolbar.ql-snow .ql-formats:nth-child(8)::after,
+.ql-toolbar.ql-snow .ql-formats:nth-child(9)::after {
     /* 🎯 핵심: 반드시 content를 넣어야 나타납니다 */
     content: "";
 
@@ -1111,30 +1112,87 @@ button:hover {
    07. 에디터 본문 및 코드블록 (Quill Content & Code) 안의 표 스타일 부분
 ============================================================================ */
 
-/* 📊 표 (Table) 최후 방어선: 테두리 강제 고정 */
+/* 📊 표 (Table) 최후 방어선: 테두리 강제 고정 및 줄바꿈 지원 */
 .ql-editor table {
     border-collapse: collapse;
     width: 100%;
     margin: 20px 0 !important;
     border: 1px solid var(--border) !important;
-    /* 👈 핵심 1: !important 추가로 검은선 방어 */
     table-layout: auto;
 }
 
 .ql-editor td,
 .ql-editor th {
     border: 1px solid var(--border) !important;
-    /* 👈 핵심 2: 셀 테두리도 강제로 밝은색 고정 */
     padding: 8px 12px;
     font-size: 14px;
     color: var(--text-main);
-    word-break: keep-all;
+    word-break: break-word !important;
+    white-space: pre-wrap !important; /* 👈 [핵심] 셀 내부 줄바꿈 완벽 렌더링 */
+    min-width: 48px;
+    vertical-align: top;
+    line-height: 1.6;
 }
 
 .ql-editor th {
     background-color: var(--surface-hover) !important;
-    /* 헤더 배경색도 !important로 보호 */
     font-weight: 600;
+}
+
+/* 🎯 [V3.3.1] 표 셀 내부 줄바꿈(Soft Break) */
+.ql-softbreak {
+    display: inline;
+}
+
+/* 🎯 [V3.3.1] 표 전용 세련된 우클릭 컨텍스트 메뉴 */
+.table-context-menu {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+    padding: 6px 0;
+    z-index: 10000;
+    min-width: 160px;
+    backdrop-filter: blur(8px);
+}
+
+.table-menu-item {
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.table-menu-item:hover {
+    background: var(--surface-hover);
+    color: var(--accent);
+}
+
+.table-menu-item.text-danger:hover {
+    color: var(--danger);
+}
+
+.table-menu-item i {
+    font-size: 12px;
+    width: 16px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.table-menu-item:hover i {
+    color: inherit;
+}
+
+.table-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
 }
 
 /* 문단(P) 및 제목(H1, H2, H3) 하단 여백 일괄 설정(문단간격) */
@@ -2756,4 +2814,247 @@ body.is-pdf-exporting .quill-wrapper {
 /* 문서 맨 끝에 숨어있는 Quill의 기본 빈 줄바꿈 차단 */
 body.is-pdf-exporting .ql-editor>p:last-child {
     display: none !important;
+}
+
+/* ============================================================================
+   🎯 [V3.3.2] 편집기 상단 이동 플로팅 버튼 (Floating Scroll to Top Button)
+============================================================================ */
+.scroll-to-top-btn {
+    position: fixed;
+    right: 32px;
+    bottom: 32px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--surface);
+    background: rgba(36, 40, 34, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 10px rgba(56, 189, 248, 0.12);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(16px) scale(0.85);
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                visibility 0.35s ease,
+                transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.2s ease,
+                box-shadow 0.25s ease,
+                color 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.scroll-to-top-btn.visible {
+    opacity: 0.95;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    animation: zenScrollTopFloat 2.6s ease-in-out infinite alternate;
+}
+
+.scroll-to-top-btn:hover {
+    opacity: 1;
+    background-color: var(--surface-hover);
+    color: #ffffff;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55), 0 0 16px rgba(56, 189, 248, 0.4);
+    transform: translateY(-3px) scale(1.08) !important;
+    animation-play-state: paused;
+}
+
+.scroll-to-top-btn:active {
+    transform: translateY(0) scale(0.95) !important;
+}
+
+.scroll-to-top-btn i {
+    font-size: 16px;
+    transition: transform 0.2s ease;
+}
+
+.scroll-to-top-btn:hover i {
+    transform: translateY(-2px);
+}
+
+@keyframes zenScrollTopFloat {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+    50% {
+        transform: translateY(-6px) scale(1);
+    }
+    100% {
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (max-width: 768px) {
+    .scroll-to-top-btn {
+        right: 20px;
+        bottom: calc(24px + env(safe-area-inset-bottom));
+        width: 40px;
+        height: 40px;
+    }
+
+    .scroll-to-top-btn i {
+        font-size: 15px;
+    }
+}
+
+/* ============================================================================
+   🎯 [V3.3.2] PDF 분할 가져오기 모달 스타일 (PDF Split Import Modal)
+============================================================================ */
+#pdf-import-modal {
+    z-index: 10005;
+}
+
+#pdf-import-modal .fm-modal {
+    max-width: 440px;
+    width: calc(100% - 28px);
+    margin: 14px auto;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+    border-radius: 14px;
+}
+
+/* 🎯 [V3.3.3] PDF 모달 입력창 스타일 (정상 폰트 및 은은한 회색 가짜 글자) */
+.pdf-page-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+    letter-spacing: 0;
+    text-align: left;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-main);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pdf-page-input::placeholder {
+    color: #888888;
+    opacity: 0.85;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+.pdf-page-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+#pdf-split-all-btn:hover {
+    background: rgba(56, 189, 248, 0.28) !important;
+    color: #ffffff !important;
+}
+
+#pdf-modal-confirm-btn:hover {
+    filter: brightness(1.1);
+}
+
+#pdf-modal-cancel-btn:hover {
+    background: var(--border) !important;
+    color: var(--text-main) !important;
+}
+
+/* 🎯 모바일 화면에서 팝업이 넘치거나 잘리지 않도록 안전 레이아웃 */
+@media (max-width: 440px) {
+    #pdf-import-modal .fm-modal {
+        width: calc(100% - 20px);
+        margin: 10px auto;
+    }
+    #pdf-import-modal .fm-modal-footer {
+        flex-direction: column-reverse;
+        gap: 8px;
+        padding: 12px 14px;
+    }
+    #pdf-split-all-btn {
+        width: 100% !important;
+        justify-content: center;
+        text-align: center;
+    }
+    .pdf-modal-action-btns {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+    .pdf-modal-action-btns button {
+        flex: 1 !important;
+        max-width: none !important;
+    }
+}
+
+/* ============================================================================
+   🎯 [V3.3.3] 마크다운 문법 안내 모달 스타일 (Markdown Cheat Sheet Modal)
+============================================================================ */
+#markdown-help-modal {
+    z-index: 10006;
+}
+
+#markdown-help-modal .fm-modal {
+    max-width: 420px;
+    width: calc(100% - 28px);
+    margin: 14px auto;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+    border-radius: 14px;
+}
+
+.md-help-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.md-help-table th {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.md-help-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    vertical-align: middle;
+    text-align: left;
+}
+
+.md-help-table tr:last-child td {
+    border-bottom: none;
+}
+
+.md-help-table code {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.md-tb-badge {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    display: inline-block;
+    line-height: 1;
+}
+
+/* 🎯 툴바 마크다운 버튼 호버 */
+.ql-toolbar.ql-snow button.ql-markdown-help:hover i {
+    color: var(--accent) !important;
 }

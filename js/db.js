@@ -521,13 +521,19 @@ function healDatabase(callback) {
       let currentParent = m.parentId;
       let changed = false;
 
-      // 🚀 [신규 작전 S 추가: 글로벌 족보 번역기]
-      // 구글에서 막 다운로드되어 parentSyncId를 달고 온 녀석이라면?
-      if (m.parentSyncId) {
-        // 내 기기에서 그 글로벌 번호를 가진 진짜 부모 폴더를 찾습니다.
+      // 🚀 [V3.4.0 핵심 교정: 글로벌 족보 동기화]
+      // 1. 내 기기의 parentId가 유효한 폴더라면, parentSyncId를 현재 부모의 syncId로 맞춤 (사용자의 폴더 이동 존중 및 고정)
+      if (m.parentId !== null && validIds.has(m.parentId)) {
+        const curParent = allData.find(f => f.id === m.parentId);
+        if (curParent && curParent.syncId && m.parentSyncId !== curParent.syncId) {
+          m.parentSyncId = curParent.syncId;
+          changed = true;
+        }
+      }
+      // 2. 구글에서 막 다운로드되었거나 부모 ID가 유실된 경우에만 parentSyncId로 로컬 부모 ID 복원
+      else if (m.parentSyncId) {
         const realParent = allData.find(f => f.syncId === m.parentSyncId);
-        // 🚀 [수정됨] 양쪽 다 숫자로 바꿔서 엄격하게 비교!
-        if (realParent && Number(m.parentId) !== realParent.id) {
+        if (realParent && validIds.has(realParent.id) && Number(m.parentId) !== realParent.id) {
           m.parentId = realParent.id;
           changed = true;
         }

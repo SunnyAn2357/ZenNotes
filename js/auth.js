@@ -407,8 +407,8 @@ async function smartSync() {
 
       // 🚀 [신규: 시체 치우기] 구글 명부에 사망진단서가 붙어있다면?
       if (cMeta.isPermanentlyDeleted) {
-        if (lMemo && cMeta.updatedAt > lMemo.updatedAt) {
-          toLocalDelete.push(lMemo.id); // 내 기기의 시체를 사형 큐에 넣음
+        if (lMemo) {
+          toLocalDelete.push(lMemo.id); // 내 기기의 시체를 사형 큐에 넣음 (사망진단서가 있으면 무조건 사형 집행!)
         }
         continue; // 진단서는 다운로드(toDownload) 안 함!
       }
@@ -501,6 +501,7 @@ async function smartSync() {
     }
 
     // 🚀 [핵심 4] 클라우드 영구 삭제 실행 (DELETE)
+    const locallyDeletedIds = [];
     if (toCloudDelete.length > 0) {
       for (const lMemo of toCloudDelete) {
         const fileName = `memo_${lMemo.syncId}.json`;
@@ -524,10 +525,7 @@ async function smartSync() {
           else cloudIndex.push(tombstone);
 
           needIndexPatch = true; // 명부 덮어쓰기 예약!
-
-          // 로컬 DB에서도 물리적 삭제 완료
-          const delTx = db.transaction(["memos"], "readwrite");
-          delTx.objectStore("memos").delete(lMemo.id);
+          locallyDeletedIds.push(lMemo.id); // 🎯 [V3.4.0] 클라우드 명부 업로드 성공 후 지우도록 예약
 
         } catch (e) {
           console.warn("클라우드 삭제 실패 (로컬 파일은 보존됩니다):", e);
@@ -544,8 +542,8 @@ async function smartSync() {
         // 🚀 [신규] 내 부모의 '글로벌 주민번호(syncId)'를 찾아내는 통역 과정
         let pSyncId = null;
         if (lMemo.parentId !== null) {
-          // 로컬 DB 데이터를 뒤져서 부모의 syncId를 확보합니다.
-          const pNode = localData.find(d => d.id === lMemo.parentId);
+          // 🎯 [V3.4.0 교정] String() 방어막으로 타입 불일치 에러 완벽 차단!
+          const pNode = localData.find(d => String(d.id) === String(lMemo.parentId));
           if (pNode) pSyncId = pNode.syncId;
         }
 
@@ -581,6 +579,12 @@ async function smartSync() {
     // 🚀 [교정] needIndexPatch 깃발이 올라갔을 때도 덮어쓰도록 추가!
     if (toUpload.length > 0 || toCloudDelete.length > 0 || needIndexPatch) {
       await v3_uploadFile(token, 'index.json', JSON.stringify(cloudIndex), folderId, indexFileId);
+
+      // 🎯 [V3.4.0 핵심 교정] 클라우드 명부 업로드가 100% 성공한 뒤에만 로컬 DB에서 최종 영구 삭제 (좀비 부활 원천 차단!)
+      if (locallyDeletedIds.length > 0) {
+        const delTx = db.transaction(["memos"], "readwrite");
+        locallyDeletedIds.forEach(id => delTx.objectStore("memos").delete(id));
+      }
     }
 
     // 8. 마무리

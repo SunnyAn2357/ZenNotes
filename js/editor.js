@@ -14,6 +14,17 @@ DividerBlot.blotName = 'divider';
 DividerBlot.tagName = 'hr';
 Quill.register(DividerBlot);
 
+// 🎯 [V3.3.1 핵심 개선] 셀 내부 줄바꿈 전용 SoftBreak Blot 등록 (length=1로 영속성 보장)
+const Embed = Quill.import('blots/embed');
+class SoftBreakBlot extends Embed {
+    length() { return 1; }
+    value() { return true; }
+}
+SoftBreakBlot.blotName = 'softbreak';
+SoftBreakBlot.tagName = 'br';
+SoftBreakBlot.className = 'ql-softbreak';
+Quill.register(SoftBreakBlot, true);
+
 // 🎯 [사용자님 통찰력 적용] 취소선 단위를 문단이 아닌 일반 글자(Inline)로 변경!
 const Parchment = Quill.import('parchment');
 const StrikeLineStyle = new Parchment.ClassAttributor('strike-line', 'ql-strike-line', {
@@ -29,11 +40,15 @@ const icons = Quill.import('ui/icons');
 // 1. 커스텀 기능 아이콘 (엔진이 모르는 기능들)
 icons['strike-line'] = '<i class="fa-solid fa-pen-slash" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['divider'] = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['markdown-help'] = '<i class="fa-brands fa-markdown" style="font-size: 15px; color: var(--text-muted);" title="마크다운 문법 (MD)"></i>';
 
-// 2. 표 확장 및 기존 툴바 아이콘 전면 교체
-icons['table'] = '<i class="fa-solid fa-table" style="font-size: 14px; color: var(--text-muted);"></i>';
-icons['table-insert-row'] = '<i class="fa-solid fa-arrow-down" style="font-size: 14px; color: var(--text-muted);"></i>';
-icons['table-insert-column'] = '<i class="fa-solid fa-arrow-right" style="font-size: 14px; color: var(--text-muted);"></i>';
+// 2. 표 확장 및 제어 아이콘 (Zen 철학: 기본 은은한 색상 -> 마우스 올리면 파란색 강조)
+icons['table'] = '<i class="fa-solid fa-table" style="font-size: 14px; color: var(--text-muted);" title="표 삽입 (3x3)"></i>';
+icons['table-insert-row'] = '<i class="fa-solid fa-arrow-down" style="font-size: 13px; color: var(--text-muted);" title="아래에 행 추가"></i>';
+icons['table-delete-row'] = '<i class="fa-solid fa-minus" style="font-size: 13px; color: var(--text-muted);" title="현재 행 삭제"></i>';
+icons['table-insert-column'] = '<i class="fa-solid fa-arrow-right" style="font-size: 13px; color: var(--text-muted);" title="오른쪽에 열 추가"></i>';
+icons['table-delete-column'] = '<i class="fa-solid fa-xmark" style="font-size: 13px; color: var(--text-muted);" title="현재 열 삭제"></i>';
+
 icons['undo'] = '<i class="fa-solid fa-rotate-left" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['redo'] = '<i class="fa-solid fa-rotate-right" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['code-block'] = '<i class="fa-solid fa-code" style="font-size: 14px; color: var(--text-muted);"></i>';
@@ -58,6 +73,64 @@ const quill = new Quill('#editor', {
         syntax: true,
         table: true,
         history: { delay: 1000, maxStack: 100, userOnly: true },
+        keyboard: {
+            bindings: {
+                // 🎯 [표 개선] Ctrl+Enter (Cmd+Enter): 표 중간 어디서든 표 바로 아래로 탈출!
+                'table-cell-ctrl-enter': {
+                    key: 'Enter',
+                    shortKey: true,
+                    format: ['table'],
+                    handler: function (range) {
+                        const tableModule = this.quill.getModule('table');
+                        if (tableModule) {
+                            const [table] = tableModule.getTable(range);
+                            if (table) {
+                                const tableEnd = table.offset() + table.length();
+                                const Delta = Quill.import('delta');
+                                const delta = new Delta().retain(tableEnd).insert('\n');
+                                this.quill.updateContents(delta, Quill.sources.USER);
+                                this.quill.setSelection(tableEnd, Quill.sources.USER);
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                },
+                // 🎯 [표 개선] Quill 순정 버그 수정: 첫 행에서 Enter 누를 때 표 위 빈 줄로 정상 탈출
+                'table enter': {
+                    key: 'Enter',
+                    shiftKey: null,
+                    format: ['table'],
+                    handler: function (range) {
+                        const tableModule = this.quill.getModule('table');
+                        if (!tableModule) return true;
+                        const [table, row] = tableModule.getTable(range);
+                        if (!table || !row) return true;
+
+                        const isFirstRow = (row.prev == null);
+                        const isLastRow = (row.next == null);
+                        const Delta = Quill.import('delta');
+
+                        if (isFirstRow) {
+                            const tableStart = table.offset();
+                            const delta = new Delta();
+                            if (tableStart > 0) delta.retain(tableStart);
+                            delta.insert('\n');
+                            this.quill.updateContents(delta, Quill.sources.USER);
+                            this.quill.setSelection(tableStart, Quill.sources.USER);
+                            return false;
+                        } else if (isLastRow) {
+                            const tableEnd = table.offset() + table.length();
+                            const delta = new Delta().retain(tableEnd).insert('\n');
+                            this.quill.updateContents(delta, Quill.sources.USER);
+                            this.quill.setSelection(tableEnd, Quill.sources.USER);
+                            return false;
+                        }
+                        return false; // 중간 행에서는 아무 동작도 하지 않음 (순정 동일)
+                    }
+                }
+            }
+        },
         // 🎯 [신규 장착] 클립보드 복사/붙여넣기 시 강제 서식 제거 엔진 (V2.0 기능 통합본)
         clipboard: {
             matchers: [
@@ -77,25 +150,45 @@ const quill = new Quill('#editor', {
             ]
         },
         toolbar: {
-            // 🎯 기획자님의 완벽한 2줄 맞춤형 설계도 적용
             container: [
                 // --- 1행 ---
                 ['undo', 'redo'],
                 [{ 'header': [1, 2, 3, false] }],
                 ['bold', 'italic', 'underline', 'strike', 'strike-line', { 'color': [] }, { 'background': [] }],
-                ['table', 'table-insert-row', 'table-insert-column'],
                 [{ 'list': 'check' }, { 'list': 'ordered' }, { 'list': 'bullet' }],
                 [{ 'align': [] }],
+                ['table', 'table-insert-row', 'table-delete-row', 'table-insert-column', 'table-delete-column'],
                 ['blockquote', 'code-block', 'divider'],
                 ['link', 'image', 'video'],
-                ['clean']
+                ['clean'],
+                ['markdown-help']
             ],
             handlers: {
-                // 🎯 취소/복구 버튼 눌렀을 때 작동할 명령 연결
+                'markdown-help': function () {
+                    openMarkdownHelpModal();
+                },
                 'undo': function () { this.quill.history.undo(); },
                 'redo': function () { this.quill.history.redo(); },
-                'table-insert-row': function () { this.quill.getModule('table').insertRowBelow(); },
-                'table-insert-column': function () { this.quill.getModule('table').insertColumnRight(); },
+                'table': function () {
+                    const tableModule = this.quill.getModule('table');
+                    if (tableModule) tableModule.insertTable(3, 3);
+                },
+                'table-insert-row': function () {
+                    const tableModule = this.quill.getModule('table');
+                    if (tableModule) tableModule.insertRowBelow();
+                },
+                'table-delete-row': function () {
+                    const tableModule = this.quill.getModule('table');
+                    if (tableModule) tableModule.deleteRow();
+                },
+                'table-insert-column': function () {
+                    const tableModule = this.quill.getModule('table');
+                    if (tableModule) tableModule.insertColumnRight();
+                },
+                'table-delete-column': function () {
+                    const tableModule = this.quill.getModule('table');
+                    if (tableModule) tableModule.deleteColumn();
+                },
                 'video': customVideoHandler,
 
                 // 🎯 아래 3가지는 기획자님의 기존 코드 그대로 유지! (건드리지 마세요)
@@ -144,40 +237,78 @@ const quill = new Quill('#editor', {
                     }
                 },
 
-                // 🎯 스마트 가로 구분선 (불필요한 줄바꿈 방지)
+                // 🎯 스마트 가로 구분선 (원클릭 즉시 생성 + 밑에 정확히 딱 1줄만 생성)
                 'divider': function () {
                     const range = this.quill.getSelection(true);
+                    if (!range) return;
 
-                    // 1. 현재 커서가 있는 줄이 '빈 줄'인지 확인합니다.
-                    const [line, offset] = this.quill.getLine(range.index);
+                    const [line] = this.quill.getLine(range.index);
+                    if (!line) return;
+
+                    const lineStart = this.quill.getIndex(line);
                     const isLineEmpty = line.length() <= 1;
+                    const Delta = Quill.import('delta');
 
-                    // 2. 구분선을 삽입합니다.
-                    this.quill.insertEmbed(range.index, 'divider', true, Quill.sources.USER);
-
-                    let nextIndex = range.index + 1;
-
-                    // 3. 빈 줄에 구분선을 넣었을 때 Quill이 오지랖으로 만들어낸 불필요한 \n(엔터) 하나를 강제로 지워버립니다.
                     if (isLineEmpty) {
-                        this.quill.deleteText(nextIndex, 1, Quill.sources.USER);
+                        // 1) 빈 줄인 경우: 현재 빈 줄 자리에 구분선을 넣고, 바로 밑에 딱 1줄 빈 줄 생성
+                        const delta = new Delta();
+                        if (lineStart > 0) delta.retain(lineStart);
+                        delta.delete(1).insert({ divider: true }).insert('\n');
+                        this.quill.updateContents(delta, Quill.sources.USER);
+                        this.quill.setSelection(lineStart + 1, 0, Quill.sources.USER);
+                    } else {
+                        // 2) 글을 쓰던 중인 경우: 쓰던 글 바로 아래에 구분선을 넣고, 그 아래에 딱 1줄 빈 줄 생성
+                        const lineEnd = lineStart + line.length();
+                        const delta = new Delta();
+                        if (lineEnd > 0) delta.retain(lineEnd);
+                        delta.insert({ divider: true }).insert('\n');
+                        this.quill.updateContents(delta, Quill.sources.USER);
+                        this.quill.setSelection(lineEnd + 1, 0, Quill.sources.USER);
                     }
-
-                    // 4. 불필요한 엔터를 지운 후, 문서의 최신 전체 길이를 측정합니다.
-                    const length = this.quill.getLength();
-
-                    // 5. 기획자님 요구사항: "구분선 밑에 아무것도 없을 때(문서 맨 끝일 때)만 강제 줄바꿈 한 줄 추가"
-                    if (nextIndex >= length - 1) {
-                        this.quill.insertText(nextIndex, '\n', Quill.sources.USER);
-                    }
-
-                    // 6. 커서를 구분선 바로 밑으로 부드럽게 이동시킵니다.
-                    this.quill.setSelection(nextIndex, Quill.sources.SILENT);
-                    this.quill.removeFormat(nextIndex, 1, Quill.sources.USER);
                 }
             }
         }
     }
 
+});
+
+// 🎯 [V3.3.2] 편집기 스크롤 감지 및 플로팅 버튼 동기화
+if (quill && quill.root) {
+    quill.root.addEventListener("scroll", () => {
+        if (typeof window.updateScrollToTopBtn === "function") {
+            window.updateScrollToTopBtn();
+        }
+    }, { passive: true });
+}
+
+// 🎯 [V3.3.3] 마크다운 문법 안내 모달 제어 함수
+function openMarkdownHelpModal() {
+    const modal = document.getElementById('markdown-help-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeMarkdownHelpModal() {
+    const modal = document.getElementById('markdown-help-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+window.openMarkdownHelpModal = openMarkdownHelpModal;
+window.closeMarkdownHelpModal = closeMarkdownHelpModal;
+
+// 툴바 마크다운 버튼 툴팁 및 ESC 닫기 이벤트 등록
+const mdHelpBtn = document.querySelector('.ql-markdown-help');
+if (mdHelpBtn) {
+    mdHelpBtn.setAttribute('title', '마크다운 문법 (MD)');
+    mdHelpBtn.setAttribute('aria-label', '마크다운 문법 안내');
+}
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const mdModal = document.getElementById('markdown-help-modal');
+        if (mdModal && mdModal.style.display === 'flex') {
+            closeMarkdownHelpModal();
+        }
+    }
 });
 
 // 🎯 [통합 완료] 이미지 붙여넣기 완벽 제어 엔진
@@ -237,9 +368,15 @@ quill.on('text-change', function (delta, oldDelta, source) {
             else if (prefix === '*' || prefix === '-') quill.formatLine(formatIndex, 1, 'list', 'bullet', Quill.sources.SILENT);
             else if (prefix === '1.') quill.formatLine(formatIndex, 1, 'list', 'ordered', Quill.sources.SILENT);
             else if (prefix === '---') {
-                quill.insertEmbed(formatIndex, 'divider', true, Quill.sources.SILENT);
-                quill.setSelection(formatIndex + 1, Quill.sources.SILENT);
-                quill.removeFormat(formatIndex + 1, 1, Quill.sources.SILENT);
+                const Delta = Quill.import('delta');
+                const delta = new Delta();
+                if (formatIndex > 0) delta.retain(formatIndex);
+                delta.insert({ divider: true });
+                if (formatIndex >= quill.getLength() - 1) {
+                    delta.insert('\n');
+                }
+                quill.updateContents(delta, Quill.sources.USER);
+                quill.setSelection(formatIndex + 1, 0, Quill.sources.USER);
             }
             else if (prefix === '```') quill.formatLine(formatIndex, 1, 'code-block', true, Quill.sources.SILENT);
             else if (prefix === '[ ]' || prefix === '[x]') {
@@ -999,4 +1136,182 @@ document.querySelector('.ql-editor').addEventListener('click', function (e) {
             if (typeof showToast === 'function') showToast("복사에 실패했습니다.");
         });
     }
+});
+
+// ============================================================================
+// 🎯 [V3.3.1] 표 셀 내부 줄바꿈(Shift+Enter) 엔진 (방향키/탈출/삭제는 100% Quill 순정 보장)
+// ============================================================================
+quill.root.addEventListener("keydown", function (e) {
+    // Shift + Enter 가 아니면 일절 가로채지 않음 -> Quill 순정 로직(상하 셀 이동, 표 탈출 등)이 100% 작동
+    if (e.key !== "Enter" || !e.shiftKey) return;
+
+    // 커서가 표의 셀(TD 또는 TH) 내부에 있는지 확인
+    const selection = window.getSelection();
+    let cell = null;
+    if (selection && selection.rangeCount > 0) {
+        const node = selection.anchorNode;
+        cell = node?.nodeType === 1 ? node.closest("td, th") : node?.parentElement?.closest("td, th");
+    }
+    if (!cell) {
+        const range = quill.getSelection() || quill.getSelection(true);
+        if (range) {
+            const [line] = quill.getLine(range.index);
+            cell = line?.domNode?.closest("td, th");
+        }
+    }
+
+    if (!cell) return;
+
+    // 🚀 Shift + Enter: 셀 내부에 SoftBreak Blot (<br class="ql-softbreak">) 삽입
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    const curRange = quill.getSelection(true) || quill.getSelection();
+    if (curRange) {
+        quill.insertEmbed(curRange.index, "softbreak", true, Quill.sources.USER);
+        quill.setSelection(curRange.index + 1, 0, Quill.sources.USER);
+    }
+}, true); // 👈 capture: true로 Quill의 'table enter'(표 탈출) 바인딩만 정확히 차단
+
+// ============================================================================
+// 🎯 [V3.3.1] 표 전용 세련된 우클릭 & 모바일 롱프레스 컨텍스트 메뉴 엔진
+// ============================================================================
+window.addEventListener("DOMContentLoaded", () => {
+    const tableContextMenu = document.getElementById("table-context-menu");
+    if (!tableContextMenu || !window.quill) return;
+
+    // 🎯 팝업 메뉴 위치 보정 및 표시 통합 헬퍼
+    function showTableContextMenu(cell, clientX, clientY) {
+        // 커서가 이미 해당 셀 안에 있다면 현재 텍스트 위치를 유지하고,
+        // 다른 곳에 있었다면 해당 셀의 맨 앞으로 포커스
+        const curSel = quill.getSelection();
+        let isInsideCell = false;
+        if (curSel) {
+            const [line] = quill.getLine(curSel.index);
+            isInsideCell = (line?.domNode?.closest("td, th") === cell);
+        }
+        if (!isInsideCell) {
+            const blot = Quill.find(cell);
+            if (blot && typeof blot.offset === 'function') {
+                quill.setSelection(blot.offset(quill.scroll), 0, Quill.sources.USER);
+            }
+        }
+
+        // 2. 팝업 메뉴 위치 보정 (화면 경계선 방어)
+        const menuWidth = 175;
+        const menuHeight = 310;
+        let x = clientX;
+        let y = clientY;
+
+        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+        tableContextMenu.style.left = `${Math.max(10, x)}px`;
+        tableContextMenu.style.top = `${Math.max(10, y)}px`;
+        tableContextMenu.style.display = "block";
+    }
+
+    // 1. PC: 마우스 오른쪽 버튼(우클릭) 메뉴
+    quill.root.addEventListener("contextmenu", (e) => {
+        const cell = e.target.closest("td, th");
+        if (!cell) {
+            tableContextMenu.style.display = "none";
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        showTableContextMenu(cell, e.clientX, e.clientY);
+    });
+
+    // 2. 모바일: 450ms 롱프레스(길게 누르기) 메뉴 지원
+    let touchTimer = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    quill.root.addEventListener("touchstart", (e) => {
+        const cell = e.target.closest("td, th");
+        if (!cell || e.touches.length > 1) return;
+
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+
+        touchTimer = setTimeout(() => {
+            if (navigator.vibrate) navigator.vibrate(40); // 부드러운 햅틱 반응
+            showTableContextMenu(cell, touchStartX, touchStartY);
+        }, 450);
+    }, { passive: true });
+
+    quill.root.addEventListener("touchmove", (e) => {
+        if (touchTimer && e.touches.length > 0) {
+            const moveX = Math.abs(e.touches[0].clientX - touchStartX);
+            const moveY = Math.abs(e.touches[0].clientY - touchStartY);
+            // 손가락이 10px 이상 움직이면 스크롤로 간주하여 메뉴 취소
+            if (moveX > 10 || moveY > 10) {
+                clearTimeout(touchTimer);
+                touchTimer = null;
+            }
+        }
+    }, { passive: true });
+
+    quill.root.addEventListener("touchend", () => {
+        if (touchTimer) {
+            clearTimeout(touchTimer);
+            touchTimer = null;
+        }
+    }, { passive: true });
+
+    // 화면 아무 곳이나 누르면 컨텍스트 메뉴 닫기
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest("#table-context-menu")) {
+            tableContextMenu.style.display = "none";
+        }
+    });
+
+    // 컨텍스트 메뉴 항목 클릭 동작
+    tableContextMenu.querySelectorAll(".table-menu-item").forEach((item) => {
+        item.addEventListener("click", () => {
+            const action = item.dataset.action;
+            tableContextMenu.style.display = "none";
+            const tableModule = quill.getModule("table");
+            if (!tableModule) return;
+
+            quill.focus();
+
+            switch (action) {
+                case "insert-softbreak": {
+                    const sel = quill.getSelection(true) || quill.getSelection();
+                    if (sel) {
+                        quill.insertEmbed(sel.index, "softbreak", true, Quill.sources.USER);
+                        quill.setSelection(sel.index + 1, 0, Quill.sources.USER);
+                    }
+                    break;
+                }
+                case "insert-row-above":
+                    tableModule.insertRowAbove();
+                    break;
+                case "insert-row-below":
+                    tableModule.insertRowBelow();
+                    break;
+                case "insert-col-left":
+                    tableModule.insertColumnLeft();
+                    break;
+                case "insert-col-right":
+                    tableModule.insertColumnRight();
+                    break;
+                case "delete-row":
+                    tableModule.deleteRow();
+                    break;
+                case "delete-col":
+                    tableModule.deleteColumn();
+                    break;
+                case "delete-table":
+                    if (confirm("현재 표를 전체 삭제하시겠습니까?")) {
+                        tableModule.deleteTable();
+                    }
+                    break;
+            }
+        });
+    });
 });

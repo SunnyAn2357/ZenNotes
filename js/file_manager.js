@@ -837,12 +837,14 @@ function emergencyDeleteSecurity() {
 
     allData.forEach((m) => {
       if (m.isSystem === "security") return; // 폴더 껍데기는 살려둠
-      // 보안폴더 직속이거나 하위 자손이면 가차 없이 DB에서 완전 삭제!
+      // 보안폴더 직속이거나 하위 자손이면 가차 없이 영구 삭제 처리 (클라우드도 함께 삭제 연동)!
       if (
         m.parentId === globalSecurityFolderId ||
         isDescendantOfSec(m.parentId)
       ) {
-        store.delete(m.id);
+        m.isPermanentlyDeleted = true;
+        m.updatedAt = Date.now();
+        store.put(m);
       }
     });
   };
@@ -1322,9 +1324,14 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     return;
   }
 
-  // 4. 변환 작업 (외계어 씌우기 or 벗기기)
-  let actualMoveCount = 0;
-  let undoPayload = [];
+  // 🎯 [V3.4.0] 대상 폴더의 syncId 확보 (글로벌 족보 동기화용)
+  let destSyncId = null;
+  if (selectedDestId !== null) {
+    const destFolder = await new Promise((res) => {
+      db.transaction(["memos"], "readonly").objectStore("memos").get(selectedDestId).onsuccess = (e) => res(e.target.result);
+    });
+    if (destFolder) destSyncId = destFolder.syncId || null;
+  }
 
   showToast("데이터를 변환하며 이동 중입니다...\n(잠시만 기다려주세요)");
 
@@ -1343,6 +1350,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     }
 
     m.parentId = selectedDestId;
+    m.parentSyncId = destSyncId; // 🎯 [V3.4.0 핵심] 새 부모의 글로벌 족보 동기화!
     m.updatedAt = Date.now();
     if (m.isDeleted) {
       m.isDeleted = false;
@@ -2137,10 +2145,13 @@ function backupDesktop() {
 
   // 1. 현재 일시로 새로운 백업 폴더 생성
   const folderName = formatDateTime(Date.now());
+  const newFolderSyncId = typeof generateSyncId === "function" ? generateSyncId() : Date.now().toString(36);
   const newFolder = {
     title: folderName,
     type: "folder",
     parentId: globalBackupFolderId, // 백업 시스템 폴더 아래에 생성
+    parentSyncId: "sys_backup",
+    syncId: newFolderSyncId,
     updatedAt: Date.now(),
     isDeleted: false,
   };
@@ -2158,6 +2169,7 @@ function backupDesktop() {
           !m.isPermanentlyDeleted
         ) {
           m.parentId = newBackupFolderId;
+          m.parentSyncId = newFolderSyncId; // 🎯 [V3.4.0]
           m.updatedAt = Date.now();
           store.put(m);
         }
@@ -2186,6 +2198,7 @@ function backupThisFolder() {
     const folder = e.target.result;
     if (folder) {
       folder.parentId = globalBackupFolderId; // 🎯 백업 폴더로 족보 변경
+      folder.parentSyncId = "sys_backup"; // 🎯 [V3.4.0]
       folder.updatedAt = Date.now();
       store.put(folder);
     }

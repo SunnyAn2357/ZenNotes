@@ -663,3 +663,85 @@ window.addEventListener('keydown', function (e) {
     e.preventDefault();
   }
 });
+
+/* ==========================================
+   🎯 [V3.3.2] 편집기 맨 위로 이동 플로팅 버튼 (Scroll to Top)
+   ========================================== */
+function initScrollToTop() {
+  const btn = document.getElementById("scroll-to-top-btn");
+  if (!btn) return;
+
+  function updateBtnVisibility() {
+    // 파일 관리자 화면이 열려있으면 숨김
+    const fmPane = document.getElementById("file-manager-pane");
+    if (fmPane && (fmPane.style.display === "flex" || fmPane.style.display === "block")) {
+      btn.classList.remove("visible");
+      return;
+    }
+
+    const qlEditor = document.querySelector(".ql-editor");
+    const qlContainer = document.querySelector(".ql-container");
+    const quillWrapper = document.querySelector(".quill-wrapper");
+    const colCenter = document.querySelector(".col-center");
+
+    const currentScroll = Math.max(
+      qlEditor ? qlEditor.scrollTop : 0,
+      qlContainer ? qlContainer.scrollTop : 0,
+      quillWrapper ? quillWrapper.scrollTop : 0,
+      colCenter ? colCenter.scrollTop : 0,
+      window.scrollY || document.documentElement.scrollTop || 0
+    );
+
+    // 🎯 아래로 스크롤했을 때 (300px 이상) 플로팅 버튼 노출
+    if (currentScroll > 300) {
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+  }
+
+  window.updateScrollToTopBtn = updateBtnVisibility;
+
+  function scrollToTop() {
+    const qlEditor = document.querySelector(".ql-editor");
+    const qlContainer = document.querySelector(".ql-container");
+    const quillWrapper = document.querySelector(".quill-wrapper");
+    const colCenter = document.querySelector(".col-center");
+
+    if (qlEditor && qlEditor.scrollTop > 0) {
+      qlEditor.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    if (qlContainer && qlContainer.scrollTop > 0) {
+      qlContainer.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    if (quillWrapper && quillWrapper.scrollTop > 0) {
+      quillWrapper.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    if (colCenter && colCenter.scrollTop > 0) {
+      colCenter.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  btn.addEventListener("click", scrollToTop);
+
+  // 🎯 capture: true로 .ql-editor 및 모든 자식의 스크롤을 100% 포착
+  window.addEventListener("scroll", updateBtnVisibility, { passive: true, capture: true });
+  document.addEventListener("scroll", updateBtnVisibility, { passive: true, capture: true });
+
+  const qlEditor = document.querySelector(".ql-editor");
+  if (qlEditor) {
+    qlEditor.addEventListener("scroll", updateBtnVisibility, { passive: true });
+  }
+  const qlContainer = document.querySelector(".ql-container");
+  if (qlContainer) {
+    qlContainer.addEventListener("scroll", updateBtnVisibility, { passive: true });
+  }
+  const colCenter = document.querySelector(".col-center");
+  if (colCenter) {
+    colCenter.addEventListener("scroll", updateBtnVisibility, { passive: true });
+  }
+}
+
+window.addEventListener("DOMContentLoaded", initScrollToTop);
+window.addEventListener("load", initScrollToTop);
