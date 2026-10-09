@@ -842,7 +842,7 @@ function showPdfPageRangeModal(totalPages) {
   });
 }
 
-// 🎯 [V3.4.2] PDF 단일 페이지 Canvas 렌더링 헬퍼 (초고화질 Scale 최적화, JPEG 92%)
+// 🎯 [V3.4.3] PDF 단일 페이지 Canvas 렌더링 헬퍼 (초고화질 Scale 최적화, JPEG 92%)
 async function renderPdfPageToBase64(pdf, pageNum) {
   try {
     const page = await pdf.getPage(pageNum);

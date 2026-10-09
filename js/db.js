@@ -521,7 +521,7 @@ function healDatabase(callback) {
       let currentParent = m.parentId;
       let changed = false;
 
-      // 🚀 [V3.4.2 핵심 교정: 글로벌 족보 동기화]
+      // 🚀 [V3.4.3 핵심 교정: 글로벌 족보 동기화]
       // 1. 내 기기의 parentId가 유효한 폴더라면, parentSyncId를 현재 부모의 syncId로 맞춤 (사용자의 폴더 이동 존중 및 고정)
       if (m.parentId !== null && validIds.has(m.parentId)) {
         const curParent = allData.find(f => f.id === m.parentId);

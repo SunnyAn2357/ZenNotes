@@ -170,7 +170,7 @@ const quill = new Quill('#editor', {
                 'markdown-help': function () {
                     openMarkdownHelpModal();
                 },
-                // 🎯 [V3.4.2] 하이퍼링크 커스텀 핸들러: 선택 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
+                // 🎯 [V3.4.3] 하이퍼링크 커스텀 핸들러: 선택 블록 자동 입력 + 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
                 'link': function (value) {
                     if (value) {
                         let range = this.quill.getSelection();
@@ -192,33 +192,27 @@ const quill = new Quill('#editor', {
                         showLinkSelectionHighlight(range);
 
                         const formats = this.quill.getFormat(range);
-                        let preview = formats.link || '';
-                        if (!preview) {
-                            const text = this.quill.getText(range.index, range.length).trim();
-                            if (/^https?:\/\//i.test(text) || /^\S+@\S+\.\S+$/.test(text)) {
-                                preview = /^\S+@\S+\.\S+$/.test(text) && !text.startsWith('mailto:') ? 'mailto:' + text : text;
-                            }
+                        const selectedText = this.quill.getText(range.index, range.length).trim();
+                        let preview = formats.link || selectedText;
+                        if (/^\S+@\S+\.\S+$/.test(preview) && !preview.startsWith('mailto:')) {
+                            preview = 'mailto:' + preview;
                         }
 
                         const { tooltip } = this.quill.theme;
-                        tooltip.edit('link', preview);
 
-                        // 2. 모바일 가상 키보드가 즉시 튀어나오지 않도록 readonly 부여 (입력란 터치 시 키보드 오픈)
-                        if (window.innerWidth <= 768) {
-                            if (tooltip.textbox) {
-                                tooltip.textbox.setAttribute('readonly', 'readonly');
-                                const unlockInput = () => {
-                                    tooltip.textbox.removeAttribute('readonly');
-                                    tooltip.textbox.removeEventListener('focus', unlockInput);
-                                    tooltip.textbox.removeEventListener('touchstart', unlockInput);
-                                    tooltip.textbox.removeEventListener('click', unlockInput);
-                                };
-                                tooltip.textbox.addEventListener('focus', unlockInput);
-                                tooltip.textbox.addEventListener('touchstart', unlockInput);
-                                tooltip.textbox.addEventListener('click', unlockInput);
-                            }
+                        // 2. 모바일 가상 키보드가 즉시 튀어나오지 않도록 edit 실행 전에 미리 readonly 부여
+                        if (window.innerWidth <= 768 && tooltip && tooltip.textbox) {
+                            tooltip.textbox.setAttribute('readonly', 'readonly');
+                            const unlockInput = () => {
+                                tooltip.textbox.removeAttribute('readonly');
+                                tooltip.textbox.focus();
+                            };
+                            tooltip.textbox.addEventListener('touchstart', unlockInput, { once: true });
+                            tooltip.textbox.addEventListener('click', unlockInput, { once: true });
                             history.pushState({ modal: 'ql-tooltip' }, '');
                         }
+
+                        tooltip.edit('link', preview);
                     } else {
                         this.quill.format('link', false);
                         removeLinkSelectionHighlight();
@@ -330,7 +324,7 @@ const quill = new Quill('#editor', {
 
 });
 
-// 🎯 [V3.4.2] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
+// 🎯 [V3.4.3] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
 let linkHighlightContainer = null;
 
 function showLinkSelectionHighlight(range) {
@@ -396,6 +390,16 @@ window.removeLinkSelectionHighlight = removeLinkSelectionHighlight;
 
 // 🎯 툴팁 닫힘 시 하이라이트 자동 해제 및 모바일 히스토리 정리 훅
 if (quill && quill.theme && quill.theme.tooltip) {
+    const tooltipRoot = quill.theme.tooltip.root;
+    if (tooltipRoot) {
+        // 🎯 툴팁 내부(입력란, 버튼 등) 클릭/터치 시 부모(.col-center)로 이벤트가 새어나가서 quill.focus()가 발동되어 창이 닫히는 현상 완벽 차단!
+        ['mousedown', 'touchstart', 'click'].forEach((evt) => {
+            tooltipRoot.addEventListener(evt, (e) => {
+                e.stopPropagation();
+            });
+        });
+    }
+
     const origTooltipSave = quill.theme.tooltip.save.bind(quill.theme.tooltip);
     quill.theme.tooltip.save = function () {
         activeMenuSelection = null; // 링크 적용 저장이 완료되었으므로 복원 취소
@@ -431,7 +435,7 @@ if (quill && quill.root) {
     }, { passive: true });
 }
 
-// 🎯 [V3.4.2] 마크다운 문법 안내 모달 제어 함수
+// 🎯 [V3.4.3] 마크다운 문법 안내 모달 제어 함수
 function openMarkdownHelpModal() {
     const curSel = quill.getSelection() || (typeof lastValidTextSelection !== 'undefined' ? lastValidTextSelection : null);
     if (curSel && curSel.length > 0) {
@@ -686,8 +690,13 @@ const handleImageFiles = (files) => {
 
 // 1. 빈 공간 클릭 시 에디터 포커스 (파일 관리창 열려있을 땐 방어)
 document.querySelector('.col-center').addEventListener('click', e => {
-    // 🎯 [수정] 파일 관리창(.file-manager-pane)을 클릭했을 때는 에디터가 포커스를 훔쳐가지 못하게 철벽 방어!
-    if (!e.target.closest('.editor-header') && !e.target.closest('.ql-toolbar') && !e.target.closest('.ql-editor') && !e.target.closest('.file-manager-pane')) {
+    // 🎯 [수정] 파일 관리창(.file-manager-pane), 툴팁(.ql-tooltip), 모바일 오버레이, 에디터/헤더/툴바 클릭 시 포커스 탈취 차단!
+    if (!e.target.closest('.editor-header') && 
+        !e.target.closest('.ql-toolbar') && 
+        !e.target.closest('.ql-editor') && 
+        !e.target.closest('.ql-tooltip') && 
+        !e.target.closest('#zen-mobile-overlay') && 
+        !e.target.closest('.file-manager-pane')) {
         quill.focus();
     }
 });
