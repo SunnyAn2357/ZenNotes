@@ -4,6 +4,7 @@ function gapiLoaded() {
       await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
       gapiInited = true;
       console.log("✅ 구글 API 준비 완료!");
+      onAuthAPIsReady();
     } catch (e) {
       console.error("❌ GAPI 초기화 실패:", e);
     }
@@ -14,33 +15,199 @@ function gisLoaded() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
-    // 🎯 추가됨: 매번 무작위 암호를 생성하여 위조된 응답(CSRF)을 방어합니다.
+    // 🎯 매번 무작위 암호를 생성하여 위조된 응답(CSRF)을 방어합니다.
     state: Math.random().toString(36).substring(2),
     callback: ''
   });
   gisInited = true;
   console.log("✅ 구글 인증 준비 완료!");
+  onAuthAPIsReady();
+}
+
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+// 🚀 [상시 로그인 유지 시스템] 영속성 저장, 복원, 무음 갱신(Silent Refresh)
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+
+// 🎯 1. 세션 보관 (localStorage 영속화)
+function saveAuthSession(resp, userEmail = null) {
+  if (!resp || !resp.access_token) return;
+
+  const expiresInSec = resp.expires_in ? parseInt(resp.expires_in, 10) : 3540;
+  // 안전마진 60초 확보하여 만료 시각 계산
+  tokenExpiryTime = Date.now() + (expiresInSec * 1000);
+
+  localStorage.setItem("zen_oauth_token", resp.access_token);
+  localStorage.setItem("zen_token_expiry", tokenExpiryTime.toString());
+  localStorage.setItem("zen_auto_login", "true");
+  if (userEmail) {
+    localStorage.setItem("zen_user_hint", userEmail);
+  }
+
+  scheduleTokenRefresh();
+}
+
+// 🎯 2. 완전 로그아웃
+function clearAuthSession() {
+  if (tokenRefreshTimer) {
+    clearTimeout(tokenRefreshTimer);
+    tokenRefreshTimer = null;
+  }
+  tokenExpiryTime = 0;
+
+  if (gapiInited && window.gapi && gapi.client) {
+    const curToken = gapi.client.getToken();
+    if (curToken && curToken.access_token && window.google?.accounts?.oauth2?.revoke) {
+      try {
+        google.accounts.oauth2.revoke(curToken.access_token, () => {});
+      } catch (e) {}
+    }
+    gapi.client.setToken(null);
+  }
+
+  localStorage.removeItem("zen_oauth_token");
+  localStorage.removeItem("zen_token_expiry");
+  localStorage.removeItem("zen_auto_login");
+  localStorage.removeItem("zen_user_hint");
+
+  checkAuthState();
+  console.log("🔒 [Google Auth] 안전하게 로그아웃되었습니다.");
+}
+
+let isRefreshing = false;
+let refreshPromise = null;
+
+// 🎯 3. 백그라운드 무음 갱신 (Silent Refresh - 팝업/알림 없이 조용히 토큰 갱신)
+async function silentRefreshToken() {
+  if (!gisInited || !tokenClient) return false;
+  if (isRefreshing && refreshPromise) return refreshPromise;
+
+  isRefreshing = true;
+  refreshPromise = new Promise((resolve) => {
+    const hint = localStorage.getItem("zen_user_hint") || "";
+    const requestConfig = {
+      prompt: "", // 🚀 핵심: 프롬프트 없이 무음 인가 요청
+    };
+    if (hint) {
+      requestConfig.hint = hint; // 🚀 특정 계정을 지정하여 계정 선택 팝업 방지
+    }
+
+    const prevCallback = tokenClient.callback;
+
+    tokenClient.callback = async (resp) => {
+      isRefreshing = false;
+      refreshPromise = null;
+      tokenClient.callback = prevCallback;
+
+      if (resp && !resp.error && resp.access_token) {
+        console.log("🔄 [Google Auth] 백그라운드 무음 토큰 갱신 성공! (상시 로그인 유지)");
+        gapi.client.setToken(resp);
+
+        let userEmail = localStorage.getItem("zen_user_hint");
+        if (!userEmail) {
+          userEmail = await fetchUserEmail(resp.access_token);
+        }
+        saveAuthSession(resp, userEmail);
+        checkAuthState();
+        resolve(true);
+      } else {
+        console.warn("⚠️ 백그라운드 무음 갱신 미완료:", resp?.error);
+        resolve(false);
+      }
+    };
+
+    try {
+      tokenClient.requestAccessToken(requestConfig);
+    } catch (e) {
+      console.warn("❌ silentRefreshToken 실행 오류:", e);
+      isRefreshing = false;
+      refreshPromise = null;
+      tokenClient.callback = prevCallback;
+      resolve(false);
+    }
+  });
+
+  return refreshPromise;
+}
+
+// 🎯 4. 만료 5분 전 자동 갱신 스케줄러
+function scheduleTokenRefresh() {
+  if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
+
+  const now = Date.now();
+  const leadTime = 5 * 60 * 1000; // 만료 5분 전
+  const delay = Math.max(10000, (tokenExpiryTime - now) - leadTime);
+
+  tokenRefreshTimer = setTimeout(async () => {
+    console.log("⏰ 토큰 만료 5분 전 감지: 백그라운드 무음 갱신을 실행합니다...");
+    const ok = await silentRefreshToken();
+    if (!ok) {
+      console.log("ℹ️ 백그라운드 갱신 대기 (동기화 트리거 시 재시도 예정)");
+    }
+  }, delay);
+}
+
+// 🎯 5. 유저 이메일 획득 (무음 갱신 시 hint로 사용하여 팝업 차단)
+async function fetchUserEmail(accessToken) {
+  try {
+    const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.email || null;
+    }
+  } catch (e) {
+    // 무시
+  }
+  return null;
+}
+
+// 🎯 6. 앱 초기화 시 토큰 복원 또는 자동 로그인
+async function onAuthAPIsReady() {
+  if (!gapiInited || !gisInited) return;
+
+  const savedToken = localStorage.getItem("zen_oauth_token");
+  const savedExpiry = parseInt(localStorage.getItem("zen_token_expiry") || "0", 10);
+  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
+  const now = Date.now();
+
+  // Case A: 로컬스토리지에 유효한 토큰이 남아있는 경우 (새로고침/재접속 시 즉시 연결!)
+  if (savedToken && savedExpiry > (now + 60 * 1000)) {
+    console.log("🔑 [Google Auth] 저장된 토큰 복원 완료! 즉시 클라우드 온라인 활성화");
+    gapi.client.setToken({ access_token: savedToken });
+    tokenExpiryTime = savedExpiry;
+    checkAuthState();
+    scheduleTokenRefresh();
+    setTimeout(() => { smartSync(); }, 1500);
+    return;
+  }
+
+  // Case B: 토큰이 만료되었지만 이전에 로그인했던 이력이 있는 경우 -> 백그라운드 무음 갱신
+  if (autoLogin) {
+    console.log("🔄 [Google Auth] 자동 로그인 감지: 백그라운드 무음 토큰 발급 시도...");
+    const success = await silentRefreshToken();
+    if (success) {
+      setTimeout(() => { smartSync(); }, 1500);
+    } else {
+      checkAuthState();
+    }
+  } else {
+    checkAuthState();
+  }
 }
 
 function checkAuthState() {
-  const currentTime = Date.now();
-
-  // 🚀 [핵심 수정] 토큰이 존재하고, 59분 수명도 아직 안 지났을 때만 '유효'로 인정!
   const hasToken = window.isZenOnline();
 
   const authBtnIcon = document.querySelector("#btn-auth i");
   if (authBtnIcon) authBtnIcon.style.color = hasToken ? "var(--accent)" : "";
 
-  // 🚀 [여기 딱 1줄만 추가!] 브라우저 전체에 현재 구름의 진짜 상태를 깃발로 꽂습니다!
   window.ZEN_IS_ONLINE = hasToken;
 
   if (hasToken) {
-    // 🎯 토큰이 유효할 땐 무조건 online이 아니라, 미동기 개수를 다시 세도록 넘깁니다. 
-    // (미동기가 0일 때 'online'으로 띄우는 세부 로직은 다음 ui.js 수정 시 추가하겠습니다)
     if (typeof updateUnsyncedCount === 'function') updateUnsyncedCount();
     else updateUIState("online-idle");
   } else {
-    // 🎯 1시간이 넘어 상한 토큰이면 확실하게 오프라인(회색) 처리!
     updateUIState("offline-idle");
   }
 }
@@ -49,6 +216,7 @@ window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
 
+// 🎯 구름 아이콘 클릭 시 (수동 동기화 또는 신규 로그인)
 document.getElementById("btn-auth").addEventListener("click", () => {
   if (!gapiInited || !gisInited) {
     alert("구글 서비스 준비 중입니다. 잠시 후 다시 시도해주세요.");
@@ -56,37 +224,56 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   }
   closeAllPanelsMobile();
 
-  // 🎯 [핵심 수정] 토큰이 있고, '50분 만료 시간'도 아직 안 지났을 때만 즉시 동기화
+  // 토큰이 유효한 상태라면 즉시 스마트 동기화
   if (gapi.client.getToken() !== null && Date.now() < tokenExpiryTime) {
     smartSync();
     return;
   }
 
-  // 🎯 토큰이 없거나, 시간이 지나서 상했다면 구글에 다시 요청 (사용자가 눌렀으니 팝업이 떠도 안전)
+  // 사용자가 직접 클릭한 시점이므로 팝업 로그인 허용
   tokenClient.callback = async (resp) => {
     if (resp.error !== undefined) {
       console.warn(">>> 동기화 취소 또는 에러", resp.error);
       return;
     }
 
-    // 🚀 토큰 수명 59분
-    tokenExpiryTime = Date.now() + (59 * 60 * 1000);
+    let userEmail = localStorage.getItem("zen_user_hint");
+    if (!userEmail) {
+      userEmail = await fetchUserEmail(resp.access_token);
+    }
+    saveAuthSession(resp, userEmail);
 
-    // 🚀 [핵심 추가] 토큰을 정상 발급받았으니, 즉시 계기판(구름)을 파란색으로 켭니다!
     checkAuthState();
 
     // 아이콘 깜빡임 효과
     const icon = document.querySelector("#btn-auth i");
-    icon.classList.add("blink-active");
-    setTimeout(() => icon.classList.remove("blink-active"), 1500);
+    if (icon) {
+      icon.classList.add("blink-active");
+      setTimeout(() => icon.classList.remove("blink-active"), 1500);
+    }
 
-    // 🚀 [4단계 핵심] 바로 동기화하지 않고, '이사'가 필요한지 먼저 확인합니다. 마이그레이션
     await checkAndMigrateV3();
-
-    // smartSync(); // 새로 받은 싱싱한 토큰으로 동기화 시작
   };
 
   tokenClient.requestAccessToken();
+});
+
+// 🎯 구름 아이콘 우클릭 시 명시적 로그아웃 지원
+document.getElementById("btn-auth").addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  const isOnline = window.isZenOnline();
+  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
+
+  if (!isOnline && !autoLogin) {
+    alert("현재 구글 연동이 되어 있지 않습니다.");
+    return;
+  }
+
+  const confirmLogout = confirm("구글 드라이브 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 로그인이 해제됩니다.");
+  if (confirmLogout) {
+    clearAuthSession();
+    alert("구글 드라이브 연동이 해제되었습니다.");
+  }
 });
 
 // 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
@@ -461,30 +648,31 @@ async function v3_uploadFile(token, fileName, fileContent, folderId, existingFil
 }
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 3. 59분 토큰 만료 검문소 (오프라인 전환)
+// 🚀 [ZenNotes V3] 3. 토큰 유효성 검문소 (만료 임박 시 무음 자동 연장)
 // ============================================================================
 async function ensureValidToken() {
   if (!gisInited || !tokenClient) return false;
 
   const currentTime = Date.now();
 
-  // 토큰이 없거나 수명(50분)이 초과되었다면?
-  if (gapi.client.getToken() === null || currentTime >= tokenExpiryTime) {
-    console.log("⚠️ 토큰 수명(1시간) 만료! 글쓰기 방해를 막기 위해 동기화를 일시 정지합니다.");
-
-    // 🚨 억지로 팝업을 띄우지 않습니다! 조용히 클라우드 연결만 끊습니다.
-    if (gapi.client.getToken() !== null) {
-      gapi.client.setToken(null);
+  // 토큰이 없거나 수명이 2분 미만으로 남았다면?
+  if (gapi.client.getToken() === null || (tokenExpiryTime - currentTime) < 2 * 60 * 1000) {
+    // 🌟 자동 로그인이 활성화되어 있다면 백그라운드 무음 갱신을 먼저 시도합니다!
+    if (localStorage.getItem("zen_auto_login") === "true") {
+      console.log("🔄 [동기화 검문소] 토큰 만료 임박 감지: 무음 갱신을 시도합니다...");
+      const refreshed = await silentRefreshToken();
+      if (refreshed) {
+        return true; // 성공 시 동기화 계속 진행!
+      }
     }
 
-    // 🎯 [수정됨] 구름 아이콘을 회색으로 바꾸고 오프라인 상태로 갱신합니다.
+    // 무음 갱신마저 실패(오프라인 등)한 경우에만 조용히 일시 정지 (글쓰기 방해 팝업 차단)
+    console.log("⚠️ 토큰 만료 및 무음 갱신 실패: 글쓰기 방해를 막기 위해 조용히 로컬 모드를 유지합니다.");
     checkAuthState();
-
-    // 검문 실패를 알려서, io.js가 로컬 DB에만 저장하고 클라우드 전송은 시도하지 않게 막습니다.
     return false;
   }
 
-  // 아직 59분이 안 지났으면 안전하므로 동기화 통과!
+  // 아직 유효하므로 동기화 통과!
   return true;
 }
 
@@ -579,6 +767,14 @@ async function checkAndMigrateV3() {
 
 window.isZenOnline = function () {
   const currentTime = Date.now();
-  // 🚀 와이파이 연결 상태가 아닌, 오직 '구글 API 토큰'이 살아있는지만 검사합니다!
-  return gapiInited && gisInited && gapi.client && gapi.client.getToken() !== null && currentTime < tokenExpiryTime;
+  // 🚀 와이파이 연결 상태가 아닌, 오직 '구글 API 토큰'이 유효하게 살아있는지 검사합니다!
+  return (
+    typeof gapiInited !== 'undefined' && gapiInited &&
+    typeof gisInited !== 'undefined' && gisInited &&
+    window.gapi &&
+    gapi.client &&
+    gapi.client.getToken() !== null &&
+    Boolean(gapi.client.getToken()?.access_token) &&
+    currentTime < tokenExpiryTime
+  );
 };

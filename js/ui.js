@@ -349,29 +349,45 @@ if ("serviceWorker" in navigator) {
       .then((registration) => {
         console.log("✅ 서비스 워커 등록 완료! Scope:", registration.scope);
 
-        // 🎯 새 버전의 서비스 워커가 발견되었을 때의 처리
+        // 🎯 업데이트 팝업(토스트) 표시 헬퍼 함수
+        const showUpdateToast = (worker) => {
+          const updateToast = document.getElementById("update-toast");
+          if (!updateToast) return;
+          updateToast.style.display = "flex";
+
+          const updateBtn = document.getElementById("update-btn");
+          if (updateBtn) {
+            updateBtn.onclick = () => {
+              updateToast.style.display = "none";
+              worker.postMessage({ type: "SKIP_WAITING" });
+            };
+          }
+        };
+
+        // 🎯 1. 이미 백그라운드에 다운로드되어 대기(waiting) 중인 새 워커가 있다면 즉시 팝업 표시
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          showUpdateToast(registration.waiting);
+        }
+
+        // 🎯 2. 새로운 버전의 서비스 워커 설치가 발견되었을 때
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
+          if (!newWorker) return;
 
           newWorker.addEventListener("statechange", () => {
-            // 새 워커가 다운로드 완료되었고, 기존에 작동 중인 워커가 있다면 (즉, 최초 설치가 아닌 '업데이트'라면)
             if (
               newWorker.state === "installed" &&
               navigator.serviceWorker.controller
             ) {
-              const updateToast = document.getElementById("update-toast");
-              updateToast.style.display = "flex";
-
-              // 새로고침 버튼을 누르면 대기 중인 워커에게 강제 적용(SKIP_WAITING) 명령 전송
-              document
-                .getElementById("update-btn")
-                .addEventListener("click", () => {
-                  updateToast.style.display = "none";
-                  newWorker.postMessage({ type: "SKIP_WAITING" });
-                });
+              showUpdateToast(newWorker);
             }
           });
         });
+
+        // 🎯 3. 깃허브 호스팅 환경: 앱 접속 시 서버의 최신 sw.js 즉시 확인 요청
+        try {
+          registration.update();
+        } catch (e) {}
       })
       .catch((error) => {
         console.error("❌ 서비스 워커 등록 실패:", error);
