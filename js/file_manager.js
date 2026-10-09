@@ -1,4 +1,4 @@
-let fmSearchTimer = null;
+﻿let fmSearchTimer = null;
 function triggerFmSearch() {
   if (fmSearchTimer) clearTimeout(fmSearchTimer);
   fmSearchTimer = setTimeout(() => loadFileManager(currentFmFolderId), 300);
@@ -1324,7 +1324,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     return;
   }
 
-  // 🎯 [V3.4.1] 대상 폴더의 syncId 확보 (글로벌 족보 동기화용)
+  // 🎯 [V3.4.2] 대상 폴더의 syncId 확보 (글로벌 족보 동기화용)
   let destSyncId = null;
   if (selectedDestId !== null) {
     const destFolder = await new Promise((res) => {
@@ -1350,7 +1350,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     }
 
     m.parentId = selectedDestId;
-    m.parentSyncId = destSyncId; // 🎯 [V3.4.1 핵심] 새 부모의 글로벌 족보 동기화!
+    m.parentSyncId = destSyncId; // 🎯 [V3.4.2 핵심] 새 부모의 글로벌 족보 동기화!
     m.updatedAt = Date.now();
     if (m.isDeleted) {
       m.isDeleted = false;
@@ -2169,7 +2169,7 @@ function backupDesktop() {
           !m.isPermanentlyDeleted
         ) {
           m.parentId = newBackupFolderId;
-          m.parentSyncId = newFolderSyncId; // 🎯 [V3.4.1]
+          m.parentSyncId = newFolderSyncId; // 🎯 [V3.4.2]
           m.updatedAt = Date.now();
           store.put(m);
         }
@@ -2198,7 +2198,7 @@ function backupThisFolder() {
     const folder = e.target.result;
     if (folder) {
       folder.parentId = globalBackupFolderId; // 🎯 백업 폴더로 족보 변경
-      folder.parentSyncId = "sys_backup"; // 🎯 [V3.4.1]
+      folder.parentSyncId = "sys_backup"; // 🎯 [V3.4.2]
       folder.updatedAt = Date.now();
       store.put(folder);
     }

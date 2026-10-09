@@ -1,4 +1,4 @@
-// 🎯 1. [PDF 전용] 라이트 테마 CSS (인쇄용 화이트 바탕 & 고정밀 팔레트)
+﻿// 🎯 1. [PDF 전용] 라이트 테마 CSS (인쇄용 화이트 바탕 & 고정밀 팔레트)
 const exportThemeCSS_Light = `
 <style>
     .zen-export-wrapper { background: #ffffff; color: #000000; font-family: 'Pretendard', -apple-system, sans-serif; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
@@ -842,22 +842,28 @@ function showPdfPageRangeModal(totalPages) {
   });
 }
 
-// 🎯 [V3.3.2] PDF 단일 페이지 Canvas 렌더링 헬퍼 (초고화질 Scale 2.0, JPEG 95%)
+// 🎯 [V3.4.2] PDF 단일 페이지 Canvas 렌더링 헬퍼 (초고화질 Scale 최적화, JPEG 92%)
 async function renderPdfPageToBase64(pdf, pageNum) {
-  const page = await pdf.getPage(pageNum);
-  const viewport = page.getViewport({ scale: 2.0 });
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  canvas.height = viewport.height;
-  canvas.width = viewport.width;
+  try {
+    const page = await pdf.getPage(pageNum);
+    const scale = window.innerWidth <= 768 ? 1.6 : 2.0;
+    const viewport = page.getViewport({ scale: scale });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
 
-  const renderContext = { canvasContext: ctx, viewport: viewport };
-  await page.render(renderContext).promise;
+    const renderContext = { canvasContext: ctx, viewport: viewport };
+    await page.render(renderContext).promise;
 
-  const base64Img = canvas.toDataURL("image/jpeg", 0.95);
-  canvas.width = 0;
-  canvas.height = 0;
-  return base64Img;
+    const base64Img = canvas.toDataURL("image/jpeg", 0.92);
+    canvas.width = 0;
+    canvas.height = 0;
+    return base64Img;
+  } catch (err) {
+    console.error(`PDF ${pageNum}페이지 렌더링 실패:`, err);
+    throw err;
+  }
 }
 
 // 🎯 [V3.3.2] 새 노트를 IndexedDB에 직접 고속 저장하는 헬퍼
@@ -936,7 +942,13 @@ function handleFileImport(e) {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
         const typedarray = new Uint8Array(this.result);
-        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+        const loadingTask = pdfjsLib.getDocument({
+          data: typedarray,
+          cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/cmaps/",
+          cMapPacked: true,
+          standardFontDataUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/standard_fonts/"
+        });
+        const pdf = await loadingTask.promise;
         const totalPages = pdf.numPages;
         const baseTitle = file.name.replace(/\.[^/.]+$/, "");
 
@@ -948,14 +960,12 @@ function handleFileImport(e) {
           const titleInput = document.getElementById("memo-title-input");
           if (titleInput) titleInput.value = baseTitle;
 
-          quill.focus();
           for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
             showToast(`PDF 변환 중... (${pageNum} / ${totalPages}장)`);
             const base64Img = await renderPdfPageToBase64(pdf, pageNum);
-            const range = quill.getSelection(true);
-            quill.insertEmbed(range.index, "image", base64Img);
-            quill.insertText(range.index + 1, "\n\n");
-            quill.setSelection(range.index + 3);
+            const insertIdx = Math.max(0, quill.getLength() - 1);
+            quill.insertEmbed(insertIdx, "image", base64Img, Quill.sources.USER);
+            quill.insertText(insertIdx + 1, "\n\n", Quill.sources.USER);
           }
           await executeSave();
           showToast(`✅ PDF 변환 및 저장이 완료되었습니다! (${totalPages}장)`);
@@ -1060,16 +1070,15 @@ function handleFileImport(e) {
           showToast(`PDF 변환 중... (${currentIdx} / ${countToLoad}장, p.${pageNum})`);
 
           const base64Img = await renderPdfPageToBase64(pdf, pageNum);
-          const range = quill.getSelection(true);
-          quill.insertEmbed(range.index, "image", base64Img);
-          quill.insertText(range.index + 1, "\n\n");
-          quill.setSelection(range.index + 3);
+          const insertIdx = Math.max(0, quill.getLength() - 1);
+          quill.insertEmbed(insertIdx, "image", base64Img, Quill.sources.USER);
+          quill.insertText(insertIdx + 1, "\n\n", Quill.sources.USER);
         }
         await executeSave();
         showToast(`✅ PDF 변환 및 저장이 완료되었습니다! (${countToLoad}장)`);
       } catch (err) {
         console.error("PDF 파싱 에러:", err);
-        alert("PDF 변환 중 오류가 발생했습니다.");
+        alert(`PDF 변환 중 오류가 발생했습니다.\n(${err.message || err})`);
       } finally {
         e.target.value = "";
       }

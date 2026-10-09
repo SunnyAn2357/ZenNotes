@@ -1,4 +1,4 @@
-hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
+﻿hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
 
 const Link = Quill.import('formats/link');
 class CustomLink extends Link {
@@ -35,6 +35,9 @@ Quill.register(StrikeLineStyle, true);
 // ============================================================================
 // 🎯 [정석 해결] 꼼수(setTimeout) 제거! Quill 네이티브 심장에 아이콘 직접 주입
 // ============================================================================
+let lastValidTextSelection = null; // 모바일/데스크톱 텍스트 블록 선택 보존용
+let activeMenuSelection = null;    // 팝업/모달 열릴 때 백업용 (닫힐 때 블록 복원)
+
 const icons = Quill.import('ui/icons');
 
 // 1. 커스텀 기능 아이콘 (엔진이 모르는 기능들)
@@ -167,17 +170,23 @@ const quill = new Quill('#editor', {
                 'markdown-help': function () {
                     openMarkdownHelpModal();
                 },
-                // 🎯 [V3.4.1] 하이퍼링크 커스텀 핸들러: 선택 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
+                // 🎯 [V3.4.2] 하이퍼링크 커스텀 핸들러: 선택 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
                 'link': function (value) {
                     if (value) {
                         let range = this.quill.getSelection();
                         if (!range || range.length === 0) {
-                            range = this.quill.selection ? this.quill.selection.savedRange : null;
+                            range = (this.quill.selection && this.quill.selection.savedRange && this.quill.selection.savedRange.length > 0)
+                                ? this.quill.selection.savedRange
+                                : lastValidTextSelection;
                         }
                         if (!range || range.length === 0) {
                             showToast("링크를 적용할 텍스트를 먼저 드래그하여 선택해주세요.");
                             return;
                         }
+
+                        // 모바일에서 터치로 인해 풀린 블록 선택 영역을 에디터에 즉시 복원
+                        this.quill.setSelection(range.index, range.length, Quill.sources.SILENT);
+                        activeMenuSelection = { index: range.index, length: range.length };
 
                         // 1. 선택된 블록 영역을 시각적으로 선명하게 표시 (포커스 이동 후에도 영역 유지)
                         showLinkSelectionHighlight(range);
@@ -194,19 +203,26 @@ const quill = new Quill('#editor', {
                         const { tooltip } = this.quill.theme;
                         tooltip.edit('link', preview);
 
-                        // 2. 모바일 가상 키보드가 즉시 튀어나오지 않도록 blur 처리 (사용자가 입력란 터치 시에만 오픈)
+                        // 2. 모바일 가상 키보드가 즉시 튀어나오지 않도록 readonly 부여 (입력란 터치 시 키보드 오픈)
                         if (window.innerWidth <= 768) {
-                            if (tooltip.textbox) tooltip.textbox.blur();
-                            if (document.activeElement) document.activeElement.blur();
-                            setTimeout(() => {
-                                if (tooltip.textbox) tooltip.textbox.blur();
-                                if (document.activeElement) document.activeElement.blur();
-                            }, 0);
+                            if (tooltip.textbox) {
+                                tooltip.textbox.setAttribute('readonly', 'readonly');
+                                const unlockInput = () => {
+                                    tooltip.textbox.removeAttribute('readonly');
+                                    tooltip.textbox.removeEventListener('focus', unlockInput);
+                                    tooltip.textbox.removeEventListener('touchstart', unlockInput);
+                                    tooltip.textbox.removeEventListener('click', unlockInput);
+                                };
+                                tooltip.textbox.addEventListener('focus', unlockInput);
+                                tooltip.textbox.addEventListener('touchstart', unlockInput);
+                                tooltip.textbox.addEventListener('click', unlockInput);
+                            }
                             history.pushState({ modal: 'ql-tooltip' }, '');
                         }
                     } else {
                         this.quill.format('link', false);
                         removeLinkSelectionHighlight();
+                        activeMenuSelection = null;
                     }
                 },
                 'undo': function () { this.quill.history.undo(); },
@@ -314,7 +330,7 @@ const quill = new Quill('#editor', {
 
 });
 
-// 🎯 [V3.4.1] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
+// 🎯 [V3.4.2] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
 let linkHighlightContainer = null;
 
 function showLinkSelectionHighlight(range) {
@@ -380,12 +396,26 @@ window.removeLinkSelectionHighlight = removeLinkSelectionHighlight;
 
 // 🎯 툴팁 닫힘 시 하이라이트 자동 해제 및 모바일 히스토리 정리 훅
 if (quill && quill.theme && quill.theme.tooltip) {
+    const origTooltipSave = quill.theme.tooltip.save.bind(quill.theme.tooltip);
+    quill.theme.tooltip.save = function () {
+        activeMenuSelection = null; // 링크 적용 저장이 완료되었으므로 복원 취소
+        origTooltipSave();
+    };
+
     const origTooltipHide = quill.theme.tooltip.hide.bind(quill.theme.tooltip);
     quill.theme.tooltip.hide = function () {
         removeLinkSelectionHighlight();
+        if (this.textbox) {
+            this.textbox.removeAttribute('readonly');
+        }
         if (window.innerWidth <= 768 && window.history.state && window.history.state.modal === 'ql-tooltip') {
             if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
             history.back();
+        }
+        // 🎯 [핵심] 링크 팝업을 취소/닫았을 때 모바일에서도 이전 텍스트 블록 선택 완벽 복원!
+        if (activeMenuSelection && activeMenuSelection.length > 0) {
+            quill.setSelection(activeMenuSelection.index, activeMenuSelection.length, Quill.sources.USER);
+            activeMenuSelection = null;
         }
         origTooltipHide();
     };
@@ -401,8 +431,13 @@ if (quill && quill.root) {
     }, { passive: true });
 }
 
-// 🎯 [V3.4.1] 마크다운 문법 안내 모달 제어 함수
+// 🎯 [V3.4.2] 마크다운 문법 안내 모달 제어 함수
 function openMarkdownHelpModal() {
+    const curSel = quill.getSelection() || (typeof lastValidTextSelection !== 'undefined' ? lastValidTextSelection : null);
+    if (curSel && curSel.length > 0) {
+        activeMenuSelection = { index: curSel.index, length: curSel.length };
+    }
+
     // 1. 모바일 가상 키보드가 올라오지 않도록 에디터 및 활성 요소의 포커스를 완벽히 해제
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
@@ -436,6 +471,11 @@ function closeMarkdownHelpModal(fromPopstate = false) {
         if (!fromPopstate && window.innerWidth <= 768 && window.history.state && window.history.state.modal === 'markdown-help') {
             if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
             history.back();
+        }
+        // 🎯 마크다운 안내 모달을 닫았을 때 이전 블록 선택 복원!
+        if (activeMenuSelection && activeMenuSelection.length > 0) {
+            quill.setSelection(activeMenuSelection.index, activeMenuSelection.length, Quill.sources.USER);
+            activeMenuSelection = null;
         }
     }
 }
@@ -803,10 +843,25 @@ function escapeFormattingBlock() {
     return false;
 }
 
-let lastSelection = null;
 quill.on("selection-change", (range) => {
-    if (range) lastSelection = range;
+    if (range) {
+        lastSelection = range;
+        if (range.length > 0) {
+            lastValidTextSelection = { index: range.index, length: range.length };
+        }
+    }
 });
+
+// 🎯 모바일 툴바 터치 시 블록 선택 유실 방지 리스너
+const tbEl = document.querySelector(".ql-toolbar");
+if (tbEl) {
+    tbEl.addEventListener("touchstart", () => {
+        const sel = quill.getSelection();
+        if (sel && sel.length > 0) {
+            lastValidTextSelection = { index: sel.index, length: sel.length };
+        }
+    }, { passive: true });
+}
 
 /* ==========================================
            2. 전 환경: ESC 키 및 뒤로가기 통합 제어 허브
@@ -1225,6 +1280,12 @@ document.querySelector('.ql-toolbar').addEventListener('click', (e) => {
     setTimeout(() => {
         // Quill이 툴바 안에 팝업을 열면 (CSS로 화면엔 안 보이게 숨겨둠)
         if (picker.classList.contains('ql-expanded')) {
+            // 🎯 팝업이 열리기 전 현재 선택 영역을 백업!
+            const curSel = quill.getSelection() || (typeof lastValidTextSelection !== 'undefined' ? lastValidTextSelection : null);
+            if (curSel && curSel.length > 0) {
+                activeMenuSelection = { index: curSel.index, length: curSel.length };
+            }
+
             // 모바일 가상 키보드가 올라와 있다면 포커스 해제하여 내리기
             if (document.activeElement && typeof document.activeElement.blur === 'function') {
                 document.activeElement.blur();
@@ -1272,7 +1333,12 @@ zenPopup.addEventListener('click', (e) => {
     else if (activeQuillPicker.classList.contains('ql-header')) formatType = 'header';
 
     // 🚀 원본 에디터에 원격으로 서식 적용 명령! (파란불 안 꺼짐)
-    if (formatType) quill.format(formatType, value === 'selected' ? false : value, Quill.sources.USER);
+    if (formatType) {
+        if (activeMenuSelection && activeMenuSelection.length > 0) {
+            quill.setSelection(activeMenuSelection.index, activeMenuSelection.length, Quill.sources.SILENT);
+        }
+        quill.format(formatType, value === 'selected' ? false : value, Quill.sources.USER);
+    }
 
     closeZenPopup(false);
 });
@@ -1295,6 +1361,11 @@ function closeZenPopup(fromPopstate = false) {
             if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
             history.back();
         }
+    }
+    // 🎯 [핵심] 팝업이 닫힐 때 모바일에서도 블록 선택 영역을 완벽 복원!
+    if (activeMenuSelection && activeMenuSelection.length > 0) {
+        quill.setSelection(activeMenuSelection.index, activeMenuSelection.length, Quill.sources.USER);
+        activeMenuSelection = null;
     }
 }
 window.closeZenPopup = closeZenPopup;

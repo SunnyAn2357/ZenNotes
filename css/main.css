@@ -2209,9 +2209,16 @@ button:hover {
     }
 
     .ql-snow .ql-tooltip {
-        left: 20px !important;
-        transform: none !important;
-        margin-top: 8px !important;
+        position: fixed !important;
+        top: 25% !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        margin: 0 !important;
+        z-index: 100000 !important;
+        width: calc(100% - 40px) !important;
+        max-width: 360px !important;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8) !important;
+        box-sizing: border-box !important;
     }
 
     /* -------------------------------------------------------

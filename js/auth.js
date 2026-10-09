@@ -1,4 +1,4 @@
-function gapiLoaded() {
+﻿function gapiLoaded() {
   gapi.load('client', async () => {
     try {
       await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
@@ -525,7 +525,7 @@ async function smartSync() {
           else cloudIndex.push(tombstone);
 
           needIndexPatch = true; // 명부 덮어쓰기 예약!
-          locallyDeletedIds.push(lMemo.id); // 🎯 [V3.4.1] 클라우드 명부 업로드 성공 후 지우도록 예약
+          locallyDeletedIds.push(lMemo.id); // 🎯 [V3.4.2] 클라우드 명부 업로드 성공 후 지우도록 예약
 
         } catch (e) {
           console.warn("클라우드 삭제 실패 (로컬 파일은 보존됩니다):", e);
@@ -542,7 +542,7 @@ async function smartSync() {
         // 🚀 [신규] 내 부모의 '글로벌 주민번호(syncId)'를 찾아내는 통역 과정
         let pSyncId = null;
         if (lMemo.parentId !== null) {
-          // 🎯 [V3.4.1 교정] String() 방어막으로 타입 불일치 에러 완벽 차단!
+          // 🎯 [V3.4.2 교정] String() 방어막으로 타입 불일치 에러 완벽 차단!
           const pNode = localData.find(d => String(d.id) === String(lMemo.parentId));
           if (pNode) pSyncId = pNode.syncId;
         }
@@ -580,7 +580,7 @@ async function smartSync() {
     if (toUpload.length > 0 || toCloudDelete.length > 0 || needIndexPatch) {
       await v3_uploadFile(token, 'index.json', JSON.stringify(cloudIndex), folderId, indexFileId);
 
-      // 🎯 [V3.4.1 핵심 교정] 클라우드 명부 업로드가 100% 성공한 뒤에만 로컬 DB에서 최종 영구 삭제 (좀비 부활 원천 차단!)
+      // 🎯 [V3.4.2 핵심 교정] 클라우드 명부 업로드가 100% 성공한 뒤에만 로컬 DB에서 최종 영구 삭제 (좀비 부활 원천 차단!)
       if (locallyDeletedIds.length > 0) {
         const delTx = db.transaction(["memos"], "readwrite");
         locallyDeletedIds.forEach(id => delTx.objectStore("memos").delete(id));
