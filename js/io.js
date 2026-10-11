@@ -273,6 +273,41 @@ function convertQuillToMarkdown() {
     return innerText;
   }
 
+  // 🎯 [V3.4.4] 목록 아이템을 마크다운 표준 들여쓰기 규격(2스페이스 단위)으로 변환
+  function formatListItem(li, counters) {
+    const match = (li.className || "").match(/ql-indent-(\d+)/);
+    const indentLvl = match ? parseInt(match[1], 10) : 0;
+    const indentSpaces = "  ".repeat(indentLvl);
+    const itemText = convertInline(li).trim();
+    const listType = li.getAttribute("data-list");
+
+    if (listType === "checked") {
+      Object.keys(counters).forEach((k) => {
+        if (parseInt(k, 10) >= indentLvl) delete counters[k];
+      });
+      return `${indentSpaces}- [x] ${itemText}`;
+    } else if (listType === "unchecked") {
+      Object.keys(counters).forEach((k) => {
+        if (parseInt(k, 10) >= indentLvl) delete counters[k];
+      });
+      return `${indentSpaces}- [ ] ${itemText}`;
+    } else if (
+      listType === "ordered" ||
+      (li.parentElement && li.parentElement.tagName.toLowerCase() === "ol" && !listType)
+    ) {
+      counters[indentLvl] = (counters[indentLvl] || 0) + 1;
+      Object.keys(counters).forEach((k) => {
+        if (parseInt(k, 10) > indentLvl) delete counters[k];
+      });
+      return `${indentSpaces}${counters[indentLvl]}. ${itemText}`;
+    } else {
+      Object.keys(counters).forEach((k) => {
+        if (parseInt(k, 10) >= indentLvl) delete counters[k];
+      });
+      return `${indentSpaces}- ${itemText}`;
+    }
+  }
+
   const lines = [];
   const children = Array.from(container.children);
 
@@ -318,35 +353,33 @@ function convertQuillToMarkdown() {
     else if (tag === "hr") {
       lines.push("---");
     }
-    // 6. 목록 (ul, ol)
-    else if (tag === "ul" || tag === "ol") {
-      const listItems = el.querySelectorAll("li");
-      listItems.forEach((li, idx) => {
-        const itemText = convertInline(li).trim();
-        const listType = li.getAttribute("data-list");
-        if (listType === "checked") {
-          lines.push(`- [x] ${itemText}`);
-        } else if (listType === "unchecked") {
-          lines.push(`- [ ] ${itemText}`);
-        } else if (tag === "ol" || listType === "ordered") {
-          lines.push(`${idx + 1}. ${itemText}`);
+    // 6. 목록 (ul, ol, 또는 단독 li) - 🎯 [V3.4.4] 들여쓰기 보존 및 연속 목록 단일 블록 연결
+    else if (tag === "ul" || tag === "ol" || tag === "li") {
+      const counters = {};
+      const listLines = [];
+
+      const processListContainer = (targetEl) => {
+        if (targetEl.tagName.toLowerCase() === "li") {
+          listLines.push(formatListItem(targetEl, counters));
         } else {
-          lines.push(`- ${itemText}`);
+          const items = Array.from(targetEl.querySelectorAll("li"));
+          items.forEach((item) => listLines.push(formatListItem(item, counters)));
         }
-      });
-    }
-    // 7. Quill 단독 li 요소
-    else if (tag === "li") {
-      const itemText = convertInline(el).trim();
-      const listType = el.getAttribute("data-list");
-      if (listType === "checked") {
-        lines.push(`- [x] ${itemText}`);
-      } else if (listType === "unchecked") {
-        lines.push(`- [ ] ${itemText}`);
-      } else if (listType === "ordered") {
-        lines.push(`1. ${itemText}`);
-      } else {
-        lines.push(`- ${itemText}`);
+      };
+
+      processListContainer(el);
+
+      // 다음 형제들도 연속된 목록 요소(ul, ol, li)라면 하나의 연속된 마크다운 목록 블록(\n)으로 결합
+      while (
+        i + 1 < children.length &&
+        ["ul", "ol", "li"].includes(children[i + 1].tagName.toLowerCase())
+      ) {
+        i++;
+        processListContainer(children[i]);
+      }
+
+      if (listLines.length > 0) {
+        lines.push(listLines.join("\n"));
       }
     }
     // 8. 표 (Table)
@@ -424,8 +457,10 @@ function convertMarkdownToHTML(mdText) {
     s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
     // 4. 굵게: **text**
     s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // 5. 밑줄: __text__
+    // 5. 밑줄: __text__ 또는 <u>text</u> 또는 <ins>text</ins>
     s = s.replace(/__(.+?)__/g, '<u>$1</u>');
+    s = s.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/gi, '<u>$1</u>');
+    s = s.replace(/&lt;ins&gt;(.*?)&lt;\/ins&gt;/gi, '<u>$1</u>');
     // 6. 취소선: ~~text~~
     s = s.replace(/~~(.+?)~~/g, '<s>$1</s>');
     // 7. 기울임꼴: *text* 또는 _text_
@@ -436,6 +471,13 @@ function convertMarkdownToHTML(mdText) {
     s = s.replace(/\\\|/g, "|");
 
     return s;
+  }
+
+  // 🎯 [V3.4.4] 마크다운 줄 앞의 공백(스페이스/탭)을 분석하여 Quill 들여쓰기 레벨(1~8)로 변환
+  function getLeadingIndent(str) {
+    if (!str) return 0;
+    const spaces = str.replace(/\t/g, "  ").length;
+    return Math.min(8, Math.floor(spaces / 2));
   }
 
   while (i < lines.length) {
@@ -523,41 +565,47 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // E. 체크리스트 (- [ ] 또는 - [x] 또는 * [ ])
-    if (/^(\*|-)\s+\[([ xX])\]\s+(.*)$/.test(line)) {
-      while (i < lines.length && /^(\*|-)\s+\[([ xX])\]\s+(.*)$/.test(lines[i])) {
-        const cm = lines[i].match(/^(\*|-)\s+\[([ xX])\]\s+(.*)$/);
-        const isChecked = cm[2].toLowerCase() === "x";
-        const text = parseInline(cm[3]);
+    // E. 체크리스트 (- [ ] 또는 - [x] 또는 * [ ]) - 🎯 [V3.4.4] 들여쓰기 지원
+    if (/^\s*(\*|-)\s+\[([ xX])\]\s*(.*)$/.test(line)) {
+      while (i < lines.length && /^\s*(\*|-)\s+\[([ xX])\]\s*(.*)$/.test(lines[i])) {
+        const cm = lines[i].match(/^(\s*)(\*|-)\s+\[([ xX])\]\s*(.*)$/);
+        const indentLvl = getLeadingIndent(cm[1]);
+        const isChecked = cm[3].toLowerCase() === "x";
+        const text = parseInline(cm[4]);
+        const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
         htmlParts.push(
-          `<li data-list="${isChecked ? "checked" : "unchecked"}">${text || "<br>"}</li>`
+          `<li data-list="${isChecked ? "checked" : "unchecked"}"${indentClass}>${text || "<br>"}</li>`
         );
         i++;
       }
       continue;
     }
 
-    // F. 번호 매기기 목록 (1. text)
-    if (/^\d+\.\s+(.*)$/.test(line)) {
-      while (i < lines.length && /^\d+\.\s+(.*)$/.test(lines[i])) {
-        const om = lines[i].match(/^\d+\.\s+(.*)$/);
-        const text = parseInline(om[1]);
-        htmlParts.push(`<li data-list="ordered">${text || "<br>"}</li>`);
+    // F. 번호 매기기 목록 (1. text) - 🎯 [V3.4.4] 들여쓰기 지원
+    if (/^\s*\d+\.\s+(.*)$/.test(line)) {
+      while (i < lines.length && /^\s*\d+\.\s+(.*)$/.test(lines[i])) {
+        const om = lines[i].match(/^(\s*)\d+\.\s+(.*)$/);
+        const indentLvl = getLeadingIndent(om[1]);
+        const text = parseInline(om[2]);
+        const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
+        htmlParts.push(`<li data-list="ordered"${indentClass}>${text || "<br>"}</li>`);
         i++;
       }
       continue;
     }
 
-    // G. 글머리 기호 목록 (* text 또는 - text)
-    if (/^(\*|-)\s+(.*)$/.test(line)) {
+    // G. 글머리 기호 목록 (* text 또는 - text) - 🎯 [V3.4.4] 들여쓰기 지원
+    if (/^\s*(\*|-)\s+(.*)$/.test(line) && !/^\s*(\*|-)\s+\[([ xX])\]/.test(line)) {
       while (
         i < lines.length &&
-        /^(\*|-)\s+(.*)$/.test(lines[i]) &&
-        !/^(\*|-)\s+\[([ xX])\]/.test(lines[i])
+        /^\s*(\*|-)\s+(.*)$/.test(lines[i]) &&
+        !/^\s*(\*|-)\s+\[([ xX])\]/.test(lines[i])
       ) {
-        const bm = lines[i].match(/^(\*|-)\s+(.*)$/);
-        const text = parseInline(bm[2]);
-        htmlParts.push(`<li data-list="bullet">${text || "<br>"}</li>`);
+        const bm = lines[i].match(/^(\s*)(\*|-)\s+(.*)$/);
+        const indentLvl = getLeadingIndent(bm[1]);
+        const text = parseInline(bm[3]);
+        const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
+        htmlParts.push(`<li data-list="bullet"${indentClass}>${text || "<br>"}</li>`);
         i++;
       }
       continue;
@@ -842,7 +890,7 @@ function showPdfPageRangeModal(totalPages) {
   });
 }
 
-// 🎯 [V3.4.3] PDF 단일 페이지 Canvas 렌더링 헬퍼 (초고화질 Scale 최적화, JPEG 92%)
+// 🎯 [V3.4.4] PDF 단일 페이지 Canvas 렌더링 헬퍼 (초고화질 Scale 최적화, JPEG 92%)
 async function renderPdfPageToBase64(pdf, pageNum) {
   try {
     const page = await pdf.getPage(pageNum);

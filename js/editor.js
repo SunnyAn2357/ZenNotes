@@ -170,7 +170,7 @@ const quill = new Quill('#editor', {
                 'markdown-help': function () {
                     openMarkdownHelpModal();
                 },
-                // 🎯 [V3.4.3] 하이퍼링크 커스텀 핸들러: 선택 블록 자동 입력 + 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
+                // 🎯 [V3.4.4] 하이퍼링크 커스텀 핸들러: 선택 블록 자동 입력 + 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
                 'link': function (value) {
                     if (value) {
                         let range = this.quill.getSelection();
@@ -324,7 +324,7 @@ const quill = new Quill('#editor', {
 
 });
 
-// 🎯 [V3.4.3] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
+// 🎯 [V3.4.4] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
 let linkHighlightContainer = null;
 
 function showLinkSelectionHighlight(range) {
@@ -435,7 +435,7 @@ if (quill && quill.root) {
     }, { passive: true });
 }
 
-// 🎯 [V3.4.3] 마크다운 문법 안내 모달 제어 함수
+// 🎯 [V3.4.4] 마크다운 문법 안내 모달 제어 함수
 function openMarkdownHelpModal() {
     const curSel = quill.getSelection() || (typeof lastValidTextSelection !== 'undefined' ? lastValidTextSelection : null);
     if (curSel && curSel.length > 0) {
