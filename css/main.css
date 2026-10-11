@@ -2588,11 +2588,28 @@ button:hover {
     }
 }
 
+/* 기본 화면에서는 인쇄 전용 메타/푸터 숨김 */
+.print-meta-sub,
+.print-doc-footer {
+    display: none;
+}
+
 /* ============================================================================
-   🎯 인쇄 및 PDF 전용 미디어쿼리 (@media print)
-   - 블랙 테마를 화이트 테마로 반전시키되, 에디터의 서식과 간격은 100% 유지
+   🎯 인쇄 및 PDF 전용 규격 (@page & @media print)
+   - A4 표준 여백 지정 및 브라우저 인쇄 품질 극대화
+   - 블랙 테마를 화이트 테마로 완벽 전환하되 서식과 표, 코드블록 보존
 ============================================================================ */
+@page {
+    size: A4 portrait;
+    margin: 15mm 12mm 15mm 12mm;
+}
+
 @media print {
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
     body {
         background: #ffffff !important;
         color: #000000 !important;
@@ -2610,7 +2627,10 @@ button:hover {
     #global-menu-btn,
     #mobile-left-menu-btn,
     #mobile-overlay,
-    .status-container {
+    .status-container,
+    .modal-overlay,
+    .ql-tooltip,
+    .custom-table-menu {
         display: none !important;
     }
 
@@ -2620,21 +2640,47 @@ button:hover {
         background: #ffffff !important;
         display: block !important;
         overflow: visible !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
 
-    /* 제목 및 구분선 화이트 테마 */
+    /* 제목 및 인쇄 메타 헤더 */
     #memo-title-input {
         color: #000000 !important;
-        font-size: 32px !important;
+        font-size: 24pt !important;
+        font-weight: 700 !important;
         width: 100% !important;
         margin-bottom: 4px !important;
         border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
+    .print-meta-sub {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        font-size: 9.5pt !important;
+        color: #555555 !important;
+        margin-bottom: 8px !important;
+        padding-bottom: 2px !important;
     }
 
     hr.print-hr {
         display: block !important;
-        border-top: 2px solid #444746 !important;
-        margin: 0 0 24px 0 !important;
+        border: none !important;
+        border-top: 2px solid #333333 !important;
+        margin: 0 0 20px 0 !important;
+    }
+
+    .print-doc-footer {
+        display: block !important;
+        border-top: 1px solid #d0d0d0 !important;
+        margin-top: 32px !important;
+        padding-top: 8px !important;
+        font-size: 8.5pt !important;
+        color: #777777 !important;
+        text-align: right !important;
     }
 
     /* 🎯 3. 에디터 본문(WYSIWYG) 뼈대 복사 및 폰트 설정 */
@@ -2642,9 +2688,15 @@ button:hover {
         color: #000000 !important;
         padding: 0 !important;
         line-height: 1.65 !important;
-        font-size: 12pt !important;
+        font-size: 11pt !important;
         word-break: keep-all !important;
         overflow-wrap: break-word !important;
+    }
+
+    /* 🎯 페이지 분할 방어 (Page-Break Defense) */
+    h1, h2, h3 {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
     }
 
     .ql-editor p,
@@ -2660,12 +2712,26 @@ button:hover {
         margin-bottom: 20px !important;
     }
 
-    /* 🎯 4. 표(Table) 화이트 테마 변환 */
+    .ql-editor li {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    /* 🎯 4. 표(Table) 화이트 테마 변환 & 페이지 절단 방어 */
     .ql-editor table {
         border-collapse: collapse !important;
         width: 100% !important;
         margin: 20px 0 !important;
         border: 1px solid #cccccc !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .ql-editor tr,
+    .ql-editor td,
+    .ql-editor th {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
     .ql-editor td,
@@ -2678,22 +2744,20 @@ button:hover {
     .ql-editor th {
         background-color: #f5f5f5 !important;
         font-weight: 600 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
     }
 
-    /* 🎯 5. 인용구(Blockquote) 화이트 테마 변환 */
+    /* 🎯 5. 인용구(Blockquote) 화이트 테마 & 페이지 절단 방어 */
     .ql-editor blockquote {
         border-left: 4px solid var(--accent) !important;
         background-color: #f9f9f9 !important;
         margin: 16px 0 !important;
         padding: 12px 16px !important;
         color: #333333 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
-    /* 🎯 6. 코드 블록 화이트 테마 & 종이 잘림 방지 (라벨 표시 추가) */
+    /* 🎯 6. 코드 블록 화이트 테마 & 종이 잘림 방지 (라벨 표시) */
     .ql-editor .ql-code-block-container {
         position: relative !important;
         background-color: #f5f5f5 !important;
@@ -2703,8 +2767,8 @@ button:hover {
         margin: 1rem 0 !important;
         white-space: pre-wrap !important;
         word-break: break-all !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
     /* 🎯 인쇄용 언어 라벨 스타일 */
@@ -2804,6 +2868,7 @@ button:hover {
         max-width: 100% !important;
         height: auto !important;
         page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 }
 

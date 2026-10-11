@@ -1,9 +1,18 @@
-﻿// 🎯 1. [PDF 전용] 라이트 테마 CSS (인쇄용 화이트 바탕 & 고정밀 팔레트)
+// 🎯 1. [PDF 전용] 라이트 테마 CSS (인쇄용 화이트 바탕 & 페이지 절단 방어 & 고정밀 팔레트)
 const exportThemeCSS_Light = `
 <style>
-    .zen-export-wrapper { background: #ffffff; color: #000000; font-family: 'Pretendard', -apple-system, sans-serif; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
+    .zen-export-wrapper { background: #ffffff; color: #111111; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
     .zen-export-wrapper p, .zen-export-wrapper h1, .zen-export-wrapper h2, .zen-export-wrapper h3, .zen-export-wrapper li { margin-bottom: 8px; }
     .zen-export-wrapper ul, .zen-export-wrapper ol { margin-bottom: 20px; }
+    
+    /* 🎯 페이지 분할 방어 (Page-Break Defense) */
+    .zen-export-wrapper h1, .zen-export-wrapper h2, .zen-export-wrapper h3 { page-break-after: avoid !important; break-after: avoid !important; }
+    .zen-export-wrapper table, .zen-export-wrapper tr, .zen-export-wrapper td, .zen-export-wrapper th { page-break-inside: avoid !important; break-inside: avoid !important; }
+    .zen-export-wrapper .ql-code-block-container { page-break-inside: avoid !important; break-inside: avoid !important; }
+    .zen-export-wrapper blockquote { page-break-inside: avoid !important; break-inside: avoid !important; }
+    .zen-export-wrapper li { page-break-inside: avoid !important; break-inside: avoid !important; }
+    .zen-export-wrapper img { max-width: 100%; height: auto; page-break-inside: avoid !important; break-inside: avoid !important; }
+
     .zen-export-wrapper table { border-collapse: collapse; width: 100%; margin: 20px 0; border: 1px solid #cccccc; }
     .zen-export-wrapper td, .zen-export-wrapper th { border: 1px solid #cccccc; padding: 8px 12px; color: #000000; }
     .zen-export-wrapper th { background-color: #f5f5f5; font-weight: 600; }
@@ -15,7 +24,7 @@ const exportThemeCSS_Light = `
     .zen-export-wrapper .ql-code-block-container::before { content: '' !important; position: absolute !important; top: 38px !important; left: 0 !important; right: 0 !important; height: 1px !important; background-color: #e0e0e0 !important; display: block !important; }
     
     /* 🎯 폰트 및 구문 강조 팔레트 (인쇄용 명암비 적용) */
-    .zen-export-wrapper .ql-code-block { background-color: transparent !important; color: #333333 !important; font-family: 'D2Coding', 'Consolas', monospace !important; font-size: 14px !important; line-height: 1.6 !important; white-space: pre-wrap !important; }
+    .zen-export-wrapper .ql-code-block { background-color: transparent !important; color: #333333 !important; font-family: 'D2Coding', 'Consolas', monospace !important; font-size: 13px !important; line-height: 1.6 !important; white-space: pre-wrap !important; }
     .zen-export-wrapper .hljs-comment, .zen-export-wrapper .hljs-quote { color: #6a737d !important; font-style: italic !important; }
     .zen-export-wrapper .hljs-keyword, .zen-export-wrapper .hljs-selector-tag, .zen-export-wrapper .hljs-type { color: #d73a49 !important; font-weight: 600 !important; }
     .zen-export-wrapper .hljs-title, .zen-export-wrapper .hljs-title.function_, .zen-export-wrapper .hljs-function { color: #005cc5 !important; }
@@ -31,71 +40,216 @@ const exportThemeCSS_Light = `
 </style>
 `;
 
-// 🎯 2. [HTML 전용] 다크 테마 CSS (뚱뚱한 외부 링크 없이, 에디터 원본 다크 테마 100% 이식)
-const exportThemeCSS_Dark = `
+// 🎯 2. [HTML 전용] 듀얼 테마 CSS (다크 기본 + 라이트 모드 전환 지원 + 인쇄 최적화)
+const exportThemeCSS_Dual = `
 <style>
-    /* -------------------------------------------------------------------------
-       🖥️ 1. 웹 브라우저 화면용 (다크 테마 & 에디터 감성 100% 일치)
-    ------------------------------------------------------------------------- */
-    .zen-export-wrapper { background: #131314; color: #e3e3e3; font-family: 'Pretendard', -apple-system, sans-serif; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
-    .zen-export-wrapper p, .zen-export-wrapper h1, .zen-export-wrapper h2, .zen-export-wrapper h3, .zen-export-wrapper li { margin-bottom: 8px; }
-    .zen-export-wrapper ul, .zen-export-wrapper ol { margin-bottom: 20px; }
-    .zen-export-wrapper table { border-collapse: collapse; width: 100%; margin: 20px 0; border: 1px solid #444746; }
-    .zen-export-wrapper td, .zen-export-wrapper th { border: 1px solid #444746; padding: 8px 12px; color: #e3e3e3; }
-    .zen-export-wrapper th { background-color: #2e2e32; font-weight: 600; }
-    .zen-export-wrapper blockquote { border-left: 4px solid #78a9ff; background-color: #1e1e20; margin: 16px 0; padding: 12px 16px; color: #c4c7c5; }
-    /* 🎯 본문 내부의 투박한 구분선을 에디터처럼 1px로 얇고 깔끔하게 튜닝 */
-    #zen-editor-content hr { border: none !important; border-bottom: 1px solid #444746 !important; margin: 20px 0 !important; }
-    
-    /* 🎯 HTML 코드 블록 라벨 세팅 */
-    .zen-export-wrapper .ql-code-block-container { position: relative !important; background-color: #1e222a !important; border: 1px solid #444746 !important; border-radius: 8px !important; padding: 44px 16px 16px 16px !important; margin: 1rem 0 !important; display: block !important; }
-    .zen-export-wrapper .ql-code-block-container select.ql-ui { display: block !important; position: absolute !important; top: 12px !important; left: 16px !important; background: transparent !important; color: #9da5b4 !important; border: none !important; font-size: 12px !important; font-weight: 600 !important; text-transform: uppercase; appearance: none !important; -webkit-appearance: none !important; pointer-events: none !important; }
-    .zen-export-wrapper .ql-code-block-container::before { content: '' !important; position: absolute !important; top: 38px !important; left: 0 !important; right: 0 !important; height: 1px !important; background-color: rgba(255, 255, 255, 0.08) !important; display: block !important; pointer-events: none !important; }
-    
-    /* 🎨 [고정밀 팔레트 확장] 기획자님의 main.css에서 직접 추출해 온 진짜 다크 테마 */
-    .zen-export-wrapper .ql-code-block { background-color: transparent !important; color: #abb2bf !important; font-family: 'D2Coding', 'Fira Code', 'Consolas', monospace !important; font-size: 14px !important; line-height: 1.6 !important; white-space: pre-wrap !important; }
-    .zen-export-wrapper .hljs-comment, .zen-export-wrapper .hljs-quote { color: #7f848e !important; font-style: italic; }
-    .zen-export-wrapper .hljs-operator, .zen-export-wrapper .hljs-punctuation { color: #abb2bf !important; }
-    .zen-export-wrapper .hljs-keyword, .zen-export-wrapper .hljs-selector-tag, .zen-export-wrapper .hljs-doctag, .zen-export-wrapper .hljs-meta, .zen-export-wrapper .hljs-meta .hljs-keyword, .zen-export-wrapper .hljs-preprocess { color: #c678dd !important; font-weight: 600; }
-    .zen-export-wrapper .hljs-function, .zen-export-wrapper .hljs-title, .zen-export-wrapper .hljs-title.class_, .zen-export-wrapper .hljs-title.function_, .zen-export-wrapper .hljs-bullet, .zen-export-wrapper .hljs-symbol, .zen-export-wrapper .hljs-link { color: #61afef !important; }
-    .zen-export-wrapper .hljs-string, .zen-export-wrapper .hljs-regexp, .zen-export-wrapper .hljs-meta .hljs-string, .zen-export-wrapper .hljs-addition { color: #98c379 !important; }
-    .zen-export-wrapper .hljs-number, .zen-export-wrapper .hljs-literal, .zen-export-wrapper .hljs-constant, .zen-export-wrapper .hljs-type, .zen-export-wrapper .hljs-built_in { color: #d19a66 !important; }
-    .zen-export-wrapper .hljs-name, .zen-export-wrapper .hljs-tag, .zen-export-wrapper .hljs-selector-id, .zen-export-wrapper .hljs-selector-class, .zen-export-wrapper .hljs-section, .zen-export-wrapper .hljs-deletion { color: #e06c75 !important; }
-    .zen-export-wrapper .hljs-attr, .zen-export-wrapper .hljs-attribute, .zen-export-wrapper .hljs-params, .zen-export-wrapper .hljs-variable, .zen-export-wrapper .hljs-template-variable { color: #56b6c2 !important; }
-    .zen-export-wrapper .hljs-strong { font-weight: bold; }
-    .zen-export-wrapper .hljs-emphasis { font-style: italic; }
-    .zen-export-wrapper .hljs-deletion { background-color: rgba(224, 108, 117, 0.15) !important; }
-    .zen-export-wrapper .hljs-addition { background-color: rgba(152, 195, 121, 0.15) !important; }
-    .zen-export-wrapper .ql-strike-line-true { color: #6b7280; text-decoration: line-through; }
-    .zen-export-wrapper a { color: #78a9ff; text-decoration: underline; }
-    
-    .zen-export-wrapper img { max-width: 100%; height: auto; }
+    :root {
+        --zen-bg: #131314;
+        --zen-text: #e3e3e3;
+        --zen-border: #444746;
+        --zen-code-bg: #1e222a;
+        --zen-code-header-border: rgba(255, 255, 255, 0.08);
+        --zen-th-bg: #2e2e32;
+        --zen-quote-bg: #1e1e20;
+        --zen-quote-text: #c4c7c5;
+        --zen-accent: #78a9ff;
+        --zen-meta-text: #8e9196;
+        --zen-card-bg: #1e1e20;
+    }
 
-    /* -------------------------------------------------------------------------
-       🖨️ 2. HTML 브라우저 인쇄용 (@media print) - 컬러 보존 & 라이트 전환
-    ------------------------------------------------------------------------- */
+    body.light-theme {
+        --zen-bg: #ffffff;
+        --zen-text: #1c1c1e;
+        --zen-border: #e0e0e0;
+        --zen-code-bg: #f6f8fa;
+        --zen-code-header-border: #e1e4e8;
+        --zen-th-bg: #f2f3f5;
+        --zen-quote-bg: #f8f9fa;
+        --zen-quote-text: #4a4d52;
+        --zen-accent: #2563eb;
+        --zen-meta-text: #6c7078;
+        --zen-card-bg: #f9f9fb;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    
+    body.zen-export-body {
+        background-color: var(--zen-bg);
+        color: var(--zen-text);
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.65;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+        transition: background-color 0.2s ease, color 0.2s ease;
+        padding: 40px 20px;
+    }
+
+    .zen-doc-container {
+        max-width: 820px;
+        margin: 0 auto;
+    }
+
+    /* 플로팅 테마 스위치 버튼 */
+    .zen-theme-switch-btn {
+        position: fixed;
+        top: 20px;
+        right: 24px;
+        z-index: 1000;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 20px;
+        border: 1px solid var(--zen-border);
+        background: var(--zen-card-bg);
+        color: var(--zen-text);
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transition: all 0.2s ease;
+    }
+    .zen-theme-switch-btn:hover {
+        transform: translateY(-1px);
+        opacity: 0.9;
+    }
+
+    /* 문서 헤더 및 메타데이터 */
+    .zen-doc-header {
+        margin-bottom: 24px;
+    }
+    .zen-doc-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--zen-text);
+        margin: 0 0 10px 0;
+        letter-spacing: -0.5px;
+        line-height: 1.3;
+    }
+    .zen-doc-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--zen-meta-text);
+        margin-bottom: 14px;
+    }
+    .zen-meta-item {
+        display: inline-flex;
+        align-items: center;
+    }
+    .zen-doc-divider {
+        border: none;
+        border-bottom: 2px solid var(--zen-border);
+        margin: 0;
+    }
+
+    /* 에디터 본문 타이포그래피 */
+    .ql-editor { padding: 0; }
+    .ql-editor p, .ql-editor h1, .ql-editor h2, .ql-editor h3, .ql-editor li { margin-bottom: 8px; }
+    .ql-editor ul, .ql-editor ol { margin-bottom: 20px; }
+    .ql-editor hr { border: none !important; border-bottom: 1px solid var(--zen-border) !important; margin: 20px 0 !important; }
+
+    /* 표 (Table) */
+    .ql-editor table { border-collapse: collapse; width: 100%; margin: 20px 0; border: 1px solid var(--zen-border); }
+    .ql-editor td, .ql-editor th { border: 1px solid var(--zen-border); padding: 8px 12px; color: var(--zen-text); }
+    .ql-editor th { background-color: var(--zen-th-bg); font-weight: 600; }
+
+    /* 인용구 (Blockquote) */
+    .ql-editor blockquote { border-left: 4px solid var(--zen-accent); background-color: var(--zen-quote-bg); margin: 16px 0; padding: 12px 16px; color: var(--zen-quote-text); border-radius: 0 4px 4px 0; }
+
+    /* 링크 및 서식 */
+    .ql-editor a { color: var(--zen-accent); text-decoration: underline; }
+    .ql-editor img { max-width: 100%; height: auto; border-radius: 4px; }
+    .ql-editor .ql-strike-line-true { text-decoration: line-through; opacity: 0.6; }
+
+    /* 코드 블록 공통 구조 */
+    .ql-editor .ql-code-block-container {
+        position: relative !important;
+        background-color: var(--zen-code-bg) !important;
+        border: 1px solid var(--zen-border) !important;
+        border-radius: 8px !important;
+        padding: 44px 16px 16px 16px !important;
+        margin: 1rem 0 !important;
+        display: block !important;
+    }
+    .ql-editor .ql-code-block-container select.ql-ui {
+        display: block !important;
+        position: absolute !important;
+        top: 12px !important;
+        left: 16px !important;
+        background: transparent !important;
+        color: var(--zen-meta-text) !important;
+        border: none !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        text-transform: uppercase;
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        pointer-events: none !important;
+    }
+    .ql-editor .ql-code-block-container::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 38px !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: 1px !important;
+        background-color: var(--zen-code-header-border) !important;
+        display: block !important;
+        pointer-events: none !important;
+    }
+    .ql-editor .ql-code-block {
+        background-color: transparent !important;
+        font-family: 'D2Coding', 'Consolas', monospace !important;
+        font-size: 13.5px !important;
+        line-height: 1.6 !important;
+        white-space: pre-wrap !important;
+    }
+
+    /* 🎨 다크 테마 코드 신택스 */
+    body:not(.light-theme) .ql-code-block { color: #abb2bf !important; }
+    body:not(.light-theme) .hljs-comment, body:not(.light-theme) .hljs-quote { color: #7f848e !important; font-style: italic; }
+    body:not(.light-theme) .hljs-keyword, body:not(.light-theme) .hljs-selector-tag, body:not(.light-theme) .hljs-type { color: #c678dd !important; font-weight: 600; }
+    body:not(.light-theme) .hljs-title, body:not(.light-theme) .hljs-title.function_, body:not(.light-theme) .hljs-function { color: #61afef !important; }
+    body:not(.light-theme) .hljs-string, body:not(.light-theme) .hljs-regexp { color: #98c379 !important; }
+    body:not(.light-theme) .hljs-number, body:not(.light-theme) .hljs-literal, body:not(.light-theme) .hljs-variable { color: #d19a66 !important; }
+    body:not(.light-theme) .hljs-name, body:not(.light-theme) .hljs-tag, body:not(.light-theme) .hljs-section { color: #e06c75 !important; }
+    body:not(.light-theme) .hljs-attr, body:not(.light-theme) .hljs-attribute, body:not(.light-theme) .hljs-params { color: #56b6c2 !important; }
+
+    /* 🎨 라이트 테마 코드 신택스 */
+    body.light-theme .ql-code-block { color: #24292e !important; }
+    body.light-theme .hljs-comment, body.light-theme .hljs-quote { color: #6a737d !important; font-style: italic; }
+    body.light-theme .hljs-keyword, body.light-theme .hljs-selector-tag, body.light-theme .hljs-type { color: #d73a49 !important; font-weight: 600; }
+    body.light-theme .hljs-title, body.light-theme .hljs-title.function_, body.light-theme .hljs-function { color: #005cc5 !important; }
+    body.light-theme .hljs-string, body.light-theme .hljs-regexp { color: #032f62 !important; }
+    body.light-theme .hljs-number, body.light-theme .hljs-literal, body.light-theme .hljs-variable { color: #005cc5 !important; }
+    body.light-theme .hljs-name, body.light-theme .hljs-tag, body.light-theme .hljs-section { color: #22863a !important; }
+    body.light-theme .hljs-attr, body.light-theme .hljs-attribute, body.light-theme .hljs-params { color: #e36209 !important; }
+
+    /* 문서 하단 푸터 */
+    .zen-doc-footer {
+        margin-top: 48px;
+        padding-top: 14px;
+        border-top: 1px solid var(--zen-border);
+        font-size: 11px;
+        color: var(--zen-meta-text);
+        text-align: right;
+    }
+
+    /* 🖨️ 인쇄 시 화이트 강제 & 불필요 버튼 숨김 */
     @media print {
-        html, body { height: auto !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
-        body.zen-export-wrapper, .zen-export-wrapper { background: #ffffff !important; color: #000000 !important; padding: 0 !important; }
-        .zen-export-wrapper h1, .zen-export-wrapper p, .zen-export-wrapper li { color: #000000 !important; }
-        .zen-export-wrapper hr { border-bottom-color: #000000 !important; }
-        .zen-export-wrapper .ql-code-block-container { background-color: #f5f5f5 !important; border-color: #e0e0e0 !important; }
-        .zen-export-wrapper .ql-code-block-container select.ql-ui { color: #666666 !important; }
-        .zen-export-wrapper .ql-code-block-container::before { background-color: #e0e0e0 !important; }
-
-        /* 종이 인쇄용 라이트 컬러 팔레트 */
-        .zen-export-wrapper .ql-code-block { color: #333333 !important; }
-        .zen-export-wrapper .hljs-comment, .zen-export-wrapper .hljs-quote { color: #6a737d !important; }
-        .zen-export-wrapper .hljs-keyword, .zen-export-wrapper .hljs-selector-tag, .zen-export-wrapper .hljs-type { color: #d73a49 !important; }
-        .zen-export-wrapper .hljs-title, .zen-export-wrapper .hljs-title.function_, .zen-export-wrapper .hljs-function { color: #005cc5 !important; }
-        .zen-export-wrapper .hljs-name, .zen-export-wrapper .hljs-section, .zen-export-wrapper .hljs-tag { color: #22863a !important; }
-        .zen-export-wrapper .hljs-attr, .zen-export-wrapper .hljs-attribute, .zen-export-wrapper .hljs-params { color: #e36209 !important; }
-        .zen-export-wrapper .hljs-string, .zen-export-wrapper .hljs-regexp { color: #032f62 !important; }
-        .zen-export-wrapper .hljs-number, .zen-export-wrapper .hljs-literal, .zen-export-wrapper .hljs-variable { color: #005cc5 !important; }
-        .zen-export-wrapper .hljs-built_in, .zen-export-wrapper .hljs-class { color: #e36209 !important; }
-        .zen-export-wrapper table, .zen-export-wrapper th, .zen-export-wrapper td { border-color: #cccccc !important; }
-        .zen-export-wrapper th { background-color: #f5f5f5 !important; color: #000000 !important; }
-        .zen-export-wrapper blockquote { background-color: #f9f9f9 !important; color: #333333 !important; }
+        .zen-theme-switch-btn { display: none !important; }
+        body.zen-export-body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; }
+        .zen-doc-title { color: #000000 !important; }
+        .zen-doc-divider { border-bottom-color: #000000 !important; }
+        .ql-editor table, .ql-editor th, .ql-editor td { border-color: #cccccc !important; color: #000000 !important; }
+        .ql-editor th { background-color: #f5f5f5 !important; }
+        .ql-editor blockquote { background-color: #f9f9f9 !important; color: #333333 !important; }
+        .ql-editor .ql-code-block-container { background-color: #f5f5f5 !important; border-color: #e0e0e0 !important; }
+        .ql-editor .ql-code-block { color: #24292e !important; }
     }
 </style>
 `;
@@ -120,99 +274,314 @@ function getHtmlWithSelectState() {
   return quill.root.innerHTML;
 }
 
-function exportHTML() {
+// 🎯 [V3.4.5] HTML 특수문자 이스케이프 헬퍼
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// 🎯 [V3.4.5] 문서 내보내기용 일시 포맷터 (YYYY-MM-DD HH:mm:ss)
+function formatExportDate(timestamp) {
+  if (!timestamp) return "";
+  const d = new Date(timestamp);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// 🎯 [V3.4.5] 본문 텍스트 내 해시태그(#태그) 자동 추출
+function extractHashTags(text) {
+  if (!text) return [];
+  const matches = text.match(/#[^\s#]+/g);
+  if (!matches) return [];
+  return Array.from(new Set(matches.map((t) => t.replace(/^#/, "").trim()))).filter(Boolean);
+}
+
+// 🎯 [V3.4.5] 현재 활성화된 노트의 상세 메타데이터 비동기 수집 (폴더 경로, 생성/수정일시 등)
+async function getCurrentMemoDetails() {
+  const title = getTitle();
+  const now = Date.now();
+
+  return new Promise((resolve) => {
+    if (!currentMemoId || !db) {
+      resolve({
+        id: null,
+        syncId: null,
+        title,
+        folderPath: "바탕 화면",
+        createdAt: now,
+        updatedAt: now,
+        isPinned: false,
+      });
+      return;
+    }
+
+    try {
+      const tx = db.transaction(["memos"], "readonly");
+      const store = tx.objectStore("memos");
+      store.getAll().onsuccess = (e) => {
+        const all = e.target.result || [];
+        const memo = all.find((m) => m.id === currentMemoId);
+        if (!memo) {
+          resolve({
+            id: currentMemoId,
+            syncId: null,
+            title,
+            folderPath: "바탕 화면",
+            createdAt: now,
+            updatedAt: now,
+            isPinned: false,
+          });
+          return;
+        }
+
+        const folderMap = new Map();
+        all.forEach((m) => {
+          if (m.type === "folder") folderMap.set(m.id, m);
+        });
+
+        let path = [];
+        let curr = memo.parentId;
+        while (curr) {
+          const f = folderMap.get(curr);
+          if (!f) break;
+          path.unshift(f.title);
+          curr = f.parentId;
+        }
+        const folderPath = path.length > 0 ? path.join(" / ") : "바탕 화면";
+
+        resolve({
+          id: memo.id,
+          syncId: memo.syncId || null,
+          title,
+          folderPath,
+          createdAt: memo.createdAt || memo.updatedAt || now,
+          updatedAt: memo.updatedAt || now,
+          isPinned: !!memo.pinnedAt,
+        });
+      };
+      store.getAll().onerror = () => {
+        resolve({
+          id: currentMemoId,
+          syncId: null,
+          title,
+          folderPath: "바탕 화면",
+          createdAt: now,
+          updatedAt: now,
+          isPinned: false,
+        });
+      };
+    } catch (err) {
+      resolve({
+        id: currentMemoId,
+        syncId: null,
+        title,
+        folderPath: "바탕 화면",
+        createdAt: now,
+        updatedAt: now,
+        isPinned: false,
+      });
+    }
+  });
+}
+
+
+// 🎯 [V3.4.5] HTML 파일 내보내기 (Pretendard 웹폰트 + 다크/라이트 듀얼 테마 전환 + 메타 헤더)
+async function exportHTML() {
   closeAllPanelsMobile();
+  const meta = await getCurrentMemoDetails();
+  const t = getTitle();
+  const c = getHtmlWithSelectState();
+  const createdAtStr = formatExportDate(meta.createdAt);
+  const updatedAtStr = formatExportDate(meta.updatedAt);
+  const plainText = quill.getText();
+  const tags = extractHashTags(plainText);
+  const tagPills = tags.length > 0
+    ? `<span class="zen-meta-item">🏷️ ${tags.map((tag) => '#' + escapeHtml(tag)).join(' ')}</span>`
+    : '';
+
   setTimeout(() => {
-    // 🎯 여백 축소(margin-bottom: 4px) & 구분선(2px solid #444746) & 드롭다운 상태 캡처
-    // 💡 변경점: div 태그 안에 class="ql-editor" 와 style="padding: 0;" 을 추가했습니다.
-    const htmlContent = `<html><head><meta charset="UTF-8">${exportThemeCSS_Dark}</head><body class="zen-export-wrapper" style="padding: 40px; background-color: #131314;"><div style="max-width: 800px; margin: 0 auto;"><h1 style="color: #e3e3e3; margin-bottom: 4px;">${getTitle()}</h1><hr style="border: none; border-bottom: 2px solid #444746; margin: 0 0 24px 0;"><div id="zen-editor-content" class="ql-editor" style="padding: 0;">${getHtmlWithSelectState()}</div></div></body></html>`;
+    const htmlContent = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(t)} - ZenNotes</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/joungkyun/font-d2coding/d2coding.css">
+    ${exportThemeCSS_Dual}
+</head>
+<body class="zen-export-body">
+    <button class="zen-theme-switch-btn" id="theme-btn" onclick="toggleExportTheme()" title="다크 / 라이트 모드 전환">
+        <span id="theme-icon">☀️</span> <span id="theme-label">라이트 모드</span>
+    </button>
+    <div class="zen-doc-container">
+        <header class="zen-doc-header">
+            <h1 class="zen-doc-title">${escapeHtml(t)}</h1>
+            <div class="zen-doc-meta">
+                <span class="zen-meta-item">📁 ${escapeHtml(meta.folderPath)}</span>
+                <span class="zen-meta-item">🕒 작성: ${createdAtStr}</span>
+                <span class="zen-meta-item">✏️ 수정: ${updatedAtStr}</span>
+                ${tagPills}
+            </div>
+            <hr class="zen-doc-divider">
+        </header>
+        <main id="zen-editor-content" class="ql-editor">${c}</main>
+        <footer class="zen-doc-footer">
+            <span>ZenNotes · ${updatedAtStr}</span>
+        </footer>
+    </div>
+    <script>
+        function toggleExportTheme() {
+            const isLight = document.body.classList.toggle('light-theme');
+            const icon = document.getElementById('theme-icon');
+            const label = document.getElementById('theme-label');
+            if (isLight) {
+                icon.textContent = '🌙';
+                label.textContent = '다크 모드';
+            } else {
+                icon.textContent = '☀️';
+                label.textContent = '라이트 모드';
+            }
+            try { localStorage.setItem('zen_export_theme', isLight ? 'light' : 'dark'); } catch(e){}
+        }
+        (function() {
+            try {
+                if (localStorage.getItem('zen_export_theme') === 'light') {
+                    document.body.classList.add('light-theme');
+                    document.getElementById('theme-icon').textContent = '🌙';
+                    document.getElementById('theme-label').textContent = '다크 모드';
+                }
+            } catch(e){}
+        })();
+    </script>
+</body>
+</html>`;
 
     saveAs(
       new Blob([htmlContent], { type: "text/html;charset=utf-8" }),
-      `${getTitle()}.html`,
+      `${t}.html`
     );
     showToast("HTML 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
   }, 300);
 }
 
-// 🎯 PDF는 굽는 데 시간이 걸리므로 진행 중 알림과 완료 알림을 따로 띄움
-function exportPDF() {
-  // 🎯 1. PDF 굽기 직전: 다이어트 모드 ON (여백 쫙 빼기)
+// 🎯 [V3.4.5] PDF 파일 내보내기 (고해상도 + 페이지 절단 방어 + 문서 메타 헤더)
+async function exportPDF() {
   document.body.classList.add('is-pdf-exporting');
   closeAllPanelsMobile();
   showToast("PDF 변환을 시작합니다...\n(잠시만 기다려주세요)");
 
+  const meta = await getCurrentMemoDetails();
+  const t = getTitle();
+  const c = getHtmlWithSelectState();
+  const createdAtStr = formatExportDate(meta.createdAt);
+  const updatedAtStr = formatExportDate(meta.updatedAt);
+  const plainText = quill.getText();
+  const tags = extractHashTags(plainText);
+  const tagStr = tags.length > 0 ? ` · 🏷️ ${tags.map((tg) => '#' + escapeHtml(tg)).join(' ')}` : '';
+
   setTimeout(() => {
     const printContainer = document.createElement("div");
-    const t = document.getElementById("memo-title-input").value || "제목 없는 노트";
-
-    // 🎯 드롭다운 상태 캡처 적용!
-    const c = getHtmlWithSelectState();
-
-    // 🎯 여백 축소(margin-bottom: 4px) & 구분선(2px solid #444746)
     printContainer.innerHTML = `
         ${exportThemeCSS_Light}
-        <div class="zen-export-wrapper" style="padding: 20px; background-color: #ffffff;">
+        <div class="zen-export-wrapper" style="padding: 24px; background-color: #ffffff;">
             <div style="max-width: 800px; margin: 0 auto;">
-                <div style="font-size: 32px; font-weight: 700; color: black; margin-bottom: 4px; letter-spacing: -0.5px;">${t}</div>
-                <hr style="border: none; border-bottom: 2px solid #444746; margin: 0 0 24px 0;">
+                <div style="font-size: 26px; font-weight: 700; color: #111111; margin-bottom: 4px; letter-spacing: -0.5px;">${escapeHtml(t)}</div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #666666; margin-bottom: 8px;">
+                    <span>📁 ${escapeHtml(meta.folderPath)}${tagStr}</span>
+                    <span>작성: ${createdAtStr} · 수정: ${updatedAtStr}</span>
+                </div>
+                <hr style="border: none; border-bottom: 2px solid #333333; margin: 0 0 20px 0;">
                 <div class="ql-snow">
-                    <div class="ql-editor" style="padding: 0; color: black; overflow: visible; height: auto;">${c}</div>
+                    <div class="ql-editor" style="padding: 0; color: #111111; overflow: visible; height: auto;">${c}</div>
+                </div>
+                <div style="margin-top: 32px; padding-top: 8px; border-top: 1px solid #e0e0e0; font-size: 10px; color: #888888; text-align: right;">
+                    ZenNotes Document · ${createdAtStr}
                 </div>
             </div>
         </div>`;
 
     html2pdf()
       .set({
-        margin: 10,
-        filename: `${getTitle()}.pdf`,
+        margin: [12, 10, 12, 10],
+        filename: `${t}.pdf`,
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ['css', 'legacy'] }
       })
       .from(printContainer)
       .save()
       .then(() => {
         showToast("PDF 파일 저장이 완료되었습니다.");
+      })
+      .catch((err) => {
+        console.error("PDF 생성 오류:", err);
+        showToast("PDF 저장 중 오류가 발생했습니다.");
+      })
+      .finally(() => {
+        document.body.classList.remove('is-pdf-exporting');
       });
   }, 300);
-
-  // 🎯 2. PDF 생성이 완료된 후: 다이어트 모드 OFF (다시 화면 원복)
-  // 주의: html2pdf 같은 라이브러리를 쓰신다면, .then() 안이나 setTimeout을 이용해 
-  // PDF가 완전히 구워진 '직후'에 클래스를 빼주셔야 화면이 정상으로 돌아옵니다.
-  setTimeout(() => {
-    document.body.classList.remove('is-pdf-exporting');
-  }, 1000); // PDF 생성에 걸리는 시간 고려 (필요시 조절)
 }
 
-function exportTXT() {
+// 🎯 [V3.4.5] TXT 파일 내보내기 (UTF-8 BOM + 제목/폴더/작성일 메타 헤더 배너)
+async function exportTXT() {
   closeAllPanelsMobile();
+  const meta = await getCurrentMemoDetails();
+  const t = getTitle();
+  const plainText = quill.getText();
+  const tags = extractHashTags(plainText);
+  const tagsLine = tags.length > 0 ? `[태그] ${tags.map((tag) => '#' + tag).join(' ')}\n` : '';
+
+  const divider = "============================================================";
+  const header = `${divider}\n[제목] ${t}\n[폴더] ${meta.folderPath}\n[작성일시] ${formatExportDate(meta.createdAt)}\n[수정일시] ${formatExportDate(meta.updatedAt)}\n${tagsLine}${divider}\n\n`;
+
+  const fullText = "\uFEFF" + header + plainText.trim() + "\n";
+
   setTimeout(() => {
     saveAs(
-      new Blob([quill.getText()], { type: "text/plain" }),
-      `${getTitle()}.txt`,
+      new Blob([fullText], { type: "text/plain;charset=utf-8" }),
+      `${t}.txt`
     );
     showToast("TXT 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
   }, 300);
 }
 
-function exportJSON() {
+// 🎯 [V3.4.5] JSON 파일 내보내기 (표준 Schema 2.0 + 전체 메타데이터 보존 + 2칸 가독성 포맷팅)
+async function exportJSON() {
   closeAllPanelsMobile();
+  const meta = await getCurrentMemoDetails();
+  const plainText = quill.getText();
+  const tags = extractHashTags(plainText);
+
+  const jsonPayload = {
+    schemaVersion: "2.0",
+    type: "ZenMemo",
+    id: meta.id,
+    syncId: meta.syncId,
+    title: meta.title,
+    folderPath: meta.folderPath,
+    tags: tags,
+    isPinned: meta.isPinned,
+    createdAt: meta.createdAt,
+    updatedAt: meta.updatedAt,
+    exportedAt: Date.now(),
+    content: quill.root.innerHTML,
+    plainText: plainText
+  };
+
+  const jsonString = JSON.stringify(jsonPayload, null, 2);
+
   setTimeout(() => {
     saveAs(
-      new Blob(
-        [
-          JSON.stringify({
-            type: "ZenMemo",
-            title: getTitle(),
-            content: quill.root.innerHTML,
-            plainText: quill.getText(),
-            updatedAt: Date.now(),
-          }),
-        ],
-        { type: "application/json" },
-      ),
-      `${getTitle()}.json`,
+      new Blob([jsonString], { type: "application/json;charset=utf-8" }),
+      `${meta.title}.json`
     );
     showToast("JSON 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
   }, 300);
@@ -418,13 +787,27 @@ function convertQuillToMarkdown() {
 }
 
 // 🎯 [V3.3.3] 마크다운(.md) 파일 내보내기
-function exportMD() {
+// 🎯 [V3.4.5] 마크다운(.md) 파일 내보내기 (YAML Frontmatter + 태그/폴더 메타 표준)
+async function exportMD() {
   closeAllPanelsMobile();
+  const meta = await getCurrentMemoDetails();
+  const t = getTitle();
+  const plainText = quill.getText();
+  const tags = extractHashTags(plainText);
+  const mdContent = convertQuillToMarkdown();
+
+  let frontmatter = `---\ntitle: "${t.replace(/"/g, '\\"')}"\ncreated: "${formatExportDate(meta.createdAt)}"\nupdated: "${formatExportDate(meta.updatedAt)}"\nfolder: "${meta.folderPath.replace(/"/g, '\\"')}"\n`;
+  if (tags.length > 0) {
+    frontmatter += `tags:\n${tags.map((tag) => `  - "${tag.replace(/"/g, '\\"')}"`).join('\n')}\n`;
+  }
+  frontmatter += `---\n\n`;
+
+  const finalMd = frontmatter + mdContent;
+
   setTimeout(() => {
-    const mdContent = convertQuillToMarkdown();
     saveAs(
-      new Blob([mdContent], { type: "text/markdown;charset=utf-8" }),
-      `${getTitle()}.md`,
+      new Blob([finalMd], { type: "text/markdown;charset=utf-8" }),
+      `${t}.md`
     );
     showToast("MD 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
   }, 300);
@@ -438,6 +821,26 @@ function convertMarkdownToHTML(mdText) {
   const lines = mdText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const htmlParts = [];
   let i = 0;
+  // 🎯 [V3.4.5] YAML Frontmatter (--- ... ---) 검출 및 제목 파싱
+  window.__lastParsedMdTitle = null;
+  if (lines.length > 0 && lines[0].trim() === "---") {
+    let endFmIdx = -1;
+    for (let j = 1; j < lines.length; j++) {
+      if (lines[j].trim() === "---") {
+        endFmIdx = j;
+        break;
+      }
+    }
+    if (endFmIdx !== -1) {
+      for (let j = 1; j < endFmIdx; j++) {
+        const fmMatch = lines[j].match(/^title:\s*["']?(.*?)["']?$/i);
+        if (fmMatch && fmMatch[1]) {
+          window.__lastParsedMdTitle = fmMatch[1].trim();
+        }
+      }
+      i = endFmIdx + 1; // Frontmatter 블록 전체 건너뛰기
+    }
+  }
 
   // 인라인 서식 변환 헬퍼 (XSS 방어 및 마크다운 기호 -> 태그)
   function parseInline(raw) {
@@ -633,8 +1036,27 @@ function convertMarkdownToHTML(mdText) {
 }
 
 // 🎯 인쇄하기도 화면이 멈추지 않도록 시간차 적용
-function handlePrint() {
+// 🎯 [V3.4.5] 인쇄하기 (종이 인쇄 메타 헤더/푸터 주입 및 A4 고품질 렌더링)
+async function handlePrint() {
   closeAllPanelsMobile();
+  try {
+    const meta = await getCurrentMemoDetails();
+    const plainText = quill.getText();
+    const tags = extractHashTags(plainText);
+    const tagStr = tags.length > 0 ? ` · 🏷️ ${tags.map((t) => '#' + escapeHtml(t)).join(' ')}` : '';
+
+    const metaElem = document.getElementById("print-meta-sub");
+    if (metaElem) {
+      metaElem.innerHTML = `<span>📁 ${escapeHtml(meta.folderPath)}${tagStr}</span><span>작성: ${formatExportDate(meta.createdAt)} · 수정: ${formatExportDate(meta.updatedAt)}</span>`;
+    }
+    const footerElem = document.getElementById("print-doc-footer");
+    if (footerElem) {
+      footerElem.textContent = `ZenNotes Document · ${formatExportDate(Date.now())}`;
+    }
+  } catch (err) {
+    console.error("인쇄 메타 준비 오류:", err);
+  }
+
   setTimeout(() => {
     window.print();
   }, 300);
@@ -1229,8 +1651,9 @@ function handleFileImport(e) {
     else if (fileExt === "md") {
       createNewMemo();
       isLoading = false;
-      document.getElementById("memo-title-input").value = fileName.replace(/\.md$/i, "");
       const parsedHtml = convertMarkdownToHTML(fileContent);
+      document.getElementById("memo-title-input").value =
+        window.__lastParsedMdTitle || fileName.replace(/\.md$/i, "");
       quill.root.innerHTML = parsedHtml;
       executeSave();
       showToast("마크다운(MD) 문서를 불러왔습니다.");
@@ -1239,8 +1662,15 @@ function handleFileImport(e) {
     else if (fileExt === "txt") {
       createNewMemo();
       isLoading = false;
-      document.getElementById("memo-title-input").value = fileName.replace(/\.txt$/i, "");
-      quill.setText(fileContent); // 일반 텍스트로 주입
+      let txtBody = fileContent.replace(/^\uFEFF/, ""); // BOM 제거
+      const headerMatch = txtBody.match(/^={20,}\r?\n\[제목\]\s*(.+?)\r?\n[\s\S]*?={20,}\r?\n\r?\n?/);
+      if (headerMatch) {
+        document.getElementById("memo-title-input").value = headerMatch[1].trim();
+        txtBody = txtBody.substring(headerMatch[0].length);
+      } else {
+        document.getElementById("memo-title-input").value = fileName.replace(/\.txt$/i, "");
+      }
+      quill.setText(txtBody);
       executeSave();
       showToast("TXT 문서를 불러왔습니다.");
     }
