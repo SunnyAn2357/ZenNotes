@@ -1709,22 +1709,47 @@ body.light-theme .search-bar {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-/* 4. 중앙 상단 바 (ZenNotes-ADS & 제목 & 툴바): 안정적인 뼈대감 부여 */
+/* 4. 중앙 상단 바 (ZenNotes-ADS & 제목 & 툴바): 아래보다 더 짙고 단단하게 잡아주는 뼈대감 */
 body.light-theme .editor-header {
-    background: linear-gradient(180deg, #f4f6f9 0%, #ffffff 100%);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-    padding-bottom: 16px;
+    background-color: #e5e8ed !important;
+    border-bottom: 1px solid #d0d5dd !important;
+    padding: 24px 24px 14px 24px !important;
+    max-width: 100% !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+body.light-theme .editor-header #memo-title-input {
+    max-width: 800px;
+    margin: 0 auto;
+    color: #191c20;
+    font-weight: 700;
+}
+
+body.light-theme .editor-header #memo-title-input::placeholder {
+    color: #848a96;
 }
 
 body.light-theme .ql-toolbar.ql-snow {
-    background: #fafbfc;
-    border-bottom: 1px solid var(--border) !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    background-color: #eef1f5 !important;
+    border-bottom: 1px solid #d0d5dd !important;
+    max-width: 100% !important;
+    padding: 8px 24px !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03) !important;
 }
 
 /* 5. 중앙 편집 도화지: 눈이 편안한 여백과 차분한 종이 느낌 */
+body.light-theme .quill-wrapper {
+    background-color: #f7f9fb !important; /* 도화지 바깥 여백은 아주 연한 그레이 */
+}
+
 body.light-theme .ql-editor {
-    background: #ffffff;
+    background: #ffffff !important;
+    box-shadow: 0 0 16px rgba(0, 0, 0, 0.04) !important;
+    border-left: 1px solid rgba(0, 0, 0, 0.04) !important;
+    border-right: 1px solid rgba(0, 0, 0, 0.04) !important;
+    margin-top: 12px !important;
+    margin-bottom: 24px !important;
+    border-radius: 8px !important;
 }
 
 /* 세련된 인용구(Blockquote) 스타일 */
