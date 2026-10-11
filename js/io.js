@@ -15,8 +15,27 @@ const exportThemeCSS_Light = `
 
     .zen-export-wrapper table { border-collapse: collapse; width: 100%; margin: 20px 0; border: 1px solid #cccccc; }
     .zen-export-wrapper td, .zen-export-wrapper th { border: 1px solid #cccccc; padding: 8px 12px; color: #000000; }
-    .zen-export-wrapper th { background-color: #f5f5f5; font-weight: 600; }
-    .zen-export-wrapper blockquote { border-left: 4px solid #78a9ff; background-color: #f9f9f9; margin: 16px 0; padding: 12px 16px; color: #333333; }
+    .zen-export-wrapper th { background-color: #f5f5f5 !important; font-weight: 600 !important; }
+    .zen-export-wrapper blockquote,
+    .zen-export-wrapper .ql-editor blockquote {
+        border-left: 4px solid #78a9ff !important;
+        background-color: #f9f9f9 !important;
+        margin: 16px 0 !important;
+        padding: 12px 16px !important;
+        color: #333333 !important;
+        font-style: normal !important;
+        border-radius: 0 8px 8px 0 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    .zen-export-wrapper code,
+    .zen-export-wrapper .ql-editor code {
+        background-color: rgba(120, 169, 255, 0.1) !important;
+        color: #0056b3 !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+        font-family: 'D2Coding', 'Consolas', monospace !important;
+    }
     
     /* 🎯 PDF 다크 침범 방어 & 라벨 세팅 */
     .zen-export-wrapper .ql-code-block-container { position: relative !important; background-color: #f5f5f5 !important; border: 1px solid #e0e0e0 !important; border-radius: 8px !important; padding: 44px 16px 16px 16px !important; margin: 1rem 0 !important; }
@@ -64,9 +83,9 @@ const exportThemeCSS_Dual = `
         --zen-code-bg: #f6f8fa;
         --zen-code-header-border: #e1e4e8;
         --zen-th-bg: #f2f3f5;
-        --zen-quote-bg: #f8f9fa;
-        --zen-quote-text: #4a4d52;
-        --zen-accent: #2563eb;
+        --zen-quote-bg: #f9f9f9;
+        --zen-quote-text: #333333;
+        --zen-accent: #78a9ff;
         --zen-meta-text: #6c7078;
         --zen-card-bg: #f9f9fb;
     }
@@ -158,7 +177,7 @@ const exportThemeCSS_Dual = `
     .ql-editor th { background-color: var(--zen-th-bg); font-weight: 600; }
 
     /* 인용구 (Blockquote) */
-    .ql-editor blockquote { border-left: 4px solid var(--zen-accent); background-color: var(--zen-quote-bg); margin: 16px 0; padding: 12px 16px; color: var(--zen-quote-text); border-radius: 0 4px 4px 0; }
+    .ql-editor blockquote { border-left: 4px solid var(--zen-accent); background-color: var(--zen-quote-bg); margin: 16px 0; padding: 12px 16px; color: var(--zen-quote-text); border-radius: 0 8px 8px 0; font-style: normal; }
 
     /* 링크 및 서식 */
     .ql-editor a { color: var(--zen-accent); text-decoration: underline; }
@@ -247,7 +266,7 @@ const exportThemeCSS_Dual = `
         .zen-doc-divider { border-bottom-color: #000000 !important; }
         .ql-editor table, .ql-editor th, .ql-editor td { border-color: #cccccc !important; color: #000000 !important; }
         .ql-editor th { background-color: #f5f5f5 !important; }
-        .ql-editor blockquote { background-color: #f9f9f9 !important; color: #333333 !important; }
+        .ql-editor blockquote { background-color: #f9f9f9 !important; color: #333333 !important; border-left: 4px solid #78a9ff !important; font-style: normal !important; border-radius: 0 8px 8px 0 !important; }
         .ql-editor .ql-code-block-container { background-color: #f5f5f5 !important; border-color: #e0e0e0 !important; }
         .ql-editor .ql-code-block { color: #24292e !important; }
     }

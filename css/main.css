@@ -2753,6 +2753,8 @@ button:hover {
         margin: 16px 0 !important;
         padding: 12px 16px !important;
         color: #333333 !important;
+        font-style: normal !important;
+        border-radius: 0 8px 8px 0 !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
     }
