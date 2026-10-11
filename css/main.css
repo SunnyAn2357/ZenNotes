@@ -1737,7 +1737,7 @@ body.light-theme .editor-header #memo-title-input {
 }
 
 body.light-theme .ql-toolbar.ql-snow {
-    background: transparent !important;
+    background: #ffffff !important; /* 모바일 스크롤 시 글자가 비치지 않는 불투명 화이트 */
     border: none !important;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
     max-width: 800px !important;
