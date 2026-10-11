@@ -20,16 +20,16 @@
     --font-family: 'Pretendard', -apple-system, sans-serif;
 }
 
-/* 🎯 [V4.0.0] 프리미엄 화이트 테마 (Light Mode) 팔레트 */
+/* 🎯 [V4.0.1] 프리미엄 화이트 테마 (눈이 편안한 맥OS/노션 스타일 깊이감 팔레트) */
 body.light-theme {
-    --bg: #ffffff;
-    --surface: #f7f8fa;
-    --surface-hover: #eef0f4;
-    --border: #dadce0;
-    --text-main: #1f2024;
-    --text-muted: #5f6368;
-    --accent: #1a73e8;
-    --danger: #d93025;
+    --bg: #ffffff;             /* 중앙 본문 도화지: 깨끗하고 집중도 높은 화이트 */
+    --surface: #eef1f5;        /* 좌/우 날개(사이드바): 차분하게 눌러주는 소프트 슬레이트 */
+    --surface-hover: #e2e6eb;  /* 사이드바 호버: 또렷한 시각적 피드백 */
+    --border: #d0d5dd;         /* 경계선: 확실하게 영역을 구분해주는 정돈된 그레이 */
+    --text-main: #191c20;      /* 본문 텍스트: 선명하고 또렷한 딥 블랙 차콜 */
+    --text-muted: #535862;     /* 보조 텍스트: 눈이 피로하지 않은 차분한 미드 그레이 */
+    --accent: #2563eb;         /* 포인트 블루: 신뢰감 있는 모던 사파이어 블루 */
+    --danger: #dc2626;
 }
 
 * {
@@ -1661,6 +1661,70 @@ body.light-theme .ql-editor .hljs-attribute,
 body.light-theme .ql-editor .hljs-params,
 body.light-theme .ql-editor .hljs-variable {
     color: #953800 !important;
+}
+
+/* ============================================================================
+   🎯 [V4.0.1] 화이트 테마 3단계 깊이감(Depth) & 날개(사이드바) 톤다운 완성
+============================================================================ */
+/* 1. 좌/우 사이드바 날개: 명확한 1px 경계선과 은은한 그림자로 입체감 분리 */
+body.light-theme .col-left {
+    border-right: 1px solid var(--border) !important;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02) !important;
+}
+
+body.light-theme .col-right {
+    border-left: 1px solid var(--border) !important;
+    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+body.light-theme .trash-pane {
+    border-left: 1px solid var(--border) !important;
+    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 2. 좌측 메모 카드: 슬레이트 배경 위에서 하얀색 카드로 깔끔하게 돋보임 */
+body.light-theme .memo-item {
+    background-color: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    margin-bottom: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+body.light-theme .memo-item:hover {
+    background-color: var(--surface-hover);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+body.light-theme .memo-item.active {
+    background-color: #ffffff;
+    border-left: 3px solid var(--accent);
+    border-color: rgba(37, 99, 235, 0.25);
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+}
+
+/* 3. 좌측 상단 검색창: 하얀색 입력 인풋으로 시인성 강화 */
+body.light-theme .search-bar {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* 4. 중앙 상단 바 (ZenNotes-ADS & 제목 & 툴바): 안정적인 뼈대감 부여 */
+body.light-theme .editor-header {
+    background: linear-gradient(180deg, #f4f6f9 0%, #ffffff 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding-bottom: 16px;
+}
+
+body.light-theme .ql-toolbar.ql-snow {
+    background: #fafbfc;
+    border-bottom: 1px solid var(--border) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+/* 5. 중앙 편집 도화지: 눈이 편안한 여백과 차분한 종이 느낌 */
+body.light-theme .ql-editor {
+    background: #ffffff;
 }
 
 /* 세련된 인용구(Blockquote) 스타일 */
