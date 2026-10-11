@@ -2959,9 +2959,22 @@ body.light-theme .ql-editor {
         margin-bottom: 20px !important;
     }
 
-    .ql-editor li {
+    .ql-editor li,
+    .ql-editor p,
+    .ql-editor h1,
+    .ql-editor h2,
+    .ql-editor h3,
+    .ql-editor blockquote,
+    .ql-editor img,
+    .ql-editor .ql-code-block-container {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+    }
+
+    .ql-editor p,
+    .ql-editor li {
+        orphans: 3;
+        widows: 3;
     }
 
     /* 🎯 4. 표(Table) 화이트 테마 변환 & 페이지 절단 방어 */

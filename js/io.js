@@ -7,6 +7,7 @@ const exportThemeCSS_Light = `
     
     /* 🎯 페이지 분할 방어 (Page-Break Defense) */
     .zen-export-wrapper h1, .zen-export-wrapper h2, .zen-export-wrapper h3 { page-break-after: avoid !important; break-after: avoid !important; }
+    .zen-export-wrapper p, .zen-export-wrapper h1, .zen-export-wrapper h2, .zen-export-wrapper h3 { page-break-inside: avoid !important; break-inside: avoid !important; orphans: 3; widows: 3; }
     .zen-export-wrapper table, .zen-export-wrapper tr, .zen-export-wrapper td, .zen-export-wrapper th { page-break-inside: avoid !important; break-inside: avoid !important; }
     .zen-export-wrapper .ql-code-block-container { page-break-inside: avoid !important; break-inside: avoid !important; }
     .zen-export-wrapper blockquote { page-break-inside: avoid !important; break-inside: avoid !important; }
@@ -261,9 +262,13 @@ const exportThemeCSS_Dual = `
     }
 
     /* 🖨️ 인쇄 시 화이트 강제 & 불필요 버튼 숨김 */
+    @page { size: A4; margin: 15mm 12mm; }
     @media print {
         .zen-theme-switch-btn { display: none !important; }
         body.zen-export-body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; }
+        .ql-editor p, .ql-editor h1, .ql-editor h2, .ql-editor h3, .ql-editor li, .ql-editor blockquote, .ql-editor tr, .ql-editor img, .ql-editor .ql-code-block-container { page-break-inside: avoid !important; break-inside: avoid !important; }
+        .ql-editor p, .ql-editor li { orphans: 3; widows: 3; }
+        .ql-editor h1, .ql-editor h2, .ql-editor h3 { page-break-after: avoid !important; break-after: avoid !important; }
         .zen-doc-title { color: #000000 !important; }
         .zen-doc-divider { border-bottom-color: #000000 !important; }
         .ql-editor table, .ql-editor th, .ql-editor td { border-color: #cccccc !important; color: #000000 !important; }
@@ -534,7 +539,7 @@ async function exportPDF() {
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ['css', 'legacy'] }
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['p', 'h1', 'h2', 'h3', 'li', 'blockquote', 'tr', 'img', '.ql-code-block-container'] }
       })
       .from(printContainer)
       .save()
