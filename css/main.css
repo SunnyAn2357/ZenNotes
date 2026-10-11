@@ -20,6 +20,18 @@
     --font-family: 'Pretendard', -apple-system, sans-serif;
 }
 
+/* 🎯 [V4.0.0] 프리미엄 화이트 테마 (Light Mode) 팔레트 */
+body.light-theme {
+    --bg: #ffffff;
+    --surface: #f7f8fa;
+    --surface-hover: #eef0f4;
+    --border: #dadce0;
+    --text-main: #1f2024;
+    --text-muted: #5f6368;
+    --accent: #1a73e8;
+    --danger: #d93025;
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -353,6 +365,23 @@ button:hover {
     gap: 16px;
 }
 
+/* 🎯 [V4.0.0] 삼선과 같은 줄 우측에 햇님/달님 토글 버튼 나란히 배치 */
+.nav-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.theme-toggle-btn {
+    transition: transform 0.25s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+    transform: rotate(15deg) scale(1.1);
+    color: var(--accent);
+}
+
 .toggle-btn {
     width: 36px;
     height: 36px;
@@ -376,6 +405,13 @@ button:hover {
 .col-left.collapsed .nav-header {
     padding: 24px 0 16px 0;
     align-items: center;
+}
+
+.col-left.collapsed .nav-header-top {
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
 }
 
 .col-left.collapsed .search-bar,
@@ -1532,6 +1568,101 @@ button:hover {
     color: #98c379 !important;
 }
 
+/* 🎯 [V4.0.0] 화이트 모드 코드 블록 전용 스타일 (GitHub Light Palette) */
+body.light-theme .ql-editor .ql-code-block-container {
+    background-color: #f6f8fa !important;
+    border: 1px solid #d0d7de !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.light-theme .ql-editor .ql-code-block-container::before {
+    background: #e1e4e8 !important;
+}
+
+body.light-theme .ql-editor .ql-code-block-container select.ql-ui {
+    background-color: #ffffff !important;
+    color: #57606a !important;
+    border: 1px solid #d0d7de !important;
+    color-scheme: light !important;
+}
+
+body.light-theme .ql-editor .ql-code-block-container select.ql-ui option {
+    background-color: #ffffff !important;
+    color: #24292f !important;
+}
+
+body.light-theme .ql-editor .ql-code-block-container::after {
+    color: #57606a !important;
+    background-color: #ffffff !important;
+    border: 1px solid #d0d7de !important;
+}
+
+body.light-theme .ql-editor .ql-code-block-container:hover::after {
+    color: #24292f !important;
+    background-color: #f3f4f6 !important;
+}
+
+body.light-theme .ql-editor .ql-code-block {
+    color: #24292f !important;
+}
+
+body.light-theme .ql-editor .hljs-comment,
+body.light-theme .ql-editor .hljs-quote {
+    color: #6e7781 !important;
+}
+
+body.light-theme .ql-editor .hljs-operator,
+body.light-theme .ql-editor .hljs-punctuation {
+    color: #24292f !important;
+}
+
+body.light-theme .ql-editor .hljs-keyword,
+body.light-theme .ql-editor .hljs-selector-tag,
+body.light-theme .ql-editor .hljs-doctag {
+    color: #cf222e !important;
+}
+
+body.light-theme .ql-editor .hljs-meta,
+body.light-theme .ql-editor .hljs-preprocess {
+    color: #8250df !important;
+}
+
+body.light-theme .ql-editor .hljs-function,
+body.light-theme .ql-editor .hljs-title,
+body.light-theme .ql-editor .hljs-title.class_,
+body.light-theme .ql-editor .hljs-title.function_ {
+    color: #0550ae !important;
+}
+
+body.light-theme .ql-editor .hljs-type,
+body.light-theme .ql-editor .hljs-built_in {
+    color: #953800 !important;
+}
+
+body.light-theme .ql-editor .hljs-string,
+body.light-theme .ql-editor .hljs-regexp {
+    color: #0a3069 !important;
+}
+
+body.light-theme .ql-editor .hljs-number,
+body.light-theme .ql-editor .hljs-literal,
+body.light-theme .ql-editor .hljs-constant {
+    color: #0550ae !important;
+}
+
+body.light-theme .ql-editor .hljs-name,
+body.light-theme .ql-editor .hljs-tag,
+body.light-theme .ql-editor .hljs-section {
+    color: #116329 !important;
+}
+
+body.light-theme .ql-editor .hljs-attr,
+body.light-theme .ql-editor .hljs-attribute,
+body.light-theme .ql-editor .hljs-params,
+body.light-theme .ql-editor .hljs-variable {
+    color: #953800 !important;
+}
+
 /* 세련된 인용구(Blockquote) 스타일 */
 .ql-editor blockquote {
     border-left: 4px solid var(--accent) !important;
@@ -2382,8 +2513,12 @@ button:hover {
         transform: translateX(0) !important;
     }
 
-    .col-left .nav-header>button.toggle-btn {
+    .col-left .nav-header-top>button:first-child {
         display: none;
+    }
+
+    .col-left .nav-header-top {
+        justify-content: flex-end;
     }
 
     .col-right,

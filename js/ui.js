@@ -745,3 +745,67 @@ function initScrollToTop() {
 
 window.addEventListener("DOMContentLoaded", initScrollToTop);
 window.addEventListener("load", initScrollToTop);
+
+// ============================================================================
+// 🎯 [V4.0.0] 프리미엄 화이트/다크 테마 전환 엔진 (햇님 / 달님)
+// ============================================================================
+function applyAppTheme(theme, save = true) {
+  const isLight = theme === "light";
+  const icon = document.getElementById("theme-toggle-icon");
+  const metaDesktop = document.getElementById("meta-theme-color-desktop");
+  const metaMobile = document.getElementById("meta-theme-color-mobile");
+
+  if (isLight) {
+    document.body.classList.add("light-theme");
+    if (icon) {
+      icon.className = "fa-solid fa-moon";
+      icon.style.color = "#7c3aed"; // 은은한 바이올렛 달님
+    }
+    if (metaDesktop) metaDesktop.setAttribute("content", "#ffffff");
+    if (metaMobile) metaMobile.setAttribute("content", "#f7f8fa");
+  } else {
+    document.body.classList.remove("light-theme");
+    if (icon) {
+      icon.className = "fa-solid fa-sun";
+      icon.style.color = "#f59e0b"; // 따뜻한 골드 햇님
+    }
+    if (metaDesktop) metaDesktop.setAttribute("content", "#282C26");
+    if (metaMobile) metaMobile.setAttribute("content", "#131314");
+  }
+
+  if (save) {
+    try {
+      localStorage.setItem("zen_app_theme", isLight ? "light" : "dark");
+    } catch (e) {
+      console.warn("테마 저장 실패:", e);
+    }
+  }
+}
+
+function toggleAppTheme() {
+  const currentIsLight = document.body.classList.contains("light-theme");
+  const nextTheme = currentIsLight ? "dark" : "light";
+  applyAppTheme(nextTheme, true);
+  
+  if (typeof showToast === "function") {
+    showToast(nextTheme === "light" ? "☀️ 화이트 모드로 전환되었습니다." : "🌙 다크 모드로 전환되었습니다.");
+  }
+}
+
+function initAppTheme() {
+  try {
+    const saved = localStorage.getItem("zen_app_theme");
+    if (saved === "light") {
+      applyAppTheme("light", false);
+    } else {
+      applyAppTheme("dark", false);
+    }
+  } catch (e) {
+    applyAppTheme("dark", false);
+  }
+}
+
+// DOM 준비 즉시 테마 적용 (깜빡임 최소화)
+initAppTheme();
+window.toggleAppTheme = toggleAppTheme;
+window.applyAppTheme = applyAppTheme;
