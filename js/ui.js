@@ -761,8 +761,8 @@ function applyAppTheme(theme, save = true) {
       icon.className = "fa-solid fa-moon";
       icon.style.color = "#7c3aed"; // 은은한 바이올렛 달님
     }
-    if (metaDesktop) metaDesktop.setAttribute("content", "#e5e8ed");
-    if (metaMobile) metaMobile.setAttribute("content", "#e5e8ed");
+    if (metaDesktop) metaDesktop.setAttribute("content", "#eef1f5");
+    if (metaMobile) metaMobile.setAttribute("content", "#eef1f5");
   } else {
     document.body.classList.remove("light-theme");
     if (icon) {

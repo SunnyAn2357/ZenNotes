@@ -1663,93 +1663,101 @@ body.light-theme .ql-editor .hljs-variable {
     color: #953800 !important;
 }
 
+
+
 /* ============================================================================
-   🎯 [V4.0.1] 화이트 테마 3단계 깊이감(Depth) & 날개(사이드바) 톤다운 완성
+   🎯 [V4.0.3] 화이트 테마: 선 없는 미니멀리즘 + 원본 툴바 복원 + 선택 피드백 극대화
 ============================================================================ */
-/* 1. 좌/우 사이드바 날개: 명확한 1px 경계선과 은은한 그림자로 입체감 분리 */
+/* 1. 좌/우 사이드바 날개: 조잡한 선 없이 자연스럽고 은은한 면 분할 */
 body.light-theme .col-left {
-    border-right: 1px solid var(--border) !important;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02) !important;
+    border-right: none !important;
+    box-shadow: none !important;
 }
 
 body.light-theme .col-right {
-    border-left: 1px solid var(--border) !important;
-    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.06) !important;
+    border-left: none !important;
+    box-shadow: none !important;
 }
 
 body.light-theme .trash-pane {
-    border-left: 1px solid var(--border) !important;
-    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.06) !important;
+    border-left: none !important;
+    box-shadow: none !important;
 }
 
-/* 2. 좌측 메모 카드: 슬레이트 배경 위에서 하얀색 카드로 깔끔하게 돋보임 */
+/* 2. 좌측 메모 카드 및 선택(Active/Multi-select) 상태 완벽 시각화 */
 body.light-theme .memo-item {
-    background-color: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    margin-bottom: 6px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    background-color: transparent;
+    border: none;
+    margin-bottom: 3px;
+    box-shadow: none;
+    border-left: 3px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 body.light-theme .memo-item:hover {
     background-color: var(--surface-hover);
-    border-color: rgba(0, 0, 0, 0.1);
 }
 
+/* 🎯 [핵심] 단일 선택 및 다중 선택(길게 누르기) 시 확 눈에 들어오는 파란색 강조 피드백 */
 body.light-theme .memo-item.active {
-    background-color: #ffffff;
-    border-left: 3px solid var(--accent);
-    border-color: rgba(37, 99, 235, 0.25);
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+    background-color: #dbeafe !important; /* 화사하고 시원한 소프트 블루 */
+    border-left: 4px solid var(--accent) !important;
+    border-radius: 4px 8px 8px 4px;
+    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12) !important;
 }
 
-/* 3. 좌측 상단 검색창: 하얀색 입력 인풋으로 시인성 강화 */
+body.light-theme .memo-item.active .memo-title {
+    color: #1d4ed8 !important; /* 진하고 또렷한 로열 블루 텍스트 */
+    font-weight: 600 !important;
+}
+
+body.light-theme .memo-item.active .memo-date {
+    color: #3b82f6 !important;
+}
+
+/* 3. 좌측 상단 검색창 */
 body.light-theme .search-bar {
     background: #ffffff;
-    border: 1px solid var(--border);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-/* 4. 중앙 상단 바 (ZenNotes-ADS & 제목 & 툴바): 아래보다 더 짙고 단단하게 잡아주는 뼈대감 */
+/* 4. 중앙 상단 바 & 툴바: 다크모드와 100% 동일한 폭(800px) 및 자연스러운 본문 일체화 */
 body.light-theme .editor-header {
-    background-color: #e5e8ed !important;
-    border-bottom: 1px solid #d0d5dd !important;
-    padding: 24px 24px 14px 24px !important;
-    max-width: 100% !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    background: transparent !important;
+    border-bottom: none !important;
+    padding: 30px 24px 10px !important;
+    max-width: 800px !important;
+    box-shadow: none !important;
 }
 
 body.light-theme .editor-header #memo-title-input {
-    max-width: 800px;
-    margin: 0 auto;
-    color: #191c20;
-    font-weight: 700;
-}
-
-body.light-theme .editor-header #memo-title-input::placeholder {
-    color: #848a96;
+    width: 75% !important;
+    color: var(--text-main);
+    font-weight: 600;
 }
 
 body.light-theme .ql-toolbar.ql-snow {
-    background-color: #eef1f5 !important;
-    border-bottom: 1px solid #d0d5dd !important;
-    max-width: 100% !important;
-    padding: 8px 24px !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03) !important;
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    max-width: 800px !important;
+    padding: 8px 12px !important;
+    box-shadow: none !important;
 }
 
-/* 5. 중앙 편집 도화지: 눈이 편안한 여백과 차분한 종이 느낌 */
+/* 5. 중앙 편집 도화지 */
 body.light-theme .quill-wrapper {
-    background-color: #f7f9fb !important; /* 도화지 바깥 여백은 아주 연한 그레이 */
+    background: transparent !important;
 }
 
 body.light-theme .ql-editor {
-    background: #ffffff !important;
-    box-shadow: 0 0 16px rgba(0, 0, 0, 0.04) !important;
-    border-left: 1px solid rgba(0, 0, 0, 0.04) !important;
-    border-right: 1px solid rgba(0, 0, 0, 0.04) !important;
-    margin-top: 12px !important;
-    margin-bottom: 24px !important;
-    border-radius: 8px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-radius: 0 !important;
 }
 
 /* 세련된 인용구(Blockquote) 스타일 */
