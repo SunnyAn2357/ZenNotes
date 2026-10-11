@@ -1,4 +1,4 @@
-﻿hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
+hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
 
 const Link = Quill.import('formats/link');
 class CustomLink extends Link {
@@ -73,7 +73,30 @@ const quill = new Quill('#editor', {
     bounds: '.col-center',
     placeholder: '여기에 지식을 기록하세요...',
     modules: {
-        syntax: true,
+        syntax: {
+            hljs: window.hljs,
+            languages: [
+                { key: 'plain', label: 'Plain Text' },
+                { key: 'javascript', label: 'JavaScript' },
+                { key: 'typescript', label: 'TypeScript' },
+                { key: 'html', label: 'HTML / XML' },
+                { key: 'css', label: 'CSS' },
+                { key: 'json', label: 'JSON' },
+                { key: 'python', label: 'Python' },
+                { key: 'java', label: 'Java' },
+                { key: 'cpp', label: 'C / C++' },
+                { key: 'csharp', label: 'C#' },
+                { key: 'sql', label: 'SQL' },
+                { key: 'bash', label: 'Bash / Shell' },
+                { key: 'markdown', label: 'Markdown' },
+                { key: 'yaml', label: 'YAML' },
+                { key: 'rust', label: 'Rust' },
+                { key: 'go', label: 'Go' },
+                { key: 'php', label: 'PHP' },
+                { key: 'kotlin', label: 'Kotlin' },
+                { key: 'swift', label: 'Swift' }
+            ]
+        },
         table: true,
         history: { delay: 1000, maxStack: 100, userOnly: true },
         keyboard: {

@@ -228,15 +228,17 @@ const exportThemeCSS_Dual = `
         white-space: pre-wrap !important;
     }
 
-    /* 🎨 다크 테마 코드 신택스 */
-    body:not(.light-theme) .ql-code-block { color: #abb2bf !important; }
-    body:not(.light-theme) .hljs-comment, body:not(.light-theme) .hljs-quote { color: #7f848e !important; font-style: italic; }
-    body:not(.light-theme) .hljs-keyword, body:not(.light-theme) .hljs-selector-tag, body:not(.light-theme) .hljs-type { color: #c678dd !important; font-weight: 600; }
+    /* 🎨 [V3.4.7] 다크 테마 코드 신택스 (One Dark Pro Vivid) */
+    body:not(.light-theme) .ql-code-block { color: #d7dae0 !important; }
+    body:not(.light-theme) .hljs-comment, body:not(.light-theme) .hljs-quote { color: #6d7688 !important; font-style: italic; }
+    body:not(.light-theme) .hljs-keyword, body:not(.light-theme) .hljs-selector-tag, body:not(.light-theme) .hljs-doctag { color: #e06c75 !important; font-weight: 600; }
+    body:not(.light-theme) .hljs-meta, body:not(.light-theme) .hljs-preprocess { color: #c678dd !important; font-weight: 600; }
     body:not(.light-theme) .hljs-title, body:not(.light-theme) .hljs-title.function_, body:not(.light-theme) .hljs-function { color: #61afef !important; }
+    body:not(.light-theme) .hljs-type, body:not(.light-theme) .hljs-built_in, body:not(.light-theme) .hljs-class .hljs-title { color: #e5c07b !important; font-weight: 600; }
     body:not(.light-theme) .hljs-string, body:not(.light-theme) .hljs-regexp { color: #98c379 !important; }
-    body:not(.light-theme) .hljs-number, body:not(.light-theme) .hljs-literal, body:not(.light-theme) .hljs-variable { color: #d19a66 !important; }
-    body:not(.light-theme) .hljs-name, body:not(.light-theme) .hljs-tag, body:not(.light-theme) .hljs-section { color: #e06c75 !important; }
-    body:not(.light-theme) .hljs-attr, body:not(.light-theme) .hljs-attribute, body:not(.light-theme) .hljs-params { color: #56b6c2 !important; }
+    body:not(.light-theme) .hljs-number, body:not(.light-theme) .hljs-literal, body:not(.light-theme) .hljs-constant { color: #ff9e64 !important; }
+    body:not(.light-theme) .hljs-name, body:not(.light-theme) .hljs-tag, body:not(.light-theme) .hljs-section { color: #f7768e !important; }
+    body:not(.light-theme) .hljs-attr, body:not(.light-theme) .hljs-attribute, body:not(.light-theme) .hljs-params, body:not(.light-theme) .hljs-variable { color: #56b6c2 !important; }
 
     /* 🎨 라이트 테마 코드 신택스 */
     body.light-theme .ql-code-block { color: #24292e !important; }
