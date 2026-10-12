@@ -503,6 +503,8 @@ button:hover {
     overflow-y: auto;
     list-style: none;
     padding: 0 10px 20px;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .memo-item {
@@ -514,6 +516,8 @@ button:hover {
     justify-content: space-between;
     align-items: center;
     transition: background 0.1s;
+    user-select: none;
+    -webkit-user-select: none;
     border-left: 3px solid transparent;
     color: var(--text-main);
 }

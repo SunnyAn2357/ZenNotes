@@ -1,4 +1,4 @@
-﻿let fmSearchTimer = null;
+let fmSearchTimer = null;
 function triggerFmSearch() {
   if (fmSearchTimer) clearTimeout(fmSearchTimer);
   fmSearchTimer = setTimeout(() => loadFileManager(currentFmFolderId), 300);
@@ -1741,6 +1741,10 @@ function createMemoElement(memo) {
       lastSelectedId = memo.id;
       loadMemoList(false);
     } else {
+      if (window.getSelection) {
+        const sel = window.getSelection();
+        if (sel.removeAllRanges) sel.removeAllRanges();
+      }
       selectedMemos.clear();
       selectedMemos.add(memo.id);
       lastSelectedId = memo.id;

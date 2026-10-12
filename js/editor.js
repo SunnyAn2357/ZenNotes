@@ -1447,6 +1447,39 @@ document.querySelector('.ql-editor').addEventListener('click', function (e) {
     }
 });
 
+/* ============================================================================
+   🎯 [V4.0.9] 코드블록 언어 선택 시 스크롤 튐 / 최상단 포커스 강탈 방지
+   ============================================================================ */
+document.querySelector('.ql-editor').addEventListener('change', function (e) {
+    if (!e.target || !e.target.matches('.ql-code-block-container select.ql-ui')) return;
+
+    // 1. 현재 에디터 및 컨테이너의 스크롤 위치 백업
+    const editorEl = document.querySelector('.ql-editor');
+    const containerEl = document.querySelector('#editor');
+    const centerEl = document.querySelector('.col-center');
+    const scrollEditor = editorEl ? editorEl.scrollTop : 0;
+    const scrollContainer = containerEl ? containerEl.scrollTop : 0;
+    const scrollCenter = centerEl ? centerEl.scrollTop : 0;
+    const scrollWindow = window.scrollY || document.documentElement.scrollTop || 0;
+
+    // 2. Quill 내부의 change 핸들러에서 실행하는 root.focus()에 의한 최상단 점프 및 키보드 팝업 차단
+    const restoreScrollAndBlur = () => {
+        if (quill && typeof quill.blur === 'function') quill.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+        if (editorEl) editorEl.scrollTop = scrollEditor;
+        if (containerEl) containerEl.scrollTop = scrollContainer;
+        if (centerEl) centerEl.scrollTop = scrollCenter;
+        window.scrollTo(0, scrollWindow);
+    };
+
+    // 마이크로태스크 및 이벤트 루프 직후 복원
+    restoreScrollAndBlur();
+    setTimeout(restoreScrollAndBlur, 0);
+    setTimeout(restoreScrollAndBlur, 50);
+}, true);
+
 // ============================================================================
 // 🎯 [V3.3.1] 표 셀 내부 줄바꿈(Shift+Enter) 엔진 (방향키/탈출/삭제는 100% Quill 순정 보장)
 // ============================================================================
