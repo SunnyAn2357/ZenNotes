@@ -369,6 +369,8 @@ button:hover {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 /* 🎯 [V4.0.0] 삼선과 같은 줄 우측에 햇님/달님 토글 버튼 나란히 배치 */
@@ -377,6 +379,8 @@ button:hover {
     align-items: center;
     justify-content: space-between;
     width: 100%;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .theme-toggle-btn {
@@ -1733,15 +1737,12 @@ body.light-theme .search-bar {
 
 /* 4. 중앙 상단 바 & 툴바: 다크모드와 100% 동일한 폭(800px) 및 자연스러운 본문 일체화 */
 body.light-theme .editor-header {
-    background: transparent !important;
-    border-bottom: none !important;
-    padding: 30px 24px 10px !important;
-    max-width: 800px !important;
-    box-shadow: none !important;
+    background: transparent;
+    border-bottom: none;
+    box-shadow: none;
 }
 
 body.light-theme .editor-header #memo-title-input {
-    width: 75% !important;
     color: var(--text-main);
     font-weight: 600;
 }

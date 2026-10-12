@@ -1,4 +1,4 @@
-﻿function gapiLoaded() {
+function gapiLoaded() {
   gapi.load('client', async () => {
     try {
       await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
@@ -85,7 +85,7 @@ async function silentRefreshToken() {
   refreshPromise = new Promise((resolve) => {
     const hint = localStorage.getItem("zen_user_hint") || "";
     const requestConfig = {
-      prompt: "", // 🚀 핵심: 프롬프트 없이 무음 인가 요청
+      prompt: "none", // 🚀 공식 GIS 규격: 팝업 및 사용자 인터랙션 없이 백그라운드 갱신
     };
     if (hint) {
       requestConfig.hint = hint; // 🚀 특정 계정을 지정하여 계정 선택 팝업 방지
@@ -255,7 +255,8 @@ document.getElementById("btn-auth").addEventListener("click", () => {
     await checkAndMigrateV3();
   };
 
-  tokenClient.requestAccessToken();
+  // 사용자가 로그아웃한 뒤 새로 로그인할 때는 계정 선택창이 뜨도록 select_account 지정
+  tokenClient.requestAccessToken({ prompt: "select_account" });
 });
 
 // 🎯 구름 아이콘 우클릭 시 명시적 로그아웃 지원
