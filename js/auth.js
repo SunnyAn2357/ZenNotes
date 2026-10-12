@@ -198,9 +198,28 @@ async function onAuthAPIsReady() {
 
 function checkAuthState() {
   const hasToken = window.isZenOnline();
+  const authBtn = document.getElementById("btn-auth");
+  const authBtnIcon = authBtn ? authBtn.querySelector("i") : null;
 
-  const authBtnIcon = document.querySelector("#btn-auth i");
-  if (authBtnIcon) authBtnIcon.style.color = hasToken ? "var(--accent)" : "";
+  if (authBtn) {
+    if (hasToken) {
+      authBtn.classList.add("is-logged-in");
+      authBtn.classList.remove("is-logged-out");
+      authBtn.setAttribute("title", "구글 드라이브 로그인 중 (클릭 시 로그아웃)");
+      if (authBtnIcon) {
+        authBtnIcon.className = "fa-solid fa-cloud-check";
+        authBtnIcon.style.color = "var(--accent)";
+      }
+    } else {
+      authBtn.classList.remove("is-logged-in");
+      authBtn.classList.add("is-logged-out");
+      authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 로그인)");
+      if (authBtnIcon) {
+        authBtnIcon.className = "fa-solid fa-cloud";
+        authBtnIcon.style.color = "var(--text-muted)";
+      }
+    }
+  }
 
   window.ZEN_IS_ONLINE = hasToken;
 
@@ -216,21 +235,34 @@ window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
 
-// 🎯 구름 아이콘 클릭 시 (수동 동기화 또는 신규 로그인)
+// 🎯 구름 버튼 토글 (로그인 상태면 로그아웃 확인 후 해제, 로그아웃 상태면 구글 로그인 연결)
 document.getElementById("btn-auth").addEventListener("click", () => {
   if (!gapiInited || !gisInited) {
-    alert("구글 서비스 준비 중입니다. 잠시 후 다시 시도해주세요.");
+    if (typeof showToast === 'function') {
+      showToast("구글 서비스 준비 중입니다. 잠시 후 다시 시도해주세요.");
+    } else {
+      alert("구글 서비스 준비 중입니다. 잠시 후 다시 시도해주세요.");
+    }
     return;
   }
   closeAllPanelsMobile();
 
-  // 토큰이 유효한 상태라면 즉시 스마트 동기화
-  if (gapi.client.getToken() !== null && Date.now() < tokenExpiryTime) {
-    smartSync();
+  const isOnline = window.isZenOnline();
+  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
+
+  // 1. 이미 로그인된 상태일 때: 클릭 시 실수 방지 컨펌 토스트/대화상자 후 안전하게 로그아웃
+  if (isOnline || autoLogin) {
+    const confirmLogout = confirm("구글 드라이브 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 로그인이 해제되고 계정 선택이 가능해집니다.");
+    if (confirmLogout) {
+      clearAuthSession();
+      if (typeof showToast === 'function') {
+        showToast("구글 드라이브 연동이 해제되었습니다.");
+      }
+    }
     return;
   }
 
-  // 사용자가 직접 클릭한 시점이므로 팝업 로그인 허용
+  // 2. 로그아웃 상태일 때: 클릭 시 로그인 진행 (계정 선택 창 팝업)
   tokenClient.callback = async (resp) => {
     if (resp.error !== undefined) {
       console.warn(">>> 동기화 취소 또는 에러", resp.error);
@@ -245,6 +277,10 @@ document.getElementById("btn-auth").addEventListener("click", () => {
 
     checkAuthState();
 
+    if (typeof showToast === 'function') {
+      showToast("구글 드라이브에 성공적으로 연결되었습니다!");
+    }
+
     // 아이콘 깜빡임 효과
     const icon = document.querySelector("#btn-auth i");
     if (icon) {
@@ -257,24 +293,6 @@ document.getElementById("btn-auth").addEventListener("click", () => {
 
   // 사용자가 로그아웃한 뒤 새로 로그인할 때는 계정 선택창이 뜨도록 select_account 지정
   tokenClient.requestAccessToken({ prompt: "select_account" });
-});
-
-// 🎯 구름 아이콘 우클릭 시 명시적 로그아웃 지원
-document.getElementById("btn-auth").addEventListener("contextmenu", (e) => {
-  e.preventDefault();
-  const isOnline = window.isZenOnline();
-  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
-
-  if (!isOnline && !autoLogin) {
-    alert("현재 구글 연동이 되어 있지 않습니다.");
-    return;
-  }
-
-  const confirmLogout = confirm("구글 드라이브 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 로그인이 해제됩니다.");
-  if (confirmLogout) {
-    clearAuthSession();
-    alert("구글 드라이브 연동이 해제되었습니다.");
-  }
 });
 
 // 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩

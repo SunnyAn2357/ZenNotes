@@ -342,6 +342,51 @@ button:hover {
     margin-top: auto;
 }
 
+/* ============================================================================
+   새 버전 업데이트 알림 토스트 (Update Toast)
+============================================================================ */
+.update-toast {
+    display: none;
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--toast-bg);
+    color: var(--toast-text);
+    border: 1px solid var(--border);
+    padding: 10px 18px;
+    border-radius: 12px;
+    box-shadow: var(--toast-shadow);
+    z-index: 10005;
+    align-items: center;
+    gap: 16px;
+}
+
+.update-toast-text {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.update-toast-btn {
+    background: var(--accent);
+    color: #131314;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.update-toast-btn:hover {
+    opacity: 0.9;
+}
+
+body.light-theme .update-toast-btn {
+    color: #ffffff !important;
+}
+
 /* 🎯 [전역] 모든 삼선, 삼점, Home 아이콘에 푸른색(Accent) 호버 적용 */
 .toggle-btn:hover,
 .toggle-btn:hover i {
@@ -390,6 +435,23 @@ button:hover {
 .theme-toggle-btn:hover {
     transform: rotate(15deg) scale(1.1);
     color: var(--accent);
+}
+
+.auth-toggle-btn {
+    transition: transform 0.25s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.auth-toggle-btn:hover {
+    transform: scale(1.1);
+    color: var(--accent);
+}
+
+.auth-toggle-btn.is-logged-in i {
+    color: var(--accent) !important;
+}
+
+.auth-toggle-btn.is-logged-out i {
+    color: var(--text-muted) !important;
 }
 
 .toggle-btn {
@@ -2374,6 +2436,11 @@ body.light-theme {
         z-index: 998;
     }
 
+    #mobile-left-menu-btn,
+    #global-menu-btn {
+        top: calc(24px + env(safe-area-inset-top)) !important;
+    }
+
     .col-center {
         width: 100%;
         min-width: 100%;
@@ -2397,24 +2464,52 @@ body.light-theme {
         height: auto !important;
     }
 
+    .quill-wrapper {
+        padding-top: calc(64px + env(safe-area-inset-top)) !important;
+    }
+
     .editor-header {
-        padding: 80px 18px 0px !important;
-        flex-direction: column;
-        align-items: flex-start !important;
-        gap: 8px !important;
+        position: fixed !important;
+        top: calc(24px + env(safe-area-inset-top)) !important;
+        left: 52px !important;
+        right: 102px !important;
+        height: 36px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        z-index: 999 !important;
+        background: transparent !important;
     }
 
     #memo-title-input {
         width: 100% !important;
-        font-size: 24px !important;
+        height: 36px !important;
+        font-size: 18px !important;
+        font-weight: 600 !important;
+        padding: 0 4px !important;
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        white-space: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
+    }
+
+    #memo-title-input::-webkit-scrollbar {
+        display: none !important;
     }
 
     /* 수정, 삭제, 교체 주의 - 모바일 상단 메뉴와 툴바 겹침 디버깅용 */
     .status-container {
-        position: fixed;
-        top: calc(35px + env(safe-area-inset-top));
-        right: 55px;
-        z-index: 999;
+        position: fixed !important;
+        top: calc(24px + env(safe-area-inset-top)) !important;
+        height: 36px !important;
+        right: 48px !important;
+        display: flex !important;
+        align-items: center !important;
+        z-index: 1000 !important;
     }
 
     /* [수정] 천장에 달라붙는(Sticky) & 1줄 가로 스크롤 편집 툴바 */
@@ -2422,7 +2517,7 @@ body.light-theme {
     .ql-toolbar.ql-snow {
         position: sticky !important;
         /* 🎯 방어막 높이에 맞춰 툴바 안착 위치 조정 */
-        top: calc(62px + env(safe-area-inset-top)) !important;
+        top: calc(64px + env(safe-area-inset-top)) !important;
         z-index: 900 !important;
         /* 방어막(998) 아래에서 부드럽게 미끄러짐 */
         background-color: var(--bg) !important;

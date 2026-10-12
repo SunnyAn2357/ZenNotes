@@ -11,8 +11,8 @@
 
     <title>ZenNotes-ADS</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=4.1.0">
-    <link rel="manifest" href="manifest.json?v=4.1.0">
+    <link rel="icon" type="image/png" href="favicon.png?v=4.1.1">
+    <link rel="manifest" href="manifest.json?v=4.1.1">
 
     <link rel="stylesheet" as="style" crossorigin
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
@@ -25,7 +25,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.1.0">
+    <link rel="stylesheet" href="css/main.css?v=4.1.1">
 
 </head>
 
@@ -182,8 +182,8 @@
             <button class="toggle-btn" onclick="toggleRightPane()">
                 <i class="fa-solid fa-bars"></i>
             </button>
-            <button class="toggle-btn" id="btn-auth">
-                <i class="fa-solid fa-cloud-arrow-up"></i>
+            <button class="toggle-btn auth-toggle-btn" id="btn-auth" title="클라우드 동기화 및 로그인 토글">
+                <i class="fa-solid fa-cloud"></i>
             </button>
         </div>
 
@@ -252,11 +252,9 @@
         </div>
     </div>
 
-    <div id="update-toast"
-        style="display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: var(--surface-hover); color: var(--text-main); padding: 12px 20px; border-radius: 8px; border: 1px solid var(--accent); box-shadow: 0 10px 25px rgba(0,0,0,0.8); z-index: 10000; align-items: center; gap: 16px;">
-        <span style="font-size: 14px; font-weight: 500;">새 버전이 준비되었습니다!</span>
-        <button id="update-btn"
-            style="background: var(--accent); color: #000; padding: 8px 12px; border-radius: 6px; font-weight: 700; font-size: 13px;">새로고침</button>
+    <div id="update-toast" class="update-toast">
+        <span class="update-toast-text">새 버전이 준비되었습니다!</span>
+        <button id="update-btn" class="update-toast-btn">새로고침</button>
     </div>
 
     <!-- 🎯 [V3.3.2] PDF 페이지 범위 선택 커스텀 모달 -->
@@ -411,14 +409,14 @@
         <div class="table-menu-item text-danger" data-action="delete-table"><i class="fa-solid fa-trash-can"></i> 표 전체 삭제</div>
     </div>
 
-    <script src="js/globals.js?v=4.1.0"></script>
-    <script src="js/db.js?v=4.1.0"></script>
-    <script src="js/ui.js?v=4.1.0"></script>
-    <script src="js/editor.js?v=4.1.0"></script>
-    <script src="js/file_manager.js?v=4.1.0"></script>
-    <script src="js/io.js?v=4.1.0"></script>
-    <script src="js/auth.js?v=4.1.0"></script>
-    <script src="js/migration.js?v=4.1.0"></script>
+    <script src="js/globals.js?v=4.1.1"></script>
+    <script src="js/db.js?v=4.1.1"></script>
+    <script src="js/ui.js?v=4.1.1"></script>
+    <script src="js/editor.js?v=4.1.1"></script>
+    <script src="js/file_manager.js?v=4.1.1"></script>
+    <script src="js/io.js?v=4.1.1"></script>
+    <script src="js/auth.js?v=4.1.1"></script>
+    <script src="js/migration.js?v=4.1.1"></script>
 
     <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
@@ -427,7 +425,7 @@
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.1.0");
+            console.log("✨ 현재 버전: v4.1.1");
             console.log("=========================================");
         });
     </script>
