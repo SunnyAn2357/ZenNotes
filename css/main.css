@@ -438,7 +438,9 @@ body.light-theme .update-toast-btn {
 }
 
 .auth-toggle-btn {
-    transition: transform 0.25s ease, color 0.2s ease, background-color 0.2s ease;
+    position: relative;
+    transition: transform 0.25s ease, background-color 0.2s ease, border-color 0.2s ease;
+    border: 1px solid transparent;
 }
 
 .auth-toggle-btn:hover {
@@ -446,12 +448,43 @@ body.light-theme .update-toast-btn {
     color: var(--accent);
 }
 
+.auth-toggle-btn.is-logged-in {
+    background: rgba(120, 169, 255, 0.15);
+    border-color: rgba(120, 169, 255, 0.3);
+}
+
+body.light-theme .auth-toggle-btn.is-logged-in {
+    background: rgba(37, 99, 235, 0.12);
+    border-color: rgba(37, 99, 235, 0.25);
+}
+
 .auth-toggle-btn.is-logged-in i {
     color: var(--accent) !important;
 }
 
+.auth-toggle-btn.is-logged-in::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    box-shadow: 0 0 5px var(--accent);
+}
+
+.auth-toggle-btn.is-logged-out {
+    background: transparent;
+    border-color: transparent;
+}
+
 .auth-toggle-btn.is-logged-out i {
     color: var(--text-muted) !important;
+}
+
+.auth-toggle-btn.is-logged-out::after {
+    display: none;
 }
 
 .toggle-btn {
@@ -2436,9 +2469,16 @@ body.light-theme {
         z-index: 998;
     }
 
-    #mobile-left-menu-btn,
+    #mobile-left-menu-btn {
+        top: calc(24px + env(safe-area-inset-top)) !important;
+        left: 10px !important;
+        z-index: 1002 !important;
+    }
+
     #global-menu-btn {
         top: calc(24px + env(safe-area-inset-top)) !important;
+        right: 10px !important;
+        z-index: 1002 !important;
     }
 
     .col-center {
@@ -2471,21 +2511,25 @@ body.light-theme {
     .editor-header {
         position: fixed !important;
         top: calc(24px + env(safe-area-inset-top)) !important;
-        left: 52px !important;
-        right: 102px !important;
+        left: 50px !important;
+        right: 125px !important;
+        width: auto !important;
+        max-width: calc(100vw - 175px) !important;
         height: 36px !important;
         padding: 0 !important;
         margin: 0 !important;
         display: flex !important;
         align-items: center !important;
+        overflow: hidden !important;
         z-index: 999 !important;
         background: transparent !important;
     }
 
     #memo-title-input {
         width: 100% !important;
+        max-width: 100% !important;
         height: 36px !important;
-        font-size: 18px !important;
+        font-size: 17px !important;
         font-weight: 600 !important;
         padding: 0 4px !important;
         background: transparent !important;
@@ -2494,6 +2538,7 @@ body.light-theme {
         white-space: nowrap !important;
         overflow-x: auto !important;
         overflow-y: hidden !important;
+        text-overflow: ellipsis;
         scrollbar-width: none !important;
     }
 
@@ -2509,7 +2554,9 @@ body.light-theme {
         right: 48px !important;
         display: flex !important;
         align-items: center !important;
-        z-index: 1000 !important;
+        justify-content: flex-end !important;
+        z-index: 1001 !important;
+        pointer-events: auto !important;
     }
 
     /* [수정] 천장에 달라붙는(Sticky) & 1줄 가로 스크롤 편집 툴바 */

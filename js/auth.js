@@ -205,9 +205,9 @@ function checkAuthState() {
     if (hasToken) {
       authBtn.classList.add("is-logged-in");
       authBtn.classList.remove("is-logged-out");
-      authBtn.setAttribute("title", "구글 드라이브 로그인 중 (클릭 시 로그아웃)");
+      authBtn.setAttribute("title", "구글 드라이브 연결됨 (클릭 시 로그아웃)");
       if (authBtnIcon) {
-        authBtnIcon.className = "fa-solid fa-cloud-check";
+        authBtnIcon.className = "fa-solid fa-cloud";
         authBtnIcon.style.color = "var(--accent)";
       }
     } else {
