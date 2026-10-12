@@ -3402,3 +3402,18 @@ body.is-pdf-exporting .ql-editor>p:last-child {
 .ql-toolbar.ql-snow button.ql-markdown-help:hover i {
     color: var(--accent) !important;
 }
+
+
+/* [V4.0.8] 화이트 테마: 상단 이동 플로팅 버튼 */
+body.light-theme .scroll-to-top-btn {
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+body.light-theme .scroll-to-top-btn:hover {
+    background: #dbeafe;
+    color: var(--accent);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
