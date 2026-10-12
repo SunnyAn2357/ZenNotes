@@ -239,7 +239,7 @@ function showToast(msg, undoData = null) {
     toast = document.createElement("div");
     toast.id = "zen-toast";
     toast.style.cssText =
-      "position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(30,30,32,0.95); color:var(--text-main); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,0.6); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:none;";
+      "position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:var(--toast-bg); color:var(--toast-text); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:var(--toast-shadow); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:none;";
     document.body.appendChild(toast);
   }
 
