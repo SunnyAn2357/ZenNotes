@@ -2254,6 +2254,16 @@ body.light-theme .ql-editor {
 }
 
 /* 🎯 [최종 교정] 다중 선택 바 다이어트 및 스크롤 숨김 애니메이션, padding 값으로 상하 높이 조절: 현재 12px*/
+:root {
+    --fm-bar-bg: rgba(30, 30, 32, 0.95);
+    --fm-bar-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+}
+
+body.light-theme {
+    --fm-bar-bg: rgba(255, 255, 255, 0.98);
+    --fm-bar-shadow: 0 -6px 20px rgba(0, 0, 0, 0.15);
+}
+
 .fm-bottom-bar {
     position: absolute;
     bottom: 0;
@@ -2261,7 +2271,7 @@ body.light-theme .ql-editor {
     right: 0;
     max-width: 800px;
     margin: 0 auto;
-    background: rgba(30, 30, 32, 0.95);
+    background: var(--fm-bar-bg);
     backdrop-filter: blur(10px);
     border-top: 1px solid var(--border);
     border-left: 1px solid var(--border);
@@ -2275,7 +2285,7 @@ body.light-theme .ql-editor {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 2000;
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
-    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--fm-bar-shadow);
 }
 
 .fm-bottom-bar.is-visible {
@@ -2616,13 +2626,7 @@ body.light-theme .ql-editor {
         transform: translateX(0) !important;
     }
 
-    .col-left .nav-header-top>button:first-child {
-        display: none;
-    }
-
-    .col-left .nav-header-top {
-        justify-content: flex-end;
-    }
+    
 
     .col-right,
     .trash-pane {

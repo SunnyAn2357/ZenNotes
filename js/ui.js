@@ -136,6 +136,11 @@ document.addEventListener("click", (e) => {
   }
 });
 
+function handleLeftHamburger() {
+  if (window.matchMedia('(max-width: 768px)').matches) toggleLeftPaneMobile();
+  else document.getElementById('col-left').classList.toggle('collapsed');
+}
+
 function toggleLeftPaneMobile() {
   if (document.activeElement) document.activeElement.blur(); // 👈 브라우저의 포커스를 뺏어 키보드를 강제로 숨깁니다.
   const lp = document.getElementById("col-left");
