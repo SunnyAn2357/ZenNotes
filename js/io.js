@@ -1712,3 +1712,318 @@ function handleFileImport(e) {
     e.target.value = "";
   }
 }
+
+// ============================================================================
+// 🎯 [V4.1.5] 데스크톱 전역 파일 드래그 앤 드롭 엔진 (Global Drag & Drop Engine)
+// 윈도우 탐색기/바탕화면에서 파일을 앱 어디든 드롭 시 새 노트로 일괄 자동 생성
+// ============================================================================
+
+/**
+ * 드롭된 파일이 ZenNotes에서 지원하는 형식인지 판별합니다.
+ */
+function isImportableFile(file) {
+  if (!file) return false;
+  if (file.type && file.type.startsWith("image/")) return true;
+  const ext = (file.name || "").split(".").pop().toLowerCase();
+  return ["html", "htm", "txt", "md", "markdown", "pdf", "json", "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext);
+}
+
+/**
+ * 단일 파일 내용을 파싱하여 새 노트 데이터 { title, html, plainText, isPdf, file } 객체를 반환합니다.
+ */
+async function parseImportableFile(file) {
+  const fileName = file.name || "제목 없는 파일";
+  const ext = fileName.split(".").pop().toLowerCase();
+  const isImage = (file.type && file.type.startsWith("image/")) || ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext);
+
+  // 1. PDF 파일
+  if (ext === "pdf") {
+    return { isPdf: true, file: file, title: fileName.replace(/\.pdf$/i, "") };
+  }
+
+  // 2. 이미지 파일
+  if (isImage) {
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const title = fileName.replace(/\.[^/.]+$/, "");
+    const html = `<p><img src="${base64Data}"></p><p><br></p>`;
+    return { title, html, plainText: "" };
+  }
+
+  // 3. 텍스트 계열 파일 읽기
+  const fileContent = await file.text();
+
+  // 3-A. HTML 문서
+  if (ext === "html" || ext === "htm") {
+    const title = fileName.replace(/\.(html|htm)$/i, "");
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(fileContent, "text/html");
+    const contentDiv = doc.getElementById("zen-editor-content");
+    let html = "";
+    if (contentDiv) {
+      html = contentDiv.innerHTML;
+    } else {
+      html = doc.body.innerHTML.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    }
+    return { title, html, plainText: "" };
+  }
+
+  // 3-B. 마크다운 (MD) 문서
+  if (ext === "md" || ext === "markdown") {
+    const parsedHtml = convertMarkdownToHTML(fileContent);
+    const title = window.__lastParsedMdTitle || fileName.replace(/\.(md|markdown)$/i, "");
+    return { title, html: parsedHtml, plainText: fileContent };
+  }
+
+  // 3-C. 일반 텍스트 (TXT) 문서
+  if (ext === "txt") {
+    let txtBody = fileContent.replace(/^\uFEFF/, ""); // BOM 제거
+    let title = fileName.replace(/\.txt$/i, "");
+    const headerMatch = txtBody.match(/^={20,}\r?\n\[제목\]\s*(.+?)\r?\n[\s\S]*?={20,}\r?\n\r?\n?/);
+    if (headerMatch) {
+      title = headerMatch[1].trim();
+      txtBody = txtBody.substring(headerMatch[0].length);
+    }
+    // Quill 문단 변환
+    const lines = txtBody.split(/\r?\n/);
+    const html = lines.map((line) => {
+      const escaped = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return `<p>${escaped || "<br>"}</p>`;
+    }).join("");
+    return { title, html, plainText: txtBody };
+  }
+
+  // 3-D. JSON 파일
+  if (ext === "json") {
+    try {
+      const parsed = JSON.parse(fileContent);
+      if (parsed.type === "ZenMemo") {
+        return {
+          title: parsed.title || fileName.replace(/\.json$/i, ""),
+          html: parsed.content || "",
+          plainText: ""
+        };
+      }
+      if (parsed.type === "ZenBackup") {
+        // 전체 백업인 경우 기존 백업 복원 로직 호출
+        handleFileImport({ target: { files: [file], value: "" } });
+        return null;
+      }
+      // 일반 JSON
+      const formatted = JSON.stringify(parsed, null, 2);
+      const lines = formatted.split("\n");
+      const html = lines.map((l) => `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") || "<br>"}</p>`).join("");
+      return { title: fileName.replace(/\.json$/i, ""), html, plainText: formatted };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 드롭된 여러 파일들을 순차 분석하여 각각 새 노트를 생성하고 즉시 엽니다.
+ */
+async function processDroppedFiles(files) {
+  if (!files || files.length === 0) return;
+
+  const supportedFiles = [];
+  const unsupportedFileNames = [];
+
+  for (const f of files) {
+    if (isImportableFile(f)) {
+      supportedFiles.push(f);
+    } else {
+      unsupportedFileNames.push(f.name);
+    }
+  }
+
+  // 지원하지 않는 파일이 있는 경우 안내 토스트 표출
+  if (unsupportedFileNames.length > 0) {
+    const listStr = unsupportedFileNames.slice(0, 3).join(", ") + (unsupportedFileNames.length > 3 ? ` 외 ${unsupportedFileNames.length - 3}개` : "");
+    showToast(`지원하지 않는 파일 (${unsupportedFileNames.length}개 제외): ${listStr}`);
+  }
+
+  if (supportedFiles.length === 0) return;
+
+  // 🎯 단일 PDF 파일인 경우: 기존 정밀 PDF 임포트 핸들러(범위 선택 모달 지원)로 연결
+  if (supportedFiles.length === 1 && supportedFiles[0].name.toLowerCase().endsWith(".pdf")) {
+    handleFileImport({ target: { files: [supportedFiles[0]], value: "" } });
+    return;
+  }
+
+  // 현재 열려있는 노트가 있다면 안전하게 즉시 저장
+  if (typeof forceSaveImmediate === "function") {
+    forceSaveImmediate();
+  }
+
+  const itemsToCreate = [];
+  for (const f of supportedFiles) {
+    try {
+      const parsed = await parseImportableFile(f);
+      if (parsed) {
+        if (parsed.isPdf) {
+          // 멀티 파일 중 PDF가 포함된 경우: 간이 PDF 렌더링 (최대 30페이지)
+          try {
+            if (typeof pdfjsLib !== "undefined") {
+              pdfjsLib.GlobalWorkerOptions.workerSrc =
+                "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+              const arrayBuf = await f.arrayBuffer();
+              const loadingTask = pdfjsLib.getDocument({
+                data: new Uint8Array(arrayBuf),
+                cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/cmaps/",
+                cMapPacked: true,
+                standardFontDataUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/standard_fonts/"
+              });
+              const pdf = await loadingTask.promise;
+              const pagesToRender = Math.min(pdf.numPages, 30);
+              let pdfHtml = "";
+              for (let p = 1; p <= pagesToRender; p++) {
+                const base64Img = await renderPdfPageToBase64(pdf, p);
+                pdfHtml += `<p><img src="${base64Img}"></p><p><br></p>`;
+              }
+              const pageSuffix = pdf.numPages > 30 ? " (p.1-30)" : "";
+              itemsToCreate.push({
+                title: parsed.title + pageSuffix,
+                html: pdfHtml,
+                plainText: ""
+              });
+            }
+          } catch (pdfErr) {
+            console.error("멀티 파일 중 PDF 파싱 실패:", pdfErr);
+          }
+        } else {
+          itemsToCreate.push(parsed);
+        }
+      }
+    } catch (err) {
+      console.error(`파일 [${f.name}] 파싱 에러:`, err);
+    }
+  }
+
+  if (itemsToCreate.length === 0) return;
+
+  const createdMemoIds = [];
+  const now = Date.now();
+
+  // 첫 번째 드롭 파일이 목록 최상단에 오도록 시차(역순 타임스탬프) 적용
+  for (let i = 0; i < itemsToCreate.length; i++) {
+    const item = itemsToCreate[i];
+    const itemTime = now + (itemsToCreate.length - 1 - i) * 1000;
+    try {
+      const newMemoId = await saveNewMemoDirect(item.title, item.html, item.plainText || "", itemTime);
+      createdMemoIds.push(newMemoId);
+    } catch (dbErr) {
+      console.error("새 노트 DB 저장 실패:", dbErr);
+    }
+  }
+
+  // 목록 갱신 및 첫 번째 생성된 새 노트 즉시 열기
+  if (typeof loadMemoList === "function") loadMemoList(true);
+  if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
+
+  if (createdMemoIds.length > 0 && typeof loadMemo === "function") {
+    await loadMemo(createdMemoIds[0]);
+  }
+
+  if (itemsToCreate.length === 1) {
+    showToast(`✅ 새 노트를 생성하여 불러왔습니다. (${itemsToCreate[0].title})`);
+  } else {
+    showToast(`✅ ${itemsToCreate.length}개의 새 노트를 생성하여 불러왔습니다!`);
+  }
+
+  // 클라우드 백그라운드 동기화 트리거
+  if (typeof triggerBackgroundSync === "function") {
+    triggerBackgroundSync();
+  }
+}
+
+/**
+ * 윈도우 전역 파일 드래그 앤 드롭 이벤트 리스너 초기화
+ */
+function initGlobalFileDragAndDrop() {
+  const overlay = document.getElementById("drop-zone-overlay");
+  let dragCounter = 0;
+
+  function hasFiles(e) {
+    if (!e.dataTransfer) return false;
+    const types = e.dataTransfer.types;
+    if (!types) return false;
+    return types.includes ? types.includes("Files") : Array.from(types).indexOf("Files") !== -1;
+  }
+
+  function showOverlay() {
+    if (overlay) overlay.classList.add("is-active");
+  }
+
+  function hideOverlay() {
+    if (overlay) overlay.classList.remove("is-active");
+  }
+
+  // 1. dragenter (캡처링 단계)
+  window.addEventListener("dragenter", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragCounter++;
+    if (dragCounter === 1) {
+      showOverlay();
+    }
+  }, true);
+
+  // 2. dragover (캡처링 단계)
+  window.addEventListener("dragover", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, true);
+
+  // 3. dragleave (캡처링 단계)
+  window.addEventListener("dragleave", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragCounter = Math.max(0, dragCounter - 1);
+    if (dragCounter === 0) {
+      hideOverlay();
+    }
+  }, true);
+
+  // 4. drop (캡처링 단계 - Quill 등의 하위 요소 캡처보다 먼저 인터셉트)
+  window.addEventListener("drop", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter = 0;
+    hideOverlay();
+
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      processDroppedFiles(files);
+    }
+  }, true);
+
+  // 5. ESC 키 또는 창 벗어남 시 방어적 리셋
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      dragCounter = 0;
+      hideOverlay();
+    }
+  });
+
+  document.addEventListener("mouseleave", () => {
+    dragCounter = 0;
+    hideOverlay();
+  });
+}
+
+// DOM 로드 완료 시 전역 드래그 앤 드롭 바인딩
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initGlobalFileDragAndDrop);
+} else {
+  initGlobalFileDragAndDrop();
+}
+

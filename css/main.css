@@ -387,6 +387,79 @@ body.light-theme .update-toast-btn {
     color: #ffffff !important;
 }
 
+/* ============================================================================
+   🎯 [V4.1.5] 전체 화면 파일 드래그 앤 드롭 오버레이 (File Drag & Drop Overlay)
+============================================================================ */
+.drop-zone-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(19, 19, 20, 0.82);
+    backdrop-filter: blur(5px);
+    z-index: 100000;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    opacity: 0;
+}
+
+body.light-theme .drop-zone-overlay {
+    background: rgba(255, 255, 255, 0.88);
+}
+
+.drop-zone-overlay.is-active {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.drop-zone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--accent);
+    border-radius: 24px;
+    padding: 50px 70px;
+    background: var(--surface);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    animation: dropZonePulse 1.6s infinite alternate ease-in-out;
+    pointer-events: none;
+}
+
+.drop-zone-content * {
+    pointer-events: none;
+}
+
+
+@keyframes dropZonePulse {
+    from { transform: scale(0.98); }
+    to { transform: scale(1.02); }
+}
+
+.drop-zone-icon {
+    font-size: 52px;
+    color: var(--accent);
+    margin-bottom: 18px;
+}
+
+.drop-zone-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+}
+
+.drop-zone-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
 /* 🎯 [전역] 모든 삼선, 삼점, Home 아이콘에 푸른색(Accent) 호버 적용 */
 .toggle-btn:hover,
 .toggle-btn:hover i {

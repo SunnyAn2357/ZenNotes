@@ -11,8 +11,8 @@
 
     <title>ZenNotes-ADS</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=4.1.4">
-    <link rel="manifest" href="manifest.json?v=4.1.4">
+    <link rel="icon" type="image/png" href="favicon.png?v=4.1.5">
+    <link rel="manifest" href="manifest.json?v=4.1.5">
 
     <link rel="stylesheet" as="style" crossorigin
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
@@ -25,7 +25,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.1.4">
+    <link rel="stylesheet" href="css/main.css?v=4.1.5">
 
 </head>
 
@@ -257,6 +257,15 @@
         <button id="update-btn" class="update-toast-btn">새로고침</button>
     </div>
 
+    <!-- 🎯 [V4.1.5] 전체 화면 드래그 앤 드롭 파일 불러오기 안내 오버레이 -->
+    <div id="drop-zone-overlay" class="drop-zone-overlay">
+        <div class="drop-zone-content">
+            <i class="fa-solid fa-cloud-arrow-up drop-zone-icon"></i>
+            <div class="drop-zone-title">파일을 여기에 놓아주세요</div>
+            <div class="drop-zone-desc">새 노트를 생성하여 즉시 불러옵니다 (.html, .txt, .md, .pdf, 이미지)</div>
+        </div>
+    </div>
+
     <!-- 🎯 [V3.3.2] PDF 페이지 범위 선택 커스텀 모달 -->
     <div id="pdf-import-modal" class="fm-modal-overlay">
         <div class="fm-modal" style="max-width: 440px;">
@@ -409,14 +418,14 @@
         <div class="table-menu-item text-danger" data-action="delete-table"><i class="fa-solid fa-trash-can"></i> 표 전체 삭제</div>
     </div>
 
-    <script src="js/globals.js?v=4.1.4"></script>
-    <script src="js/db.js?v=4.1.4"></script>
-    <script src="js/ui.js?v=4.1.4"></script>
-    <script src="js/editor.js?v=4.1.4"></script>
-    <script src="js/file_manager.js?v=4.1.4"></script>
-    <script src="js/io.js?v=4.1.4"></script>
-    <script src="js/auth.js?v=4.1.4"></script>
-    <script src="js/migration.js?v=4.1.4"></script>
+    <script src="js/globals.js?v=4.1.5"></script>
+    <script src="js/db.js?v=4.1.5"></script>
+    <script src="js/ui.js?v=4.1.5"></script>
+    <script src="js/editor.js?v=4.1.5"></script>
+    <script src="js/file_manager.js?v=4.1.5"></script>
+    <script src="js/io.js?v=4.1.5"></script>
+    <script src="js/auth.js?v=4.1.5"></script>
+    <script src="js/migration.js?v=4.1.5"></script>
 
     <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
@@ -425,7 +434,7 @@
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.1.4");
+            console.log("✨ 현재 버전: v4.1.5");
             console.log("=========================================");
         });
     </script>
