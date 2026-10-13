@@ -2536,10 +2536,17 @@ body.light-theme {
         border: none !important;
         outline: none !important;
         white-space: nowrap !important;
-        overflow-x: auto !important;
+        overflow-x: hidden !important;
         overflow-y: hidden !important;
         text-overflow: ellipsis;
+        touch-action: pan-y;
         scrollbar-width: none !important;
+    }
+
+    #memo-title-input:focus {
+        overflow-x: auto !important;
+        text-overflow: clip !important;
+        touch-action: pan-x;
     }
 
     #memo-title-input::-webkit-scrollbar {
@@ -2952,7 +2959,7 @@ body.light-theme {
     ========================================= */
     .col-right {
         gap: 40px !important;
-        padding-top: 24px !important;
+        padding-top: calc(24px + env(safe-area-inset-top)) !important;
     }
 
     .util-section {
@@ -2964,11 +2971,11 @@ body.light-theme {
     }
 
     /* =========================================
-       3. 좌측/휴지통 노트 목록 간격 압축 (기존 설정 유지)
+       3. 좌측/휴지통 노트 목록 간격 압축 (24px 기준선 완벽 일치)
     ========================================= */
     .nav-header {
-        padding: 32px 16px 12px !important;
-        gap: 18px !important;
+        padding: calc(24px + env(safe-area-inset-top)) 20px 12px !important;
+        gap: 16px !important;
     }
 
     .memo-item {

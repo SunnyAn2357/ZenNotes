@@ -1281,7 +1281,11 @@ if (window.visualViewport) {
     );
     document
         .getElementById("memo-title-input")
-        .addEventListener("blur", () => setTimeout(updateToolbarPosition, 100));
+        .addEventListener("blur", () => {
+            setTimeout(updateToolbarPosition, 100);
+            const titleInput = document.getElementById("memo-title-input");
+            if (titleInput) titleInput.scrollLeft = 0;
+        });
 }
 
 
