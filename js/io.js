@@ -1097,7 +1097,7 @@ function backupAllData() {
       .getAll().onsuccess = (e) => {
         const activeMemos = e.target.result.filter((m) => !m.isDeleted);
         saveAs(
-          new Blob([JSON.stringify({ type: "ZenBackup", data: activeMemos })], {
+          new Blob([JSON.stringify({ type: "ZenBackup", timestamp: Date.now(), data: activeMemos })], {
             type: "application/json",
           }),
           `Zen_Backup_${Date.now()}.json`,
@@ -1397,6 +1397,109 @@ function saveNewMemoDirect(title, htmlContent, plainTextContent = "", updatedAt 
   });
 }
 
+// 🎯 [V4.1.6] 백업 JSON 데이터 및 파일 정보로부터 백업 일시(YYYY-MM-DD HH:mm)를 추출합니다.
+function extractBackupDate(parsed, file) {
+  let timestamp = null;
+
+  // 1. JSON 내부에 기록된 타임스탬프
+  if (parsed && parsed.timestamp) {
+    timestamp = parsed.timestamp;
+  } else if (parsed && parsed.date) {
+    timestamp = new Date(parsed.date).getTime();
+  }
+
+  // 2. 파일명에서 타임스탬프 추출 (예: Zen_Backup_1720000000000.json)
+  if (!timestamp && file && file.name) {
+    const match = file.name.match(/Zen_Backup_(\d{10,13})/i);
+    if (match) {
+      let num = parseInt(match[1], 10);
+      if (match[1].length === 10) num *= 1000;
+      timestamp = num;
+    }
+  }
+
+  // 3. 백업 데이터 내부 메모들의 가장 최신 updatedAt 확인
+  if (!timestamp && parsed && Array.isArray(parsed.data) && parsed.data.length > 0) {
+    const maxUpdated = Math.max(...parsed.data.map((m) => m.updatedAt || 0));
+    if (maxUpdated > 0) {
+      timestamp = maxUpdated;
+    }
+  }
+
+  // 4. file.lastModified 활용
+  if (!timestamp && file && file.lastModified) {
+    timestamp = file.lastModified;
+  }
+
+  // 날짜 포맷 변환 (YYYY-MM-DD HH:mm)
+  if (timestamp) {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) {
+      const pad = (n) => String(n).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const min = pad(d.getMinutes());
+      return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+    }
+  }
+
+  return "알 수 없는 날짜";
+}
+
+// 🎯 [V4.1.6] ZenBackup 전체 데이터를 IndexedDB에 복원하는 공용 엔진
+function restoreZenBackupData(parsed, onCompleteCallback) {
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  let restoredCount = 0;
+  let skippedCount = 0;
+
+  store.getAll().onsuccess = (event) => {
+    const currentMemos = event.target.result;
+    const existingMap = new Map();
+    currentMemos.forEach((m) => {
+      if (m.syncId) existingMap.set(m.syncId, m);
+    });
+
+    parsed.data.forEach((m) => {
+      if (m.syncId && existingMap.has(m.syncId)) {
+        const localMemo = existingMap.get(m.syncId);
+        if (localMemo.isDeleted) {
+          localMemo.isDeleted = false;
+          delete localMemo.deletedAt;
+          localMemo.updatedAt = Date.now();
+          store.put(localMemo);
+          restoredCount++;
+        } else {
+          skippedCount++;
+        }
+        return;
+      }
+      const isDuplicateContent = currentMemos.some(
+        (existing) => existing.title === m.title && existing.content === m.content
+      );
+      if (isDuplicateContent) {
+        skippedCount++;
+        return;
+      }
+      delete m.id;
+      if (!m.syncId) m.syncId = generateSyncId();
+      store.add(m);
+      restoredCount++;
+    });
+  };
+
+  tx.oncomplete = () => {
+    healDatabase(() => {
+      loadMemoList();
+      alert(`복원이 완료되었습니다.\n(복원노트: ${restoredCount}개 / 중복제외: ${skippedCount}개)`);
+      if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+      if (typeof onCompleteCallback === "function") onCompleteCallback();
+    });
+  };
+}
+
 // 🎯 [올인원 불러오기 엔진] 파일 하나로 모든 형식을 판단하여 처리합니다.
 function handleFileImport(e) {
   const file = e.target.files[0];
@@ -1593,54 +1696,17 @@ function handleFileImport(e) {
       try {
         const parsed = JSON.parse(fileContent);
         if (parsed.type === "ZenBackup") {
-          const tx = db.transaction(["memos"], "readwrite");
-          const store = tx.objectStore("memos");
-          let restoredCount = 0;
-          let skippedCount = 0;
-
-          store.getAll().onsuccess = (event) => {
-            const currentMemos = event.target.result;
-            const existingMap = new Map();
-            currentMemos.forEach((m) => {
-              if (m.syncId) existingMap.set(m.syncId, m);
-            });
-
-            parsed.data.forEach((m) => {
-              if (m.syncId && existingMap.has(m.syncId)) {
-                const localMemo = existingMap.get(m.syncId);
-                if (localMemo.isDeleted) {
-                  localMemo.isDeleted = false;
-                  delete localMemo.deletedAt;
-                  localMemo.updatedAt = Date.now();
-                  store.put(localMemo);
-                  restoredCount++;
-                } else {
-                  skippedCount++;
-                }
-                return;
-              }
-              const isDuplicateContent = currentMemos.some(
-                (existing) => existing.title === m.title && existing.content === m.content
-              );
-              if (isDuplicateContent) {
-                skippedCount++;
-                return;
-              }
-              delete m.id;
-              if (!m.syncId) m.syncId = generateSyncId();
-              store.add(m);
-              restoredCount++;
-            });
-          };
-
-          tx.oncomplete = () => {
-            healDatabase(() => {
-              loadMemoList();
-              alert(`복원이 완료되었습니다.\n(복원노트: ${restoredCount}개 / 중복제외: ${skippedCount}개)`);
-              // 🚀 [스파이 추가] 대규모 복원이 끝났으니 클라우드에 싹 다 올려줍니다!
-              if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
-            });
-          };
+          const backupDateStr = extractBackupDate(parsed, file);
+          const isConfirmed = confirm(`${backupDateStr}에 백업한 파일을 복원하시겠습니까?`);
+          if (!isConfirmed) {
+            showToast("백업 복원이 취소되었습니다.");
+            e.target.value = "";
+            return;
+          }
+          restoreZenBackupData(parsed, () => {
+            e.target.value = "";
+          });
+          return;
         } else if (parsed.type === "ZenMemo") {
           createNewMemo();
           isLoading = false;
@@ -1801,17 +1867,20 @@ async function parseImportableFile(file) {
   if (ext === "json") {
     try {
       const parsed = JSON.parse(fileContent);
+      if (parsed.type === "ZenBackup") {
+        return {
+          isZenBackup: true,
+          file: file,
+          parsed: parsed,
+          title: fileName
+        };
+      }
       if (parsed.type === "ZenMemo") {
         return {
           title: parsed.title || fileName.replace(/\.json$/i, ""),
           html: parsed.content || "",
           plainText: ""
         };
-      }
-      if (parsed.type === "ZenBackup") {
-        // 전체 백업인 경우 기존 백업 복원 로직 호출
-        handleFileImport({ target: { files: [file], value: "" } });
-        return null;
       }
       // 일반 JSON
       const formatted = JSON.stringify(parsed, null, 2);
@@ -1843,7 +1912,7 @@ async function processDroppedFiles(files) {
     }
   }
 
-  // 지원하지 않는 파일이 있는 경우 안내 토스트 표출
+  // 지원하지 않는 일반 확장자 파일 안내 토스트
   if (unsupportedFileNames.length > 0) {
     const listStr = unsupportedFileNames.slice(0, 3).join(", ") + (unsupportedFileNames.length > 3 ? ` 외 ${unsupportedFileNames.length - 3}개` : "");
     showToast(`지원하지 않는 파일 (${unsupportedFileNames.length}개 제외): ${listStr}`);
@@ -1851,9 +1920,50 @@ async function processDroppedFiles(files) {
 
   if (supportedFiles.length === 0) return;
 
+  // 파일 파싱 실행
+  const parsedItems = [];
+  for (const f of supportedFiles) {
+    try {
+      const parsed = await parseImportableFile(f);
+      if (parsed) {
+        parsedItems.push(parsed);
+      } else {
+        unsupportedFileNames.push(f.name);
+      }
+    } catch (err) {
+      console.error(`파일 [${f.name}] 파싱 에러:`, err);
+    }
+  }
+
+  // 🎯 [V4.1.6] 로컬 백업 파일(ZenBackup) 분리 식별
+  const backupItems = parsedItems.filter((item) => item.isZenBackup);
+  const noteItems = parsedItems.filter((item) => !item.isZenBackup);
+
+  // 🎯 [Case A] 로컬 백업 파일 단독 1개만 드롭된 경우: 확인 컨펌 후 복원 진행
+  if (backupItems.length === 1 && noteItems.length === 0) {
+    const backupItem = backupItems[0];
+    const backupDateStr = extractBackupDate(backupItem.parsed, backupItem.file);
+    const isConfirmed = confirm(`${backupDateStr}에 백업한 파일을 복원하시겠습니까?`);
+    if (isConfirmed) {
+      restoreZenBackupData(backupItem.parsed);
+    } else {
+      showToast("백업 복원이 취소되었습니다.");
+    }
+    return;
+  }
+
+  // 🎯 [Case B] 로컬 백업 파일이 여러 개이거나 다른 일반 파일들과 함께 섞여 있는 경우: 제외 안내 토스트
+  if (backupItems.length > 0) {
+    const backupNames = backupItems.map((b) => b.file.name).join(", ");
+    showToast(`로컬 백업 파일은 일괄 불러오기에서 제외되었습니다: ${backupNames}`);
+  }
+
+  // 생성할 일반 노트 아이템이 없으면 종료
+  if (noteItems.length === 0) return;
+
   // 🎯 단일 PDF 파일인 경우: 기존 정밀 PDF 임포트 핸들러(범위 선택 모달 지원)로 연결
-  if (supportedFiles.length === 1 && supportedFiles[0].name.toLowerCase().endsWith(".pdf")) {
-    handleFileImport({ target: { files: [supportedFiles[0]], value: "" } });
+  if (noteItems.length === 1 && noteItems[0].isPdf) {
+    handleFileImport({ target: { files: [noteItems[0].file], value: "" } });
     return;
   }
 
@@ -1863,46 +1973,39 @@ async function processDroppedFiles(files) {
   }
 
   const itemsToCreate = [];
-  for (const f of supportedFiles) {
-    try {
-      const parsed = await parseImportableFile(f);
-      if (parsed) {
-        if (parsed.isPdf) {
-          // 멀티 파일 중 PDF가 포함된 경우: 간이 PDF 렌더링 (최대 30페이지)
-          try {
-            if (typeof pdfjsLib !== "undefined") {
-              pdfjsLib.GlobalWorkerOptions.workerSrc =
-                "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
-              const arrayBuf = await f.arrayBuffer();
-              const loadingTask = pdfjsLib.getDocument({
-                data: new Uint8Array(arrayBuf),
-                cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/cmaps/",
-                cMapPacked: true,
-                standardFontDataUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/standard_fonts/"
-              });
-              const pdf = await loadingTask.promise;
-              const pagesToRender = Math.min(pdf.numPages, 30);
-              let pdfHtml = "";
-              for (let p = 1; p <= pagesToRender; p++) {
-                const base64Img = await renderPdfPageToBase64(pdf, p);
-                pdfHtml += `<p><img src="${base64Img}"></p><p><br></p>`;
-              }
-              const pageSuffix = pdf.numPages > 30 ? " (p.1-30)" : "";
-              itemsToCreate.push({
-                title: parsed.title + pageSuffix,
-                html: pdfHtml,
-                plainText: ""
-              });
-            }
-          } catch (pdfErr) {
-            console.error("멀티 파일 중 PDF 파싱 실패:", pdfErr);
+  for (const item of noteItems) {
+    if (item.isPdf) {
+      // 멀티 파일 중 PDF가 포함된 경우: 간이 PDF 렌더링 (최대 30페이지)
+      try {
+        if (typeof pdfjsLib !== "undefined") {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+          const arrayBuf = await item.file.arrayBuffer();
+          const loadingTask = pdfjsLib.getDocument({
+            data: new Uint8Array(arrayBuf),
+            cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/cmaps/",
+            cMapPacked: true,
+            standardFontDataUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/standard_fonts/"
+          });
+          const pdf = await loadingTask.promise;
+          const pagesToRender = Math.min(pdf.numPages, 30);
+          let pdfHtml = "";
+          for (let p = 1; p <= pagesToRender; p++) {
+            const base64Img = await renderPdfPageToBase64(pdf, p);
+            pdfHtml += `<p><img src="${base64Img}"></p><p><br></p>`;
           }
-        } else {
-          itemsToCreate.push(parsed);
+          const pageSuffix = pdf.numPages > 30 ? " (p.1-30)" : "";
+          itemsToCreate.push({
+            title: item.title + pageSuffix,
+            html: pdfHtml,
+            plainText: ""
+          });
         }
+      } catch (pdfErr) {
+        console.error("멀티 파일 중 PDF 파싱 실패:", pdfErr);
       }
-    } catch (err) {
-      console.error(`파일 [${f.name}] 파싱 에러:`, err);
+    } else {
+      itemsToCreate.push(item);
     }
   }
 
