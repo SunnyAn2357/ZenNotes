@@ -148,17 +148,31 @@ function scheduleTokenRefresh() {
 
 // 🎯 5. 유저 이메일 획득 (무음 갱신 시 hint로 사용하여 팝업 차단)
 async function fetchUserEmail(accessToken) {
+  // 1차: userinfo API
   try {
     const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     if (res.ok) {
       const data = await res.json();
-      return data.email || null;
+      if (data.email) return data.email;
     }
   } catch (e) {
     // 무시
   }
+
+  // 2차: Drive API about.get fallback
+  try {
+    if (window.gapi && gapi.client && gapi.client.drive) {
+      const about = await gapi.client.drive.about.get({ fields: "user(emailAddress)" });
+      if (about?.result?.user?.emailAddress) {
+        return about.result.user.emailAddress;
+      }
+    }
+  } catch (e) {
+    // 무시
+  }
+
   return null;
 }
 
@@ -248,11 +262,10 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   closeAllPanelsMobile();
 
   const isOnline = window.isZenOnline();
-  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
 
-  // 1. 이미 로그인된 상태일 때: 클릭 시 실수 방지 컨펌 토스트/대화상자 후 안전하게 로그아웃
-  if (isOnline || autoLogin) {
-    const confirmLogout = confirm("구글 드라이브 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 로그인이 해제되고 계정 선택이 가능해집니다.");
+  // 1. 오직 실제로 온라인(정상 로그인) 상태일 때만 클릭 시 로그아웃 확인창 표시
+  if (isOnline) {
+    const confirmLogout = confirm("구글 드라이브 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.");
     if (confirmLogout) {
       clearAuthSession();
       if (typeof showToast === 'function') {
@@ -262,7 +275,10 @@ document.getElementById("btn-auth").addEventListener("click", () => {
     return;
   }
 
-  // 2. 로그아웃 상태일 때: 클릭 시 로그인 진행 (계정 선택 창 팝업)
+  // 2. 오프라인 또는 세션 만료 상태일 때: 클릭 시 로그인 진행
+  const savedHint = localStorage.getItem("zen_user_hint");
+  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
+
   tokenClient.callback = async (resp) => {
     if (resp.error !== undefined) {
       console.warn(">>> 동기화 취소 또는 에러", resp.error);
@@ -291,8 +307,14 @@ document.getElementById("btn-auth").addEventListener("click", () => {
     await checkAndMigrateV3();
   };
 
-  // 사용자가 로그아웃한 뒤 새로 로그인할 때는 계정 선택창이 뜨도록 select_account 지정
-  tokenClient.requestAccessToken({ prompt: "select_account" });
+  // 사용자가 직접 로그아웃한 적이 없고(힌트 존재) 만료 등으로 풀린 상태라면:
+  // 계정 선택창 없이 저장된 이메일 힌트로 즉시 원클릭 재연결
+  if (savedHint && autoLogin) {
+    tokenClient.requestAccessToken({ hint: savedHint });
+  } else {
+    // 사용자가 직접 로그아웃했거나 최초 로그인인 경우: 계정 선택창 표출
+    tokenClient.requestAccessToken({ prompt: "select_account" });
+  }
 });
 
 // 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
