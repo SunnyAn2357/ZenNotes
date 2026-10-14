@@ -2086,6 +2086,26 @@ body.light-theme .ql-editor {
     font-size: 15px;
 }
 
+.fm-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.fm-header .status-container {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    z-index: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+}
+
 .fm-body {
     flex: 1;
     overflow-y: auto;
@@ -2509,9 +2529,10 @@ body.light-theme {
         display: none !important;
     }
 
-    /* 🎯 [추가] 모바일에서는 좁은 화면을 위해 검색창 우측 여백 최소화 */
+    /* 🎯 [추가] 모바일에서는 좁은 화면을 위해 검색창 여백 정돈 */
     .fm-search-bar {
-        margin-right: 8px !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
     }
 
     /* 🎯 1. 모바일에서 파일관리창이 에디터와 함께 통째로 끌려 올라가는 현상 완벽 고정 (헤더 고정 효과) */
@@ -3076,12 +3097,38 @@ body.light-theme {
     /* 모바일에서는 화면이 좁으므로 날짜 숨김 */
 
     .fm-header {
-        padding: 30px 16px 16px;
+        padding: calc(24px + env(safe-area-inset-top)) 16px 16px !important;
+        gap: 8px !important;
     }
 
-    /* 모바일에서는 상단 여백 확보 */
+    /* 모바일에서는 검색창이 남은 공간을 차지하되 상태점 영역을 침범하지 않음 */
     .fm-search-bar {
-        max-width: none;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+        padding: 8px 12px !important;
+    }
+
+    .fm-header-actions {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex-shrink: 0 !important;
+        margin-left: 0 !important;
+    }
+
+    .fm-header .status-container {
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        height: auto !important;
+        margin: 0 !important;
+        z-index: auto !important;
+        display: flex !important;
+        align-items: center !important;
+        flex-shrink: 0 !important;
     }
 }
 
