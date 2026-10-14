@@ -239,6 +239,62 @@ function loadFileManager(folderId = null) {
       li.addEventListener("touchend", cancelPress);
       li.addEventListener("touchmove", cancelPress, { passive: true });
 
+      // 🎯 [V4.1.7] 파일 관리자 드래그 앤 드롭 이동 지원 (노트/폴더를 다른 폴더로 드래그 이동)
+      const canDrag = !m.isSystem && m.type !== "trash";
+      if (canDrag) {
+        li.setAttribute("draggable", "true");
+        li.addEventListener("dragstart", (e) => {
+          if (typeof cancelPress === "function") cancelPress();
+          let idsToMove = [m.id];
+          if (isFmMultiSelectMode && fmSelectedItems.has(m.id)) {
+            idsToMove = Array.from(fmSelectedItems);
+          }
+          e.dataTransfer.setData("application/zen-fm-id", idsToMove.join(","));
+          e.dataTransfer.effectAllowed = "move";
+          li.classList.add("fm-dragging");
+        });
+        li.addEventListener("dragend", () => {
+          li.classList.remove("fm-dragging");
+          document
+            .querySelectorAll(".fm-drag-over")
+            .forEach((el) => el.classList.remove("fm-drag-over"));
+        });
+      }
+
+      // 🎯 폴더인 경우 드롭 대상(Drop Target)으로 설정
+      if (m.type === "folder") {
+        li.addEventListener("dragover", (e) => {
+          if (
+            e.dataTransfer &&
+            e.dataTransfer.types.includes("application/zen-fm-id")
+          ) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            li.classList.add("fm-drag-over");
+          }
+        });
+        li.addEventListener("dragleave", () => {
+          li.classList.remove("fm-drag-over");
+        });
+        li.addEventListener("drop", async (e) => {
+          li.classList.remove("fm-drag-over");
+          if (!e.dataTransfer) return;
+          const dataStr = e.dataTransfer.getData("application/zen-fm-id");
+          if (!dataStr) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const itemIds = dataStr
+            .split(",")
+            .map((id) => parseInt(id, 10))
+            .filter((n) => !isNaN(n));
+          // 자기 자신 폴더로 드롭 방어
+          const validIds = itemIds.filter((id) => id !== m.id);
+          if (validIds.length > 0) {
+            await moveItemsToFolder(validIds, m.id);
+          }
+        });
+      }
+
       li.onclick = (e) => {
         if (e.target.closest(".memo-actions-wrap")) return;
 
@@ -343,6 +399,35 @@ function renderFmBreadcrumbs() {
       const steps = index + 1 - fmPath.length;
       history.go(steps); // 브라우저 스택을 단번에 롤백! (popstate가 자동 실행되며 화면을 그려줌)
     };
+
+    // 🎯 [V4.1.7] 상단 경로(Breadcrumb)로 드래그 앤 드롭 이동 지원
+    if (!isLast) {
+      span.addEventListener("dragover", (e) => {
+        if (e.dataTransfer && e.dataTransfer.types.includes("application/zen-fm-id")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          span.classList.add("fm-drag-over");
+        }
+      });
+      span.addEventListener("dragleave", () => {
+        span.classList.remove("fm-drag-over");
+      });
+      span.addEventListener("drop", async (e) => {
+        span.classList.remove("fm-drag-over");
+        if (!e.dataTransfer) return;
+        const dataStr = e.dataTransfer.getData("application/zen-fm-id");
+        if (!dataStr) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const itemIds = dataStr
+          .split(",")
+          .map((id) => parseInt(id, 10))
+          .filter((n) => !isNaN(n));
+        if (itemIds.length > 0) {
+          await moveItemsToFolder(itemIds, p.id);
+        }
+      });
+    }
 
     container.appendChild(span);
 
@@ -598,7 +683,7 @@ function fmHardDelete(id) {
 
 // 🎯 [No.016] 다중 선택 및 이동/삭제 통합 로직
 let movingItemIds = []; // 단일/다중 이동을 모두 담는 배열로 업그레이드!
-let selectedDestId = null;
+let selectedDestId = undefined;
 
 let isFmMultiSelectMode = false;
 
@@ -1034,7 +1119,7 @@ function cancelFmMultiSelect(fromPopstate = false) {
 // 단일 항목 이동 (기존 팝업에서 호출)
 function openMoveModal(id) {
   movingItemIds = [id];
-  selectedDestId = null;
+  selectedDestId = undefined;
 
   const itemMenu = document.getElementById("fm-item-menu");
   const globalMenu = document.getElementById("fm-global-menu");
@@ -1056,7 +1141,7 @@ function openFmBatchMoveModal() {
     return;
   }
   movingItemIds = Array.from(fmSelectedItems); // 선택된 놈들을 싹 다 배열로!
-  selectedDestId = null;
+  selectedDestId = undefined;
   history.pushState({ mode: "modal" }, ""); // 👈 추가: 다중선택 위에 모달이 뜨므로 방어막 1장 추가!
   document.getElementById("fm-move-modal").style.display = "flex";
   renderDestFolders();
@@ -1128,6 +1213,7 @@ function closeMoveModal(fromPopstate = false) {
   if (document.getElementById("fm-move-modal").style.display === "none") return;
   document.getElementById("fm-move-modal").style.display = "none";
   movingItemIds = [];
+  selectedDestId = undefined;
 
   // 모달이 닫힐 때 유령 방어막 청소
   if (!fromPopstate) {
@@ -1264,15 +1350,16 @@ function createDestItem(id, title, icon, colorStyle) {
   return div;
 }
 
-// 🎯 [완벽 교정] 스마트 이동 엔진 (자동 암복호화 탑재)
-document.getElementById("fm-move-confirm-btn").onclick = async () => {
-  if (selectedDestId === undefined) {
+// 🎯 [V4.1.7] 폴더 간 아이템(노트/폴더) 이동을 실행하는 핵심 공용 엔진
+async function moveItemsToFolder(itemIds, targetFolderId) {
+  if (!itemIds || itemIds.length === 0) return;
+  if (targetFolderId === undefined) {
     alert("이동할 위치를 선택해주세요.");
     return;
   }
 
   // 1. 목적지가 보안 폴더 구역인지 확인
-  const isDestSecure = await checkIsUnderSecurity(selectedDestId);
+  const isDestSecure = await checkIsUnderSecurity(targetFolderId);
 
   // 2. 비동기 처리를 위해 이동할 데이터를 먼저 모두 RAM으로 끌어올립니다.
   const itemsToMove = [];
@@ -1281,9 +1368,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     const getStore = getTx.objectStore("memos");
     let processed = 0;
 
-    if (movingItemIds.length === 0) resolve();
-
-    movingItemIds.forEach((id) => {
+    itemIds.forEach((id) => {
       getStore.get(id).onsuccess = (e) => {
         const m = e.target.result;
         if (
@@ -1294,18 +1379,18 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
           m.isSystem !== "backup"
         ) {
           // 🚀 [버그 척결] 휴지통에 갇힌 유령(isDeleted)이라면 제자리(같은 폴더)로 이동하더라도 무조건 배열에 넣어서 부활 의식을 치러야 합니다!
-          if (m.parentId !== selectedDestId || m.isDeleted) {
+          if (m.parentId !== targetFolderId || m.isDeleted) {
             itemsToMove.push(m);
           }
         }
         processed++;
-        if (processed === movingItemIds.length) resolve();
+        if (processed === itemIds.length) resolve();
       };
     });
   });
 
   if (itemsToMove.length === 0) {
-    closeMoveModal();
+    showToast("이미 해당 위치에 있는 항목입니다.");
     return;
   }
 
@@ -1320,20 +1405,22 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     alert(
       "보안 구역으로 넣거나 빼려면, 먼저 보안 폴더를 한 번 열어서(잠금 해제) 열쇠를 활성화해야 합니다.",
     );
-    closeMoveModal();
     return;
   }
 
   // 🎯 [V3.4.4] 대상 폴더의 syncId 확보 (글로벌 족보 동기화용)
   let destSyncId = null;
-  if (selectedDestId !== null) {
+  if (targetFolderId !== null) {
     const destFolder = await new Promise((res) => {
-      db.transaction(["memos"], "readonly").objectStore("memos").get(selectedDestId).onsuccess = (e) => res(e.target.result);
+      db.transaction(["memos"], "readonly").objectStore("memos").get(targetFolderId).onsuccess = (e) => res(e.target.result);
     });
     if (destFolder) destSyncId = destFolder.syncId || null;
   }
 
   showToast("데이터를 변환하며 이동 중입니다...\n(잠시만 기다려주세요)");
+
+  let actualMoveCount = 0;
+  const undoPayload = [];
 
   for (const m of itemsToMove) {
     const isItemSecure = await checkIsUnderSecurity(m.parentId);
@@ -1349,7 +1436,7 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
       m.plainText = await decryptData(m.plainText, currentSecKey);
     }
 
-    m.parentId = selectedDestId;
+    m.parentId = targetFolderId;
     m.parentSyncId = destSyncId; // 🎯 [V3.4.4 핵심] 새 부모의 글로벌 족보 동기화!
     m.updatedAt = Date.now();
     if (m.isDeleted) {
@@ -1365,45 +1452,59 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
   const putStore = putTx.objectStore("memos");
   itemsToMove.forEach((m) => putStore.put(m));
 
-  putTx.oncomplete = () => {
-    let stepsToPop = 0; // 🎯 벗길 방어막 개수
-
-    // 1. 이동 팝업창 닫기
-    document.getElementById("fm-move-modal").style.display = "none";
-    movingItemIds = [];
-    stepsToPop++;
-
-    // 2. 다중 선택 모드 끄기
-    if (isFmMultiSelectMode) {
-      isFmMultiSelectMode = false;
-      fmSelectedItems.clear();
-      updateFmBottomBar();
-      stepsToPop++;
-    }
-
-    // 3. 브라우저 히스토리 롤백 (이중 뒤로가기를 한 번에 처리)
-    if (stepsToPop > 0) {
-      // 🚨 [대참사 원인 해결!]
-      // history.go(-N)은 N칸을 점프해도 popstate 이벤트를 무조건 딱 "1번"만 발생시킵니다!
-      // 따라서 카운터를 stepsToPop만큼 올리면 안 되고, 무조건 1만 올려야 합니다!!
-      isProgrammaticBack = true;
-      //programmaticBackCount += 1;
-      history.go(-stepsToPop);
-    }
-
-    if (actualMoveCount > 0) {
-      if (needsCrypto) {
-        showToast(
-          `${actualMoveCount}개 항목이 안전하게 변환되어 이동되었습니다.`,
-        );
-      } else {
-        showToast(`${actualMoveCount}개 항목이 이동되었습니다.`, undoPayload);
+  return new Promise((resolve) => {
+    putTx.oncomplete = () => {
+      if (actualMoveCount > 0) {
+        if (needsCrypto) {
+          showToast(
+            `${actualMoveCount}개 항목이 안전하게 변환되어 이동되었습니다.`,
+          );
+        } else {
+          showToast(`${actualMoveCount}개 항목이 이동되었습니다.`, undoPayload);
+        }
+        loadMemoList(true);
       }
-      loadMemoList(true);
-    }
-    loadFileManager(currentFmFolderId);
-    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
-  };
+      loadFileManager(currentFmFolderId);
+      if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+      resolve();
+    };
+  });
+}
+
+// 🎯 [완벽 교정] 스마트 이동 엔진 (모달 확인 버튼)
+document.getElementById("fm-move-confirm-btn").onclick = async () => {
+  if (selectedDestId === undefined) {
+    alert("이동할 위치를 선택해주세요.");
+    return;
+  }
+
+  const targetId = selectedDestId;
+  const items = [...movingItemIds];
+
+  let stepsToPop = 0; // 🎯 벗길 방어막 개수
+
+  // 1. 이동 팝업창 닫기
+  document.getElementById("fm-move-modal").style.display = "none";
+  movingItemIds = [];
+  selectedDestId = undefined;
+  stepsToPop++;
+
+  // 2. 다중 선택 모드 끄기
+  if (isFmMultiSelectMode) {
+    isFmMultiSelectMode = false;
+    fmSelectedItems.clear();
+    updateFmBottomBar();
+    stepsToPop++;
+  }
+
+  // 3. 브라우저 히스토리 롤백 (이중 뒤로가기를 한 번에 처리)
+  if (stepsToPop > 0) {
+    isProgrammaticBack = true;
+    history.go(-stepsToPop);
+  }
+
+  // 4. 공용 이동 엔진 실행
+  await moveItemsToFolder(items, targetId);
 };
 
 // 🎯 [수정] 파일 관리창 열기/닫기 (에디터 강제 초기화 및 완벽 잠금)

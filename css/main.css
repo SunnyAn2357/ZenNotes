@@ -2172,8 +2172,21 @@ body.light-theme .ql-editor {
     border-left: 3px solid var(--accent);
 }
 
-.fm-item:hover {
-    background: var(--surface);
+.fm-item.fm-dragging {
+    opacity: 0.45;
+}
+
+.fm-item.fm-drag-over {
+    background: rgba(120, 169, 255, 0.22) !important;
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+}
+
+.fm-crumb.fm-drag-over {
+    color: var(--accent) !important;
+    text-decoration: underline;
+    background: rgba(120, 169, 255, 0.15);
+    border-radius: 4px;
 }
 
 .fm-item-info {
