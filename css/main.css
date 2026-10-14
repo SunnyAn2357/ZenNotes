@@ -16,6 +16,7 @@
     --text-main: #e3e3e3;
     --text-muted: #c4c7c5;
     --accent: #78a9ff;
+    --accent-contrast: #131314;
     --danger: #ff6b6b;
     --toast-bg: rgba(30,30,32,0.95);
     --toast-text: #e3e3e3;
@@ -32,6 +33,7 @@ body.light-theme {
     --text-main: #191c20;      /* 본문 텍스트: 선명하고 또렷한 딥 블랙 차콜 */
     --text-muted: #535862;     /* 보조 텍스트: 눈이 피로하지 않은 차분한 미드 그레이 */
     --accent: #2563eb;         /* 포인트 블루: 신뢰감 있는 모던 사파이어 블루 */
+    --accent-contrast: #ffffff;/* 블루 배경 위 텍스트: 선명하고 또렷한 퓨어 화이트 */
     --danger: #dc2626;
     --toast-bg: rgba(255,255,255,0.98);
     --toast-text: #191c20;
@@ -2411,6 +2413,21 @@ body.light-theme .ql-editor {
 /* 🎯 텍스트나 아이콘이 마우스 클릭을 훔쳐가는 짓을 원천 차단 (투과시킴) */
 .fm-modal-footer button * {
     pointer-events: none !important;
+}
+
+/* 🎯 [V4.1.9] 모달 확인/이동 버튼 테마별 고대비 시인성 보장 */
+#fm-move-confirm-btn,
+#pdf-modal-confirm-btn,
+#markdown-help-modal .fm-modal-footer button {
+    background: var(--accent) !important;
+    color: var(--accent-contrast) !important;
+    font-weight: 700 !important;
+}
+
+body.light-theme #fm-move-confirm-btn,
+body.light-theme #pdf-modal-confirm-btn,
+body.light-theme #markdown-help-modal .fm-modal-footer button {
+    color: #ffffff !important;
 }
 
 /* 🎯 [No.020] 보안 폴더 비밀번호 팝업 전용 스타일 */
