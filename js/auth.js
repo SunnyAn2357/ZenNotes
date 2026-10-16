@@ -39,6 +39,9 @@ function saveAuthSession(resp, userEmail = null) {
   localStorage.setItem("zen_oauth_token", resp.access_token);
   localStorage.setItem("zen_token_expiry", tokenExpiryTime.toString());
   localStorage.setItem("zen_auto_login", "true");
+  // 🌟 성공적으로 로그인되었으므로 명시적 로그아웃 상태를 완전히 해제
+  localStorage.removeItem("zen_explicit_logout");
+
   if (userEmail) {
     localStorage.setItem("zen_user_hint", userEmail);
   }
@@ -47,8 +50,8 @@ function saveAuthSession(resp, userEmail = null) {
   scheduleTokenRefresh();
 }
 
-// 🎯 2. 완전 로그아웃
-function clearAuthSession() {
+// 🎯 2. 로그아웃 (명시적 로그아웃 vs 세션 만료)
+function clearAuthSession(isExplicit = false) {
   if (tokenRefreshTimer) {
     clearTimeout(tokenRefreshTimer);
     tokenRefreshTimer = null;
@@ -67,11 +70,20 @@ function clearAuthSession() {
 
   localStorage.removeItem("zen_oauth_token");
   localStorage.removeItem("zen_token_expiry");
-  localStorage.removeItem("zen_auto_login");
-  localStorage.removeItem("zen_user_hint");
+
+  if (isExplicit) {
+    // 👤 사용자가 직접 로그아웃 버튼을 눌러 연동을 해제한 경우:
+    // 다음 로그인 시 반드시 계정 선택창이 열리도록 명시적 로그아웃 플래그 설정
+    localStorage.setItem("zen_explicit_logout", "true");
+    localStorage.removeItem("zen_auto_login");
+    localStorage.removeItem("zen_user_hint");
+    console.log("🔒 [Google Auth] 사용자가 명시적으로 로그아웃했습니다. (다음 로그인 시 계정 선택창 표출)");
+  } else {
+    // ⚠️ 토큰 만료 등 비의도적 오프라인 전환: 원클릭 무음 재연결을 위해 hint와 auto_login 정보 보존
+    console.log("⚠️ [Google Auth] 세션 만료로 인한 오프라인 전환 (원클릭 무음 재연결 정보 보존)");
+  }
 
   checkAuthState();
-  console.log("🔒 [Google Auth] 안전하게 로그아웃되었습니다.");
 }
 
 let isRefreshing = false;
@@ -102,7 +114,9 @@ async function silentRefreshToken() {
 
       if (resp && !resp.error && resp.access_token) {
         console.log("🔄 [Google Auth] 백그라운드 무음 토큰 갱신 성공! (상시 로그인 유지)");
-        gapi.client.setToken(resp);
+        if (window.gapi && gapi.client) {
+          gapi.client.setToken(resp);
+        }
 
         let userEmail = localStorage.getItem("zen_user_hint");
         if (!userEmail) {
@@ -150,6 +164,8 @@ function scheduleTokenRefresh() {
 
 // 🎯 5. 유저 이메일 획득 (무음 갱신 시 hint로 사용하여 팝업 차단)
 async function fetchUserEmail(accessToken) {
+  if (!accessToken) return null;
+
   // 1차: userinfo API
   try {
     const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
@@ -157,13 +173,28 @@ async function fetchUserEmail(accessToken) {
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.email) return data.email;
+      if (data && data.email) return data.email;
     }
   } catch (e) {
     // 무시
   }
 
-  // 2차: Drive API about.get fallback
+  // 2차: Drive REST API about (GAPI 초기화 여부와 무관하게 직접 fetch로 안정적 획득)
+  try {
+    const res = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.user && data.user.emailAddress) {
+        return data.user.emailAddress;
+      }
+    }
+  } catch (e) {
+    // 무시
+  }
+
+  // 3차: GAPI Drive client fallback
   try {
     if (window.gapi && gapi.client && gapi.client.drive) {
       const about = await gapi.client.drive.about.get({ fields: "user(emailAddress)" });
@@ -224,7 +255,7 @@ function checkAuthState() {
   const authBtn = document.getElementById("btn-auth");
   const authBtnIcon = authBtn ? authBtn.querySelector("i") : null;
   const savedHint = localStorage.getItem("zen_user_hint");
-  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
+  const isExplicitLogout = localStorage.getItem("zen_explicit_logout") === "true";
 
   if (authBtn) {
     if (hasToken) {
@@ -238,10 +269,12 @@ function checkAuthState() {
     } else {
       authBtn.classList.remove("is-logged-in");
       authBtn.classList.add("is-logged-out");
-      if (savedHint && autoLogin) {
+      if (isExplicitLogout) {
+        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 로그인 및 계정 선택)");
+      } else if (savedHint) {
         authBtn.setAttribute("title", `오프라인 (클릭 시 ${savedHint} 계정으로 즉시 연결)`);
       } else {
-        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 로그인)");
+        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 즉시 연결)");
       }
       if (authBtnIcon) {
         authBtnIcon.className = "fa-solid fa-cloud";
@@ -282,7 +315,7 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   if (isOnline) {
     const confirmLogout = confirm("구글 드라이브 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.");
     if (confirmLogout) {
-      clearAuthSession();
+      clearAuthSession(true); // 명시적 로그아웃!
       if (typeof showToast === 'function') {
         showToast("구글 드라이브 연동이 해제되었습니다.");
       }
@@ -291,13 +324,17 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   }
 
   // 2. 오프라인 또는 세션 만료 상태일 때: 클릭 시 로그인 진행
+  const isExplicitLogout = localStorage.getItem("zen_explicit_logout") === "true";
   const savedHint = localStorage.getItem("zen_user_hint");
-  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
 
   tokenClient.callback = async (resp) => {
     if (resp.error !== undefined) {
       console.warn(">>> 동기화 취소 또는 에러", resp.error);
       return;
+    }
+
+    if (window.gapi && gapi.client) {
+      gapi.client.setToken(resp);
     }
 
     let userEmail = localStorage.getItem("zen_user_hint");
@@ -322,19 +359,20 @@ document.getElementById("btn-auth").addEventListener("click", () => {
     await checkAndMigrateV3();
   };
 
-  // 사용자가 직접 로그아웃한 적이 없고(힌트 존재) 만료 등으로 풀린 상태라면:
-  // 계정 선택창 없이 저장된 이메일 힌트로 즉시 원클릭 재연결
-  if (savedHint && autoLogin) {
-    console.log("🚀 [Google Auth] 저장된 계정 힌트(" + savedHint + ")로 원클릭 재연결 요청 (계정 선택 팝업 생략)");
-    tokenClient.requestAccessToken({
-      prompt: "",
-      hint: savedHint,
-      login_hint: savedHint
-    });
-  } else {
-    // 사용자가 직접 로그아웃했거나 최초 로그인인 경우: 계정 선택창 표출
-    console.log("🚀 [Google Auth] 신규 로그인 또는 재선택: 계정 선택 팝업 표출");
+  // 🎯 [구글 로그인 정책] 명시적 로그아웃 vs 비의도적 세션 만료 엄격 분기
+  if (isExplicitLogout) {
+    // ① 사용자가 직접 로그아웃 버튼을 누른 경우 -> 계정 선택창 표출
+    console.log("👤 [Google Auth] 명시적 로그아웃 상태: 계정 선택창 표출");
     tokenClient.requestAccessToken({ prompt: "select_account" });
+  } else {
+    // ② 사용자가 로그아웃한 적 없이 토큰 만료/브라우저 재오픈된 경우 -> 계정 선택창 없이 원클릭 무음 재연결
+    console.log("⚡ [Google Auth] 세션 만료에 따른 재연결: 계정 선택창 없이 원클릭 무음 재연결 (힌트:", savedHint || "없음", ")");
+    const requestConfig = { prompt: "" };
+    if (savedHint) {
+      requestConfig.hint = savedHint;
+      requestConfig.login_hint = savedHint;
+    }
+    tokenClient.requestAccessToken(requestConfig);
   }
 });
 
