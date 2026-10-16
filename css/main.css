@@ -2388,17 +2388,117 @@ body.light-theme .ql-editor {
     padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
 }
 
-/* 🎯 [No.006] 파일 관리창 리스트 & 경로(Breadcrumbs) 스타일 */
+/* 🎯 [No.006 / V4.2.4] 파일 관리창 상단 경로(Breadcrumbs) & 원클릭 퀵 액션 툴바 */
+.fm-toolbar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+body.light-theme .fm-toolbar-row {
+    border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
 .fm-breadcrumbs {
     display: flex;
     gap: 8px;
-    margin-bottom: 16px;
     font-size: 14px;
     color: var(--text-muted);
     align-items: center;
     overflow-x: auto;
     white-space: nowrap;
-    padding-bottom: 4px;
+    padding-bottom: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.fm-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.fm-quick-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.fm-quick-btn i {
+    font-size: 12px;
+    color: var(--accent);
+}
+
+.fm-quick-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+    border-color: var(--accent);
+}
+
+.fm-quick-btn.is-active {
+    background: rgba(120, 169, 255, 0.15);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+body.light-theme .fm-quick-btn.is-active {
+    background: rgba(37, 99, 235, 0.1);
+}
+
+.fm-folder-count-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-hover);
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-left: 6px;
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+
+.fm-select-checkbox {
+    font-size: 16px;
+    color: var(--text-muted);
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+    transition: color 0.15s ease;
+}
+
+.fm-select-checkbox.is-checked {
+    color: var(--accent);
+}
+
+.fm-item-up {
+    opacity: 0.85;
+    border: 1px dashed transparent;
+}
+
+.fm-item-up:hover {
+    opacity: 1;
+}
+
+@media screen and (max-width: 520px) {
+    .fm-quick-btn {
+        padding: 5px 8px;
+        font-size: 12px;
+    }
 }
 
 .fm-crumb {

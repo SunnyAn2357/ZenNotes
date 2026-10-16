@@ -20,10 +20,12 @@ document.querySelector(".fm-body").addEventListener("scroll", () => {
   }
 });
 
-// 🎯 [No.006] 파일 관리창 전역 변수 및 렌더링 함수
+// 🎯 [No.006 / V4.2.4] 파일 관리창 전역 변수 및 렌더링 함수
 let currentFmFolderId = null;
 let isCurrentInTrash = false; // 👈 휴지통 내부(루트 및 하위) 감지 센서
 let fmPath = [{ id: null, title: "Home" }]; // 빵부스러기 경로 저장용 배열
+let currentFmDisplayedItems = []; // 🎯 [V4.2.4] 현재 FM 화면에 렌더링된 항목 목록 (전체 선택 & Shift 범위 선택용)
+let lastFmSelectedId = null; // 🎯 [V4.2.4] Shift+클릭 범위 다중 선택 기준점
 
 function loadFileManager(folderId = null) {
   currentFmFolderId = folderId;
@@ -87,6 +89,30 @@ function loadFileManager(folderId = null) {
     }
 
     isCurrentInTrash = checkDeepInTrash(currentFmFolderId);
+
+    // 🎯 [V4.2.4] 상단 우측 원클릭 퀵 액션 버튼 렌더링
+    renderFmQuickActions();
+
+    // 🎯 [V4.2.4] 각 폴더 내부의 직속 항목 개수(배지 표시용) 사전 계산
+    const folderChildCountMap = new Map();
+    let trashTotalCount = 0;
+    allData.forEach((item) => {
+      if (item.isPermanentlyDeleted) return;
+      if (item.isDeleted) {
+        trashTotalCount++;
+        if (isCurrentInTrash && item.parentId !== null && item.parentId !== undefined) {
+          folderChildCountMap.set(
+            item.parentId,
+            (folderChildCountMap.get(item.parentId) || 0) + 1,
+          );
+        }
+      } else if (item.parentId !== null && item.parentId !== undefined) {
+        folderChildCountMap.set(
+          item.parentId,
+          (folderChildCountMap.get(item.parentId) || 0) + 1,
+        );
+      }
+    });
 
     let items = [];
 
@@ -157,8 +183,65 @@ function loadFileManager(folderId = null) {
       return b.updatedAt - a.updatedAt;
     });
 
+    currentFmDisplayedItems = items;
+    // 전체 선택 버튼 라벨 최신화 (항목 배열이 확정된 직후 반영)
+    renderFmQuickActions();
+
+    // 🎯 [V4.2.4] 하위 폴더 진입 상태이고 검색 중이 아닐 때, 목록 최상단에 '.. (상위 폴더로)' 행 추가 (클릭 이동 & 드래그 앤 드롭 타겟)
+    if (currentFmFolderId !== null && !query && fmPath.length > 1) {
+      const parentStep = fmPath[fmPath.length - 2];
+      const upLi = document.createElement("li");
+      upLi.className = "fm-item fm-item-up";
+      upLi.innerHTML = `
+        <div class="fm-item-info">
+          <i class="fa-solid fa-turn-up fm-item-icon" style="color: var(--text-muted); transform: scaleX(-1);"></i>
+          <span class="fm-item-title" style="color: var(--text-muted); font-weight: 500;">.. <span style="font-size: 12.5px; opacity: 0.85;">(상위 폴더: ${parentStep.title})</span></span>
+        </div>
+        <div class="fm-item-date"></div>
+        <div class="memo-actions-wrap" style="width: 32px;"></div>
+      `;
+      upLi.onclick = () => {
+        forceCleanFmUI();
+        history.go(-1);
+      };
+      upLi.addEventListener("dragover", (ev) => {
+        if (
+          ev.dataTransfer &&
+          ev.dataTransfer.types.includes("application/zen-fm-id")
+        ) {
+          ev.preventDefault();
+          ev.dataTransfer.dropEffect = "move";
+          upLi.classList.add("fm-drag-over");
+        }
+      });
+      upLi.addEventListener("dragleave", () => {
+        upLi.classList.remove("fm-drag-over");
+      });
+      upLi.addEventListener("drop", async (ev) => {
+        upLi.classList.remove("fm-drag-over");
+        if (!ev.dataTransfer) return;
+        const dataStr = ev.dataTransfer.getData("application/zen-fm-id");
+        if (!dataStr) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const itemIds = dataStr
+          .split(",")
+          .map((id) => parseInt(id, 10))
+          .filter((n) => !isNaN(n));
+        if (itemIds.length > 0) {
+          await moveItemsToFolder(itemIds, parentStep.id);
+        }
+      });
+      list.appendChild(upLi);
+    }
+
     items.forEach((m) => {
       const li = document.createElement("li");
+      const isSystemFolder =
+        m.isSystem === "desktop" ||
+        m.isSystem === "security" ||
+        m.isSystem === "trash" ||
+        m.isSystem === "backup";
 
       // 🎯 선택 모드일 때 선택된 항목이면 CSS 클래스(파란색 배경) 추가
       const isSelected = isFmMultiSelectMode && fmSelectedItems.has(m.id);
@@ -187,7 +270,7 @@ function loadFileManager(folderId = null) {
       }
 
       const effectiveSys = getEffectiveSystemType(m);
-      let iconColorStyle = "color: var(--text-muted);"; // 일반 폴더/파일은 틔미한 회색 유지
+      let iconColorStyle = "color: var(--text-muted);"; // 일반 폴더/파일은 희미한 회색 유지
 
       if (effectiveSys === "trash") {
         iconColorStyle = "color: var(--danger);";
@@ -209,6 +292,25 @@ function loadFileManager(folderId = null) {
         if (m.isSystem === "backup") iconClass = "fa-solid fa-box-archive";
       }
 
+      // 🎯 [V4.2.4] 폴더 내 항목 개수 배지 (잠긴 보안 폴더는 프라이버시를 위해 개수 숨김)
+      let countBadgeHtml = "";
+      if (m.type === "folder") {
+        const isLockedSec = m.isSystem === "security" && !isSecurityUnlocked;
+        if (!isLockedSec) {
+          const itemCount =
+            m.isSystem === "trash"
+              ? trashTotalCount
+              : folderChildCountMap.get(m.id) || 0;
+          countBadgeHtml = `<span class="fm-folder-count-badge">${itemCount}</span>`;
+        }
+      }
+
+      // 🎯 [V4.2.4] 다중 선택 모드일 때 좌측 체크박스 표시 (4대장 시스템 폴더 제외)
+      let checkboxHtml = "";
+      if (isFmMultiSelectMode && !isSystemFolder) {
+        checkboxHtml = `<i class="${isSelected ? "fa-solid fa-square-check is-checked" : "fa-regular fa-square"} fm-select-checkbox"></i>`;
+      }
+
       // 🎯 폴더도 날짜를 표시하여 레이아웃 붕괴 방지 및 시각적 구분선 역할 수행
       const dateHtml = formatDateTime(m.updatedAt);
 
@@ -222,8 +324,10 @@ function loadFileManager(folderId = null) {
 
       li.innerHTML = `
                         <div class="fm-item-info">
+                            ${checkboxHtml}
                             <i class="${iconClass} fm-item-icon" style="${iconColorStyle}"></i>
                             <span class="fm-item-title">${m.title}</span>
+                            ${countBadgeHtml}
                         </div>
                         <div class="fm-item-date">${dateHtml}</div>
                         ${moreBtnHtml}
@@ -304,23 +408,52 @@ function loadFileManager(folderId = null) {
           return;
         }
 
-        // 🎯 다중 선택 모드일 때 클릭하면 (파일 여는 대신) 선택 체크/해제
-        if (isFmMultiSelectMode) {
-          if (
-            m.isSystem === "desktop" ||
-            m.isSystem === "security" ||
-            m.isSystem === "trash" ||
-            m.isSystem === "backup"
-          ) {
+        const isCtrl = e.ctrlKey || e.metaKey;
+        const isShift = e.shiftKey;
+
+        // 🎯 [V4.2.4] PC에서 Ctrl+클릭 또는 Shift+클릭 시 즉시 다중 선택 모드 진입 및 범위 선택 지원!
+        if (isFmMultiSelectMode || isCtrl || isShift) {
+          if (isSystemFolder) {
             showToast("시스템 폴더는 선택할 수 없습니다.");
             return;
           }
 
-          if (fmSelectedItems.has(m.id)) fmSelectedItems.delete(m.id);
-          else fmSelectedItems.add(m.id);
+          if (!isFmMultiSelectMode) {
+            isFmMultiSelectMode = true;
+            fmSelectedItems.clear();
+            history.pushState({ mode: "multi" }, "");
+          }
+
+          const selectableList = currentFmDisplayedItems.filter(
+            (item) =>
+              item.isSystem !== "desktop" &&
+              item.isSystem !== "security" &&
+              item.isSystem !== "trash" &&
+              item.isSystem !== "backup",
+          );
+
+          if (isShift && lastFmSelectedId !== null) {
+            const cIdx = selectableList.findIndex((item) => item.id === m.id);
+            const lIdx = selectableList.findIndex(
+              (item) => item.id === lastFmSelectedId,
+            );
+            if (cIdx !== -1 && lIdx !== -1) {
+              const start = Math.min(cIdx, lIdx);
+              const end = Math.max(cIdx, lIdx);
+              for (let i = start; i <= end; i++) {
+                fmSelectedItems.add(selectableList[i].id);
+              }
+            } else {
+              fmSelectedItems.add(m.id);
+            }
+          } else {
+            if (fmSelectedItems.has(m.id)) fmSelectedItems.delete(m.id);
+            else fmSelectedItems.add(m.id);
+            lastFmSelectedId = m.id;
+          }
 
           updateFmBottomBar();
-          loadFileManager(currentFmFolderId); // 🎯 다시 그려서 파란 줄 입히기
+          loadFileManager(currentFmFolderId); // 🎯 다시 그려서 체크박스 & 파란 줄 입히기
           return;
         }
 
@@ -359,6 +492,7 @@ function loadFileManager(folderId = null) {
 function forceCleanFmUI() {
   isFmMultiSelectMode = false;
   fmSelectedItems.clear();
+  lastFmSelectedId = null;
   updateFmBottomBar();
 
   const globalMenu = document.getElementById("fm-global-menu");
@@ -376,6 +510,7 @@ function forceCleanFmUI() {
 // 경로(Breadcrumb)를 HTML로 그려주는 함수
 function renderFmBreadcrumbs() {
   const container = document.getElementById("fm-breadcrumbs");
+  if (!container) return;
   container.innerHTML = "";
   fmPath.forEach((p, index) => {
     const isLast = index === fmPath.length - 1;
@@ -438,6 +573,86 @@ function renderFmBreadcrumbs() {
     }
   });
 }
+
+// 🎯 [V4.2.4] FM 상단 경로 바 우측 원클릭 퀵 액션 버튼 렌더링 (`+ 새 폴더`, `+ 새 노트`, `☑ 선택 / 전체 선택`)
+function renderFmQuickActions() {
+  const container = document.getElementById("fm-quick-actions");
+  if (!container) return;
+
+  const isTrashRoot = currentFmFolderId === globalTrashFolderId;
+  let html = "";
+
+  // 1. 휴지통 외부일 때: '+ 새 폴더' 및 (하위 폴더 내부일 때) '+ 새 노트' 원클릭 버튼 제공
+  if (!isTrashRoot && !isCurrentInTrash) {
+    if (currentFmFolderId !== null) {
+      html += `
+        <button type="button" class="fm-quick-btn" onclick="createNewMemoInFolder(${currentFmFolderId})" title="현재 폴더에 새 노트 작성">
+          <i class="fa-solid fa-pen-to-square"></i> <span class="fm-quick-label">새 노트</span>
+        </button>
+      `;
+    }
+    html += `
+      <button type="button" class="fm-quick-btn" onclick="createNewFolder()" title="현재 위치에 새 폴더 만들기">
+        <i class="fa-solid fa-folder-plus"></i> <span class="fm-quick-label">새 폴더</span>
+      </button>
+    `;
+  }
+
+  // 2. 다중 선택 토글 또는 전체 선택/해제 버튼
+  if (isFmMultiSelectMode) {
+    const selectableItems = (currentFmDisplayedItems || []).filter(
+      (m) =>
+        m.isSystem !== "desktop" &&
+        m.isSystem !== "security" &&
+        m.isSystem !== "trash" &&
+        m.isSystem !== "backup",
+    );
+    const allSelected =
+      selectableItems.length > 0 &&
+      selectableItems.every((m) => fmSelectedItems.has(m.id));
+    html += `
+      <button type="button" class="fm-quick-btn is-active" onclick="toggleFmSelectAll()" title="${allSelected ? "전체 선택 해제" : "전체 선택"}">
+        <i class="fa-solid ${allSelected ? "fa-square-check" : "fa-check-double"}"></i> <span>${allSelected ? "전체 해제" : "전체 선택"}</span>
+      </button>
+    `;
+  } else {
+    html += `
+      <button type="button" class="fm-quick-btn" onclick="startFmMultiSelect()" title="다중 선택 모드 켜기">
+        <i class="fa-solid fa-check-double"></i> <span class="fm-quick-label">선택</span>
+      </button>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+// 🎯 [V4.2.4] 다중 선택 모드에서 현재 폴더 내 모든 선택 가능 항목 전체 선택 / 전체 해제 토글
+function toggleFmSelectAll() {
+  if (!isFmMultiSelectMode) {
+    startFmMultiSelect();
+    return;
+  }
+  const selectableItems = (currentFmDisplayedItems || []).filter(
+    (m) =>
+      m.isSystem !== "desktop" &&
+      m.isSystem !== "security" &&
+      m.isSystem !== "trash" &&
+      m.isSystem !== "backup",
+  );
+  if (selectableItems.length === 0) {
+    showToast("선택할 수 있는 항목이 없습니다.");
+    return;
+  }
+  const allSelected = selectableItems.every((m) => fmSelectedItems.has(m.id));
+  if (allSelected) {
+    selectableItems.forEach((m) => fmSelectedItems.delete(m.id));
+  } else {
+    selectableItems.forEach((m) => fmSelectedItems.add(m.id));
+  }
+  updateFmBottomBar();
+  loadFileManager(currentFmFolderId);
+}
+window.toggleFmSelectAll = toggleFmSelectAll;
 
 // 🎯 [완벽 교정] 위치에 따라 이름과 기능이 바뀌는 지능형 글로벌 메뉴
 function toggleFmGlobalMenu(e) {
@@ -554,26 +769,43 @@ function openFmItemMenu(e, id, type, isTrashMode, sysType) {
   menu.classList.add("is-active");
 }
 
-// 1. 새 폴더 생성
-function createNewFolder() {
+// 1. 새 폴더 생성 (🎯 [V4.2.4] syncId 및 parentSyncId 족보 완벽 부여)
+async function createNewFolder() {
+  const globalMenu = document.getElementById("fm-global-menu");
+  if (globalMenu) globalMenu.classList.remove("is-active");
+
   const name = prompt("새 폴더 이름을 입력하세요:", "새 폴더");
   if (!name || name.trim() === "") return;
 
-  // 🎯 바탕화면 강제 배정 삭제! 현재 위치(Home이면 null)에 그대로 생성됨
+  // 🎯 현재 위치(Home이면 null)에 그대로 생성됨 + 부모의 syncId 조회
   const parent = currentFmFolderId;
+  let parentSyncId = null;
+  if (parent !== null && db) {
+    const parentObj = await new Promise((resolve) => {
+      db
+        .transaction(["memos"], "readonly")
+        .objectStore("memos")
+        .get(parent).onsuccess = (e) => resolve(e.target.result);
+    });
+    if (parentObj) parentSyncId = parentObj.syncId || null;
+  }
+
   const tx = db.transaction(["memos"], "readwrite");
   tx.objectStore("memos").add({
     title: name.trim(),
     type: "folder",
     parentId: parent,
+    parentSyncId: parentSyncId,
+    syncId: typeof generateSyncId === "function" ? generateSyncId() : Date.now().toString(36),
     updatedAt: Date.now(),
     isDeleted: false,
   });
   // 🎯 확실히 DB 저장이 끝난 뒤(oncomplete) 화면 새로고침
   tx.oncomplete = () => {
     loadFileManager(currentFmFolderId);
+    updateUnsyncedCount();
     if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
-  }
+  };
 }
 
 // 2. 이름 바꾸기
@@ -1025,6 +1257,7 @@ function startFmPress(e, m) {
     }
 
     fmSelectedItems.add(m.id); // 꾹 누른 녀석을 첫 번째로 선택
+    lastFmSelectedId = m.id;
     document.getElementById("fm-global-menu").classList.remove("is-active");
 
     updateFmBottomBar();
@@ -1143,6 +1376,7 @@ function startFmMultiSelect() {
 
   isFmMultiSelectMode = true;
   fmSelectedItems.clear();
+  lastFmSelectedId = null;
   updateFmBottomBar();
   loadFileManager(currentFmFolderId);
 }
@@ -1152,6 +1386,7 @@ function cancelFmMultiSelect(fromPopstate = false) {
   if (!isFmMultiSelectMode) return;
   isFmMultiSelectMode = false;
   fmSelectedItems.clear();
+  lastFmSelectedId = null;
 
   updateFmBottomBar();
   loadFileManager(currentFmFolderId);

@@ -25,7 +25,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.2.3">
+    <link rel="stylesheet" href="css/main.css?v=4.2.4">
 
 </head>
 
@@ -170,7 +170,10 @@
             </div>
 
             <div class="fm-body">
-                <div id="fm-breadcrumbs" class="fm-breadcrumbs"></div>
+                <div class="fm-toolbar-row">
+                    <div id="fm-breadcrumbs" class="fm-breadcrumbs"></div>
+                    <div id="fm-quick-actions" class="fm-quick-actions"></div>
+                </div>
                 <ul id="fm-list" class="fm-list"></ul>
             </div>
         </div>
@@ -469,14 +472,14 @@
         <div class="table-menu-item text-danger" data-action="delete-table"><i class="fa-solid fa-trash-can"></i> 표 전체 삭제</div>
     </div>
 
-    <script src="js/globals.js?v=4.2.3"></script>
-    <script src="js/db.js?v=4.2.3"></script>
-    <script src="js/ui.js?v=4.2.3"></script>
-    <script src="js/editor.js?v=4.2.3"></script>
-    <script src="js/file_manager.js?v=4.2.3"></script>
-    <script src="js/io.js?v=4.2.3"></script>
-    <script src="js/auth.js?v=4.2.3"></script>
-    <script src="js/migration.js?v=4.2.3"></script>
+    <script src="js/globals.js?v=4.2.4"></script>
+    <script src="js/db.js?v=4.2.4"></script>
+    <script src="js/ui.js?v=4.2.4"></script>
+    <script src="js/editor.js?v=4.2.4"></script>
+    <script src="js/file_manager.js?v=4.2.4"></script>
+    <script src="js/io.js?v=4.2.4"></script>
+    <script src="js/auth.js?v=4.2.4"></script>
+    <script src="js/migration.js?v=4.2.4"></script>
 
     <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
@@ -485,7 +488,7 @@
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.2.3");
+            console.log("✨ 현재 버전: v4.2.4");
             console.log("=========================================");
         });
     </script>
