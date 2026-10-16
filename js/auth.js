@@ -42,6 +42,7 @@ function saveAuthSession(resp, userEmail = null) {
   if (userEmail) {
     localStorage.setItem("zen_user_hint", userEmail);
   }
+  console.log("💾 [Google Auth] 세션 영속화 완료: 계정 힌트 =", userEmail || localStorage.getItem("zen_user_hint"), "유효시간 =", expiresInSec, "초");
 
   scheduleTokenRefresh();
 }
@@ -89,6 +90,7 @@ async function silentRefreshToken() {
     };
     if (hint) {
       requestConfig.hint = hint; // 🚀 특정 계정을 지정하여 계정 선택 팝업 방지
+      requestConfig.login_hint = hint;
     }
 
     const prevCallback = tokenClient.callback;
@@ -198,12 +200,19 @@ async function onAuthAPIsReady() {
 
   // Case B: 토큰이 만료되었지만 이전에 로그인했던 이력이 있는 경우 -> 백그라운드 무음 갱신
   if (autoLogin) {
-    console.log("🔄 [Google Auth] 자동 로그인 감지: 백그라운드 무음 토큰 발급 시도...");
-    const success = await silentRefreshToken();
-    if (success) {
-      setTimeout(() => { smartSync(); }, 1500);
-    } else {
+    // 📱 모바일 브라우저는 사용자 터치(User Gesture) 없이 백그라운드 팝업/아이프레임 실행 시 '팝업 차단' 경고를 띄웁니다.
+    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    if (isMobileDevice) {
+      console.log("📱 [Google Auth] 모바일 환경 감지: 팝업 차단 방지를 위해 자동 갱신을 생략하고 원클릭 재연결 대기 상태로 유지합니다.");
       checkAuthState();
+    } else {
+      console.log("🔄 [Google Auth] 자동 로그인 감지: 백그라운드 무음 토큰 발급 시도...");
+      const success = await silentRefreshToken();
+      if (success) {
+        setTimeout(() => { smartSync(); }, 1500);
+      } else {
+        checkAuthState();
+      }
     }
   } else {
     checkAuthState();
@@ -214,12 +223,14 @@ function checkAuthState() {
   const hasToken = window.isZenOnline();
   const authBtn = document.getElementById("btn-auth");
   const authBtnIcon = authBtn ? authBtn.querySelector("i") : null;
+  const savedHint = localStorage.getItem("zen_user_hint");
+  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
 
   if (authBtn) {
     if (hasToken) {
       authBtn.classList.add("is-logged-in");
       authBtn.classList.remove("is-logged-out");
-      authBtn.setAttribute("title", "구글 드라이브 연결됨 (클릭 시 로그아웃)");
+      authBtn.setAttribute("title", savedHint ? `구글 드라이브 연결됨 (${savedHint})` : "구글 드라이브 연결됨 (클릭 시 로그아웃)");
       if (authBtnIcon) {
         authBtnIcon.className = "fa-solid fa-cloud";
         authBtnIcon.style.color = "var(--accent)";
@@ -227,7 +238,11 @@ function checkAuthState() {
     } else {
       authBtn.classList.remove("is-logged-in");
       authBtn.classList.add("is-logged-out");
-      authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 로그인)");
+      if (savedHint && autoLogin) {
+        authBtn.setAttribute("title", `오프라인 (클릭 시 ${savedHint} 계정으로 즉시 연결)`);
+      } else {
+        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 로그인)");
+      }
       if (authBtnIcon) {
         authBtnIcon.className = "fa-solid fa-cloud";
         authBtnIcon.style.color = "var(--text-muted)";
@@ -310,9 +325,15 @@ document.getElementById("btn-auth").addEventListener("click", () => {
   // 사용자가 직접 로그아웃한 적이 없고(힌트 존재) 만료 등으로 풀린 상태라면:
   // 계정 선택창 없이 저장된 이메일 힌트로 즉시 원클릭 재연결
   if (savedHint && autoLogin) {
-    tokenClient.requestAccessToken({ hint: savedHint });
+    console.log("🚀 [Google Auth] 저장된 계정 힌트(" + savedHint + ")로 원클릭 재연결 요청 (계정 선택 팝업 생략)");
+    tokenClient.requestAccessToken({
+      prompt: "",
+      hint: savedHint,
+      login_hint: savedHint
+    });
   } else {
     // 사용자가 직접 로그아웃했거나 최초 로그인인 경우: 계정 선택창 표출
+    console.log("🚀 [Google Auth] 신규 로그인 또는 재선택: 계정 선택 팝업 표출");
     tokenClient.requestAccessToken({ prompt: "select_account" });
   }
 });

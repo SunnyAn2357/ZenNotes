@@ -2,7 +2,7 @@
 const CLIENT_ID = '765080058790-uhqk1gj2ko8a197f26ujnq0gb4nl97ha.apps.googleusercontent.com';
 const API_KEY = 'AIzaSyD1Z5E5e8tRfmG9fDruBM72pliOt6ZkShw';
 const DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
-const SCOPES = "https://www.googleapis.com/auth/drive.file email";
+const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email openid";
 let tokenClient, gapiInited = false, gisInited = false;
 let hasLoadedFromCloud = false;
 

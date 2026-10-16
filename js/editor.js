@@ -32,6 +32,12 @@ const StrikeLineStyle = new Parchment.ClassAttributor('strike-line', 'ql-strike-
 });
 Quill.register(StrikeLineStyle, true);
 
+// 🎯 [V4.2.0] 인용구 내부 리스트(글머리 기호, 번호, 체크리스트) 지원용 블록 클래스 Attributor
+const QuoteItemStyle = new Parchment.ClassAttributor('quote-item', 'ql-quote-item', {
+    scope: Parchment.Scope.BLOCK
+});
+Quill.register(QuoteItemStyle, true);
+
 // ============================================================================
 // 🎯 [정석 해결] 꼼수(setTimeout) 제거! Quill 네이티브 심장에 아이콘 직접 주입
 // ============================================================================
@@ -154,6 +160,29 @@ const quill = new Quill('#editor', {
                         }
                         return false; // 중간 행에서는 아무 동작도 하지 않음 (순정 동일)
                     }
+                },
+                // 🎯 [V4.2.0] 인용구 빈 줄에서 Enter: 인용구 서식 해제 및 일반 본문으로 탈출
+                'blockquote empty enter': {
+                    key: 'Enter',
+                    collapsed: true,
+                    format: ['blockquote'],
+                    empty: true,
+                    handler: function (range, context) {
+                        this.quill.format('blockquote', false, Quill.sources.USER);
+                        return false;
+                    }
+                },
+                // 🎯 [V4.2.0] 인용구 내부 리스트(글머리, 번호, 체크) 빈 줄에서 Enter: 리스트 및 인용구 탈출
+                'quote-item empty enter': {
+                    key: 'Enter',
+                    collapsed: true,
+                    format: ['quote-item'],
+                    empty: true,
+                    handler: function (range, context) {
+                        this.quill.format('list', false, Quill.sources.USER);
+                        this.quill.format('quote-item', false, Quill.sources.USER);
+                        return false;
+                    }
                 }
             }
         },
@@ -192,6 +221,38 @@ const quill = new Quill('#editor', {
             handlers: {
                 'markdown-help': function () {
                     openMarkdownHelpModal();
+                },
+                // 🎯 [V4.2.0] 인용구 내부 리스트(글머리, 번호, 체크) 연동 툴바 핸들러
+                'list': function (value) {
+                    const range = this.quill.getSelection();
+                    if (!range) return;
+                    const formats = this.quill.getFormat(range);
+                    const wasInQuote = !!(formats.blockquote || formats['quote-item']);
+                    const currentList = formats.list;
+                    const targetList = (currentList === value) ? false : value;
+
+                    this.quill.format('list', targetList, Quill.sources.USER);
+                    if (wasInQuote) {
+                        if (targetList) {
+                            this.quill.format('quote-item', true, Quill.sources.USER);
+                        } else {
+                            this.quill.format('blockquote', true, Quill.sources.USER);
+                            this.quill.format('quote-item', false, Quill.sources.USER);
+                        }
+                    }
+                },
+                // 🎯 [V4.2.0] 인용구 툴바 핸들러: 리스트 항목에서 인용구 누르면 quote-item 토글
+                'blockquote': function (value) {
+                    const range = this.quill.getSelection();
+                    if (!range) return;
+                    const formats = this.quill.getFormat(range);
+                    if (formats.list) {
+                        const isQuoted = !!formats['quote-item'];
+                        this.quill.format('quote-item', !isQuoted, Quill.sources.USER);
+                    } else {
+                        const isQuote = !!formats.blockquote;
+                        this.quill.format('blockquote', !isQuote, Quill.sources.USER);
+                    }
                 },
                 // 🎯 [V3.4.4] 하이퍼링크 커스텀 핸들러: 선택 블록 자동 입력 + 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
                 'link': function (value) {
@@ -565,14 +626,23 @@ quill.on('text-change', function (delta, oldDelta, source) {
             const deleteLength = prefix.length + 1;
             const formatIndex = range.index - deleteLength;
 
+            const currentLineFormat = quill.getFormat(formatIndex);
+            const isInsideQuote = !!(currentLineFormat.blockquote || currentLineFormat['quote-item']);
+
             quill.deleteText(formatIndex, deleteLength, Quill.sources.USER);
 
             if (prefix === '#') quill.formatLine(formatIndex, 1, 'header', 1, Quill.sources.SILENT);
             else if (prefix === '##') quill.formatLine(formatIndex, 1, 'header', 2, Quill.sources.SILENT);
             else if (prefix === '###') quill.formatLine(formatIndex, 1, 'header', 3, Quill.sources.SILENT);
             else if (prefix === '>') quill.formatLine(formatIndex, 1, 'blockquote', true, Quill.sources.SILENT);
-            else if (prefix === '*' || prefix === '-') quill.formatLine(formatIndex, 1, 'list', 'bullet', Quill.sources.SILENT);
-            else if (prefix === '1.') quill.formatLine(formatIndex, 1, 'list', 'ordered', Quill.sources.SILENT);
+            else if (prefix === '*' || prefix === '-') {
+                quill.formatLine(formatIndex, 1, 'list', 'bullet', Quill.sources.SILENT);
+                if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.SILENT);
+            }
+            else if (prefix === '1.') {
+                quill.formatLine(formatIndex, 1, 'list', 'ordered', Quill.sources.SILENT);
+                if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.SILENT);
+            }
             else if (prefix === '---') {
                 const Delta = Quill.import('delta');
                 const delta = new Delta();
@@ -586,7 +656,9 @@ quill.on('text-change', function (delta, oldDelta, source) {
             }
             else if (prefix === '```') quill.formatLine(formatIndex, 1, 'code-block', true, Quill.sources.SILENT);
             else if (prefix === '[ ]' || prefix === '[x]') {
-                quill.formatLine(formatIndex, 1, 'list', 'check', Quill.sources.USER);
+                const listVal = prefix === '[x]' ? 'checked' : 'unchecked';
+                quill.formatLine(formatIndex, 1, 'list', listVal, Quill.sources.USER);
+                if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
             }
 
             return;
@@ -1506,14 +1578,20 @@ quill.root.addEventListener("keydown", function (e) {
         }
     }
 
-    if (!cell) return;
+    let inQuote = false;
+    const curRange = quill.getSelection(true) || quill.getSelection();
+    if (curRange) {
+        const formats = quill.getFormat(curRange);
+        inQuote = !!(formats.blockquote || formats['quote-item']);
+    }
 
-    // 🚀 Shift + Enter: 셀 내부에 SoftBreak Blot (<br class="ql-softbreak">) 삽입
+    if (!cell && !inQuote) return;
+
+    // 🚀 Shift + Enter: 셀 또는 인용구 내부에 SoftBreak Blot (<br class="ql-softbreak">) 삽입
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    const curRange = quill.getSelection(true) || quill.getSelection();
     if (curRange) {
         quill.insertEmbed(curRange.index, "softbreak", true, Quill.sources.USER);
         quill.setSelection(curRange.index + 1, 0, Quill.sources.USER);

@@ -1941,20 +1941,89 @@ body.light-theme .ql-editor {
     border-radius: 0 !important;
 }
 
-/* 세련된 인용구(Blockquote) 스타일 */
+/* ============================================================================
+   🎯 [V4.2.0] 인용구(Blockquote) 멀티라인 연속 통합 박스 및 내부 리스트 스타일
+   ============================================================================ */
 .ql-editor blockquote {
     border-left: 4px solid var(--accent) !important;
-    /* 포인트 컬러로 굵은 선 */
     background-color: var(--surface) !important;
-    /* 배경색을 아주 살짝 깔아줌 */
-    margin: 16px 0 !important;
-    padding: 12px 16px !important;
+    margin: 16px 0 0 0 !important;
+    padding: 8px 16px 2px 16px !important;
     color: var(--text-muted) !important;
-    /* 글자색을 살짝 차분하게 */
     font-style: normal !important;
-    /* 촌스러운 기울임꼴 제거 */
+    border-radius: 0 8px 0 0 !important;
+    line-height: 1.6;
+}
+
+/* 연속된 인용구 줄: 여백 제거 및 단일 카드 박스로 부드럽게 결합 */
+.ql-editor blockquote + blockquote {
+    margin-top: 0 !important;
+    border-top: none !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    border-radius: 0 !important;
+}
+
+/* 인용구의 마지막 줄 */
+.ql-editor blockquote:not(:has(+ blockquote)) {
+    margin-bottom: 16px !important;
+    border-radius: 0 0 8px 0 !important;
+    padding-bottom: 8px !important;
+}
+
+/* 단독(한 줄짜리) 인용구 */
+.ql-editor blockquote:not(:has(+ blockquote)):not(blockquote + blockquote) {
+    margin: 16px 0 !important;
     border-radius: 0 8px 8px 0 !important;
-    /* 오른쪽 모서리만 둥글게 */
+    padding: 8px 16px !important;
+}
+
+/* 🎯 [V4.2.0] 인용구 내부 리스트 아이템 (글머리 기호, 번호, 체크리스트) */
+.ql-editor li.ql-quote-item {
+    border-left: 4px solid var(--accent) !important;
+    background-color: var(--surface) !important;
+    color: var(--text-muted) !important;
+    font-style: normal !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    line-height: 1.6;
+}
+
+/* 인용구 바로 뒤에 이어지는 리스트 컨테이너 */
+.ql-editor blockquote + ol,
+.ql-editor blockquote + ul {
+    margin-top: 0 !important;
+}
+
+.ql-editor blockquote + ol > li.ql-quote-item:first-child,
+.ql-editor blockquote + ul > li.ql-quote-item:first-child {
+    padding-top: 2px !important;
+    border-radius: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* 단독 인용구 리스트 (첫 머리) */
+.ql-editor ol:not(blockquote + ol) > li.ql-quote-item:first-child,
+.ql-editor ul:not(blockquote + ul) > li.ql-quote-item:first-child {
+    margin-top: 16px !important;
+    padding-top: 8px !important;
+    border-radius: 0 8px 0 0 !important;
+}
+
+/* 인용구 리스트의 마지막 항목 (뒤에 blockquote가 이어지지 않는 경우) */
+.ql-editor ol:not(:has(+ blockquote)) > li.ql-quote-item:last-child,
+.ql-editor ul:not(:has(+ blockquote)) > li.ql-quote-item:last-child {
+    margin-bottom: 16px !important;
+    padding-bottom: 8px !important;
+    border-radius: 0 0 8px 0 !important;
+}
+
+/* 인용구 리스트 뒤에 바로 이어지는 인용구 */
+.ql-editor ol:has(> li.ql-quote-item) + blockquote,
+.ql-editor ul:has(> li.ql-quote-item) + blockquote {
+    margin-top: 0 !important;
+    border-radius: 0 !important;
+    padding-top: 2px !important;
 }
 
 .ql-editor code {
@@ -3320,15 +3389,13 @@ body.light-theme {
         font-weight: 600 !important;
     }
 
-    /* 🎯 5. 인용구(Blockquote) 화이트 테마 & 페이지 절단 방어 */
-    .ql-editor blockquote {
+    /* 🎯 5. 인용구(Blockquote) & 인용구 내부 리스트 화이트 테마 */
+    .ql-editor blockquote,
+    .ql-editor li.ql-quote-item {
         border-left: 4px solid var(--accent) !important;
         background-color: #f9f9f9 !important;
-        margin: 16px 0 !important;
-        padding: 12px 16px !important;
         color: #333333 !important;
         font-style: normal !important;
-        border-radius: 0 8px 8px 0 !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
     }

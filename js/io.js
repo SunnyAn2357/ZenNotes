@@ -677,29 +677,41 @@ function convertQuillToMarkdown() {
     const listType = li.getAttribute("data-list");
 
     if (listType === "checked") {
+      const isQuoted = li.classList.contains("ql-quote-item");
+      const qPrefix = isQuoted ? "> " : "";
+
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) >= indentLvl) delete counters[k];
       });
-      return `${indentSpaces}- [x] ${itemText}`;
+      return `${qPrefix}${indentSpaces}- [x] ${itemText}`;
     } else if (listType === "unchecked") {
+      const isQuoted = li.classList.contains("ql-quote-item");
+      const qPrefix = isQuoted ? "> " : "";
+
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) >= indentLvl) delete counters[k];
       });
-      return `${indentSpaces}- [ ] ${itemText}`;
+      return `${qPrefix}${indentSpaces}- [ ] ${itemText}`;
     } else if (
       listType === "ordered" ||
       (li.parentElement && li.parentElement.tagName.toLowerCase() === "ol" && !listType)
     ) {
+      const isQuoted = li.classList.contains("ql-quote-item");
+      const qPrefix = isQuoted ? "> " : "";
+
       counters[indentLvl] = (counters[indentLvl] || 0) + 1;
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) > indentLvl) delete counters[k];
       });
-      return `${indentSpaces}${counters[indentLvl]}. ${itemText}`;
+      return `${qPrefix}${indentSpaces}${counters[indentLvl]}. ${itemText}`;
     } else {
+      const isQuoted = li.classList.contains("ql-quote-item");
+      const qPrefix = isQuoted ? "> " : "";
+
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) >= indentLvl) delete counters[k];
       });
-      return `${indentSpaces}- ${itemText}`;
+      return `${qPrefix}${indentSpaces}- ${itemText}`;
     }
   }
 
@@ -982,15 +994,27 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // D. 인용구 (> text)
+    // D. 인용구 (> text) - 🎯 [V4.2.0] 인용구 내부 글머리 기호, 번호, 체크리스트 지원
     if (/^>\s?(.*)$/.test(line)) {
-      const quoteLines = [];
       while (i < lines.length && /^>\s?(.*)$/.test(lines[i])) {
         const qm = lines[i].match(/^>\s?(.*)$/);
-        quoteLines.push(parseInline(qm[1]));
+        const innerLine = qm[1] || "";
+        const checkMatch = innerLine.match(/^\s*(\*|-)\s+\[([ xX])\]\s*(.*)$/);
+        const orderedMatch = innerLine.match(/^\s*(\d+)\.\s+(.*)$/);
+        const bulletMatch = innerLine.match(/^\s*(\*|-)\s+(.*)$/);
+
+        if (checkMatch) {
+          const isChecked = checkMatch[2].toLowerCase() === "x";
+          htmlParts.push(`<li data-list="${isChecked ? "checked" : "unchecked"}" class="ql-quote-item">${parseInline(checkMatch[3]) || "<br>"}</li>`);
+        } else if (orderedMatch) {
+          htmlParts.push(`<li data-list="ordered" class="ql-quote-item">${parseInline(orderedMatch[2]) || "<br>"}</li>`);
+        } else if (bulletMatch) {
+          htmlParts.push(`<li data-list="bullet" class="ql-quote-item">${parseInline(bulletMatch[2]) || "<br>"}</li>`);
+        } else {
+          htmlParts.push(`<blockquote>${parseInline(innerLine) || "<br>"}</blockquote>`);
+        }
         i++;
       }
-      htmlParts.push(`<blockquote>${quoteLines.join("<br>")}</blockquote>`);
       continue;
     }
 
