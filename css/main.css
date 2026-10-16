@@ -493,14 +493,202 @@ body.light-theme .drop-zone-overlay {
     -webkit-user-select: none;
 }
 
-/* 🎯 [V4.0.0] 삼선과 같은 줄 우측에 햇님/달님 토글 버튼 나란히 배치 */
+/* 🎯 [V4.0.0 / V4.2.2] 삼선(노트 메뉴)과 같은 줄 우측에 사이드바 접기 버튼 나란히 배치 */
 .nav-header-top {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     width: 100%;
     user-select: none;
     -webkit-user-select: none;
+}
+
+.left-collapse-btn {
+    transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.left-collapse-btn:hover {
+    color: var(--accent) !important;
+    background: var(--surface-hover);
+}
+
+/* 🎯 [V4.2.2] 좌측 삼선 통합 노트 메뉴 드롭다운 */
+.left-note-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    width: 245px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+    z-index: 2500;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+}
+
+body.light-theme .left-note-menu {
+    background: #ffffff;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+}
+
+.left-note-menu.is-active {
+    display: flex;
+}
+
+.left-menu-item {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    transition: background 0.15s ease, color 0.15s ease;
+    text-align: left;
+}
+
+.left-menu-item:hover {
+    background: var(--surface-hover);
+    color: var(--accent);
+}
+
+.left-menu-item-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.left-menu-item-main > i {
+    width: 18px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: color 0.15s ease;
+}
+
+.left-menu-item:hover .left-menu-item-main > i {
+    color: var(--accent);
+}
+
+.left-menu-chevron,
+.left-menu-action-icon {
+    font-size: 11px !important;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.left-menu-item:hover .left-menu-chevron,
+.left-menu-item:hover .left-menu-action-icon {
+    color: var(--accent);
+}
+
+.left-menu-folder-texts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.left-menu-folder-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.left-menu-folder-path {
+    font-size: 11px;
+    color: var(--accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    opacity: 0.9;
+}
+
+.left-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 6px;
+    opacity: 0.6;
+}
+
+/* 🎯 [V4.2.2] 최근 노트 서브메뉴 리스트 (최대 10개) */
+.recent-notes-submenu {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 4px 4px 12px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.14);
+    border-radius: 8px;
+    margin: 2px 2px 4px 2px;
+}
+
+body.light-theme .recent-notes-submenu {
+    background: var(--surface);
+}
+
+.recent-note-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    min-width: 0;
+}
+
+.recent-note-item:hover {
+    background: var(--surface-hover);
+    color: var(--accent);
+}
+
+.recent-note-item.is-current {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.recent-note-item i {
+    font-size: 12px !important;
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.recent-note-item i.sec-lock-icon {
+    color: #f59e0b !important;
+}
+
+.recent-note-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.recent-note-empty {
+    padding: 10px 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
 }
 
 .theme-toggle-btn {
@@ -594,9 +782,14 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     justify-content: center;
 }
 
+.col-left.collapsed .left-note-menu {
+    left: 10px;
+    top: 44px;
+}
+
 .col-left.collapsed .search-bar,
 .col-left.collapsed .memo-list,
-.col-left.collapsed .btn-text {
+.col-left.collapsed .new-note-btn .btn-text {
     display: none !important;
 }
 

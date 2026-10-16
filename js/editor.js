@@ -1023,21 +1023,29 @@ document.addEventListener("keydown", (e) => {
             }
         }
 
-        // [1.5순위] 파일관리창 팝업 메뉴 수동 닫기 (히스토리를 남기지 않는 UI)
+        // [1.5순위] 파일관리창 팝업 메뉴 및 좌측 삼선 노트 메뉴 수동 닫기 (히스토리를 남기지 않는 UI)
         const globalMenu = document.getElementById("fm-global-menu");
         const itemMenu = document.getElementById("fm-item-menu");
+        const leftNoteMenu = document.getElementById("left-note-menu");
         if (
             (globalMenu && globalMenu.classList.contains("is-active")) ||
-            (itemMenu && itemMenu.classList.contains("is-active"))
+            (itemMenu && itemMenu.classList.contains("is-active")) ||
+            (leftNoteMenu && leftNoteMenu.classList.contains("is-active"))
         ) {
             if (globalMenu) globalMenu.classList.remove("is-active");
             if (itemMenu) itemMenu.classList.remove("is-active");
+            if (leftNoteMenu) leftNoteMenu.classList.remove("is-active");
             return;
         }
 
         // 🎯 [핵심] 화면에 열려있는 UI가 '히스토리 스택(뒤로가기 기록)'을 사용하는지 판별
         const fmPane = document.getElementById("file-manager-pane");
         const isFmOpen = fmPane && fmPane.style.display === "flex"; // 파일관리창이 열려있으면 모두 히스토리 지배를 받음
+        const moveModalEl = document.getElementById("fm-move-modal");
+        const secModalEl = document.getElementById("fm-security-modal");
+        const isGlobalFmModalOpen =
+            (moveModalEl && moveModalEl.style.display === "flex") ||
+            (secModalEl && secModalEl.style.display === "flex");
 
         // 메인/휴지통 창 다중선택
         const inMainMulti = isMultiSelectMode || selectedMemos.size > 1;
@@ -1056,6 +1064,7 @@ document.addEventListener("keydown", (e) => {
         // 🎯 1. 히스토리를 쓰는 UI라면? ESC 키 = 물리적 뒤로가기 버튼 강제 실행! (통합 엔진 작동)
         if (
             isFmOpen ||
+            isGlobalFmModalOpen ||
             (isMobile && (inMainMulti || inTrashMulti || isMobilePanelOpen))
         ) {
             if (document.activeElement) document.activeElement.blur();
@@ -1103,20 +1112,12 @@ document.addEventListener("keydown", (e) => {
            3. 모바일 환경: 뒤로가기(popstate) 통합 제어
            ========================================== */
 window.addEventListener("popstate", (e) => {
-    // // 🎯 1. 강제 뒤로가기 카운터 처리 (클릭 씹힘 방지)
-    // if (programmaticBackCount > 0) {
-    //     programmaticBackCount--;
-    //     return;
-    // }
-
     // 1. [1칸 전용 방어막] (기존에 있던 코드)
     if (typeof programmaticBackCount !== 'undefined' && programmaticBackCount > 0) {
         programmaticBackCount--;
         return;
     }
     // 2. 🚀 [다중 칸 전용 스위치 방어막 추가]
-    // 3칸을 뛰어넘어 popstate가 딱 1번 발생했을 때, 이 스위치가 방어하고 즉시 꺼집니다!
-    // 이렇게 하면 다음번 사용자의 진짜 터치를 절대 씹어먹지 않습니다.
     if (typeof isProgrammaticBack !== 'undefined' && isProgrammaticBack) {
         isProgrammaticBack = false;
         return;
@@ -1150,6 +1151,22 @@ window.addEventListener("popstate", (e) => {
         return;
     }
 
+    // 🎯 [V4.2.2] 메인 편집창/FM 공통 최상단 모달(이동 모달, 보안 비번 모달) 및 좌측 삼선 메뉴 최우선 닫기
+    const globalMoveModal = document.getElementById("fm-move-modal");
+    const globalSecurityModal = document.getElementById("fm-security-modal");
+    const leftNoteMenu = document.getElementById("left-note-menu");
+    if (leftNoteMenu && leftNoteMenu.classList.contains("is-active")) {
+        leftNoteMenu.classList.remove("is-active");
+    }
+    if (
+        (globalMoveModal && globalMoveModal.style.display === "flex") ||
+        (globalSecurityModal && globalSecurityModal.style.display === "flex")
+    ) {
+        if (globalMoveModal && globalMoveModal.style.display === "flex") closeMoveModal(true);
+        if (globalSecurityModal && globalSecurityModal.style.display === "flex") closeSecurityModal(true);
+        return;
+    }
+
     const fmPane = document.getElementById("file-manager-pane");
     if (fmPane && fmPane.style.display === "flex") {
         const searchInput = document.getElementById("fm-search-input");
@@ -1158,23 +1175,14 @@ window.addEventListener("popstate", (e) => {
         // 🎯 2. 순서 교정 1순위: 화면 최상단 팝업/메뉴부터 닫기
         const globalMenu = document.getElementById("fm-global-menu");
         const itemMenu = document.getElementById("fm-item-menu");
-        const moveModal = document.getElementById("fm-move-modal");
-        const securityModal = document.getElementById("fm-security-modal");
 
         const isMenuOpen =
             (globalMenu && globalMenu.classList.contains("is-active")) ||
             (itemMenu && itemMenu.classList.contains("is-active"));
-        const isModalOpen =
-            (moveModal && moveModal.style.display === "flex") ||
-            (securityModal && securityModal.style.display === "flex");
 
-        if (isMenuOpen || isModalOpen) {
+        if (isMenuOpen) {
             if (globalMenu) globalMenu.classList.remove("is-active");
             if (itemMenu) itemMenu.classList.remove("is-active");
-
-            if (moveModal && moveModal.style.display === "flex") closeMoveModal(true);
-            if (securityModal && securityModal.style.display === "flex")
-                closeSecurityModal(true);
             return; // 팝업만 닫고 멈춤
         }
 

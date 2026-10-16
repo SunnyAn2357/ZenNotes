@@ -578,6 +578,7 @@ function createNewFolder() {
 
 // 2. 이름 바꾸기
 function fmRename(id) {
+  let renamedTitle = null;
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
   store.get(id).onsuccess = (e) => {
@@ -586,11 +587,22 @@ function fmRename(id) {
     const newName = prompt("새 이름을 입력하세요:", m.title);
     if (!newName || newName.trim() === "" || newName === m.title) return;
 
-    m.title = newName.trim();
+    renamedTitle = newName.trim();
+    m.title = renamedTitle;
     m.updatedAt = Date.now();
     store.put(m);
   };
   tx.oncomplete = () => {
+    if (renamedTitle !== null) {
+      if (typeof updateRecentNoteTitleIfExist === "function") {
+        updateRecentNoteTitleIfExist(id, renamedTitle);
+      }
+      if (Number(currentMemoId) === Number(id)) {
+        const titleInput = document.getElementById("memo-title-input");
+        if (titleInput) titleInput.value = renamedTitle;
+        document.title = renamedTitle;
+      }
+    }
     loadFileManager(currentFmFolderId);
     loadMemoList(true);
     if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
@@ -741,6 +753,7 @@ function openSecurityModal(mode) {
 
 // 🎯 [완벽 교정]
 function closeSecurityModal(fromPopstate = false) {
+  pendingRecentSecureMemoId = null;
   if (document.getElementById("fm-security-modal").style.display === "none")
     return;
   document.getElementById("fm-security-modal").style.display = "none";
@@ -776,7 +789,24 @@ async function submitSecurityPassword() {
       isSecurityUnlocked = true;
       currentSecKey = await getCryptoKey(pw); // 🚀 [핵심] 암호화 열쇠 획득!
       document.getElementById("fm-security-modal").style.display = "none";
-      enterSecurityFolder(); // 이 안에서 replaceState가 작동!
+
+      // 🎯 [V4.2.2] 최근 노트에서 보안 노트를 클릭하여 비번을 입력한 경우: FM으로 가지 않고 즉시 해당 노트를 복호화하여 오픈!
+      if (pendingRecentSecureMemoId !== null) {
+        const targetId = pendingRecentSecureMemoId;
+        pendingRecentSecureMemoId = null;
+        programmaticBackCount++;
+        history.back();
+        const fmPane = document.getElementById("file-manager-pane");
+        if (fmPane && fmPane.style.display === "flex") {
+          closeFileManager();
+        }
+        if (Number(currentMemoId) === Number(targetId)) {
+          currentMemoId = null;
+        }
+        loadMemo(targetId);
+      } else {
+        enterSecurityFolder(); // 이 안에서 replaceState가 작동!
+      }
     } else {
       showToast("비밀번호가 일치하지 않습니다.");
       input.value = "";
@@ -803,7 +833,23 @@ async function submitSecurityPassword() {
         isSecurityUnlocked = true;
         currentSecKey = await getCryptoKey(pw); // 🚀 [핵심] 암호화 열쇠 획득!
         document.getElementById("fm-security-modal").style.display = "none";
-        enterSecurityFolder();
+
+        if (pendingRecentSecureMemoId !== null) {
+          const targetId = pendingRecentSecureMemoId;
+          pendingRecentSecureMemoId = null;
+          programmaticBackCount++;
+          history.back();
+          const fmPane = document.getElementById("file-manager-pane");
+          if (fmPane && fmPane.style.display === "flex") {
+            closeFileManager();
+          }
+          if (Number(currentMemoId) === Number(targetId)) {
+            currentMemoId = null;
+          }
+          loadMemo(targetId);
+        } else {
+          enterSecurityFolder();
+        }
       } else {
         showToast("비밀번호가 일치하지 않습니다. 처음부터 다시 입력해주세요.");
         openSecurityModal("setup"); // 1단계로 강제 초기화
@@ -1237,9 +1283,21 @@ function renderDestFolders() {
       if (m.type === "folder") folderMap.set(m.id, m);
     });
 
+    // 🎯 [V4.2.2] FM이 열려있는지, 아니면 메인 편집창 삼선 메뉴에서 호출되었는지 판별
+    const fmPane = document.getElementById("file-manager-pane");
+    const isFmOpen = fmPane && fmPane.style.display === "flex";
+    let excludedFolderId = currentFmFolderId;
+    if (!isFmOpen && movingItemIds.length === 1) {
+      const targetItem = allData.find(
+        (m) => m.id === Number(movingItemIds[0]),
+      );
+      excludedFolderId = targetItem ? targetItem.parentId : undefined;
+    }
+
     // 🎯 2. 목적지 자격 검사 (휴지통 소속이거나, 영구삭제(유령)이거나, 선택한 항목의 자식이면 안됨)
     function isValidDestination(folderId) {
-      if (folderId === currentFmFolderId) return false; // 현재 내가 서 있는 폴더는 목적지 후보에서 아예 제외합니다!
+      if (excludedFolderId !== undefined && folderId === excludedFolderId)
+        return false; // 현재 소속된 폴더는 목적지 후보에서 제외
       if (movingItemIds.includes(folderId)) return false; // 내 자신에게 이동 불가
 
       let curr = folderId;
@@ -1464,7 +1522,13 @@ async function moveItemsToFolder(itemIds, targetFolderId) {
         }
         loadMemoList(true);
       }
-      loadFileManager(currentFmFolderId);
+      const fmPane = document.getElementById("file-manager-pane");
+      if (fmPane && fmPane.style.display === "flex") {
+        loadFileManager(currentFmFolderId);
+      }
+      if (typeof updateLeftMenuCurrentFolderPath === "function") {
+        updateLeftMenuCurrentFolderPath();
+      }
       if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
       resolve();
     };
@@ -2025,6 +2089,14 @@ async function loadMemo(id) {
         }
 
         quill.root.innerHTML = finalContent;
+
+        // 🎯 [V4.2.2] 성공적으로 열람(및 복호화)된 노트를 최근 노트 목록(최대 10개)에 기록
+        if (typeof recordRecentNote === "function") {
+          recordRecentNote(m.id, m.parentId, m.title, isEditingSecureMemo);
+        }
+        if (typeof updateLeftMenuCurrentFolderPath === "function") {
+          updateLeftMenuCurrentFolderPath();
+        }
 
         if (typeof checkAuthState === 'function') checkAuthState();
 

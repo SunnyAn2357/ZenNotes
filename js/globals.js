@@ -31,7 +31,7 @@ let mainSearchTimer = null, trashSearchTimer = null;
 let statusTextTimer = null, syncStartTime = 0, backPressTimer = 0, toastTimer = null, lastUndoData = null, refreshing = false, isReading = false;
 
 // 🎯 [보안 폴더 상태]
-let currentSecKey = null, isEditingSecureMemo = false, isSecurityUnlocked = false;
+let currentSecKey = null, isEditingSecureMemo = false, isSecurityUnlocked = false, pendingRecentSecureMemoId = null;
 
 // 🎯 [히스토리 방어막]
 var programmaticBackCount = 0, isProgrammaticBack = false;

@@ -1,4 +1,4 @@
-﻿// 🟦🟦🟦পণ্ডিত🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
+// 🟦🟦🟦পণ্ডিত🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
 // 💾 [ZenNotes V3] LOCAL SAVE & CRYPTO ENGINE (로컬 DB 저장 및 군사급 암호화)
 // 🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
 
@@ -146,6 +146,11 @@ async function executeSave() {
 
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
+  const wasExistingMemo = !!currentMemoId;
+  let savedParentId =
+    targetNewMemoFolderId !== null
+      ? targetNewMemoFolderId
+      : globalDesktopFolderId;
 
   if (currentMemoId) {
     // 🎯 기존 노트 수정 시
@@ -158,6 +163,7 @@ async function executeSave() {
           saveTimer = null;
           return;
         }
+        savedParentId = m.parentId;
         m.title = title; // 📌 제목은 검색을 위해 무조건 평문 유지!
         m.content = finalContent;
         m.plainText = finalPlainText;
@@ -175,10 +181,7 @@ async function executeSave() {
       isDeleted: false,
       type: "file",
       syncId: generateSyncId(),
-      parentId:
-        targetNewMemoFolderId !== null
-          ? targetNewMemoFolderId
-          : globalDesktopFolderId,
+      parentId: savedParentId,
     };
 
     // [수정] 저장이 완료된 후(add) 동기화 트리거 실행
@@ -191,6 +194,17 @@ async function executeSave() {
     isSaving = false;
     saveTimer = null;
     updateUIState("saved");
+    if (currentMemoId) {
+      if (wasExistingMemo) {
+        if (typeof updateRecentNoteTitleIfExist === "function") {
+          updateRecentNoteTitleIfExist(currentMemoId, title);
+        }
+      } else {
+        if (typeof recordRecentNote === "function") {
+          recordRecentNote(currentMemoId, savedParentId, title, isSecure);
+        }
+      }
+    }
     loadMemoList(true);
     updateUnsyncedCount();
     if (pendingSave) {
@@ -673,6 +687,7 @@ function purgeEmptyMemos() {
         m.isPermanentlyDeleted = true; // 휴지통에서도 숨기기 위한 투명 망토
         m.updatedAt = Date.now(); // 동기화 서버에 상태 변경 알림
         cursor.update(m);
+        if (typeof removeRecentNote === "function") removeRecentNote(m.id);
         isPurged = true;
       }
       cursor.continue();
@@ -717,6 +732,7 @@ function purgeMemoIfEmpty(memoIdToEvict) {
       m.isPermanentlyDeleted = true;
       m.updatedAt = Date.now();
       store.put(m);
+      if (typeof removeRecentNote === "function") removeRecentNote(m.id);
 
       tx.oncomplete = () => {
         loadMemoList(true); // 조용히 목록 새로고침

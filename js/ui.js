@@ -113,6 +113,19 @@ document.addEventListener("click", (e) => {
   const fmGlobalMenu = document.getElementById("fm-global-menu");
   if (fmItemMenu) fmItemMenu.classList.remove("is-active");
   if (fmGlobalMenu) fmGlobalMenu.classList.remove("is-active");
+
+  // 🎯 [V4.2.2] 좌측 삼선 노트 메뉴 닫기 로직
+  const leftNoteMenu = document.getElementById("left-note-menu");
+  const leftNoteMenuBtn = document.getElementById("left-note-menu-btn");
+  if (
+    leftNoteMenu &&
+    leftNoteMenu.classList.contains("is-active") &&
+    !leftNoteMenu.contains(e.target) &&
+    (!leftNoteMenuBtn || !leftNoteMenuBtn.contains(e.target))
+  ) {
+    closeLeftNoteMenu();
+  }
+
   const rp = document.getElementById("col-right");
   const tp = document.getElementById("trash-pane");
   const gb = document.getElementById("global-menu-btn");
@@ -137,12 +150,24 @@ document.addEventListener("click", (e) => {
 });
 
 function handleLeftHamburger() {
-  if (window.matchMedia('(max-width: 768px)').matches) toggleLeftPaneMobile();
-  else document.getElementById('col-left').classList.toggle('collapsed');
+  closeLeftNoteMenu();
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    toggleLeftPaneMobile();
+  } else {
+    const colLeft = document.getElementById('col-left');
+    colLeft.classList.toggle('collapsed');
+    const icon = document.getElementById('left-collapse-icon');
+    if (icon) {
+      icon.className = colLeft.classList.contains('collapsed')
+        ? 'fa-solid fa-angles-right'
+        : 'fa-solid fa-angles-left';
+    }
+  }
 }
 
 function toggleLeftPaneMobile() {
   if (document.activeElement) document.activeElement.blur(); // 👈 브라우저의 포커스를 뺏어 키보드를 강제로 숨깁니다.
+  closeLeftNoteMenu();
   const lp = document.getElementById("col-left");
   const ov = document.getElementById("mobile-overlay");
   lp.classList.toggle("is-mobile-open");
@@ -159,6 +184,7 @@ function toggleLeftPaneMobile() {
 
 function closeAllPanelsMobile() {
   closeAllMemoMenus();
+  closeLeftNoteMenu();
 
   // 🎯 PC와 모바일 환경 차별 없이, 열려있는 모든 패널을 깔끔하게 닫아줍니다!
   document.getElementById("col-left").classList.remove("is-mobile-open");
@@ -182,6 +208,7 @@ window.addEventListener("resize", () => {
 });
 
 document.getElementById("btn-read-memo").addEventListener("click", function () {
+  closeLeftNoteMenu();
   closeAllPanelsMobile();
   const synth = window.speechSynthesis;
   const btnIcon = this.querySelector("i");
@@ -191,7 +218,7 @@ document.getElementById("btn-read-memo").addEventListener("click", function () {
     synth.cancel();
     isReading = false;
     btnIcon.className = "fa-solid fa-volume-high";
-    btnText.innerText = "음성으로 듣기";
+    btnText.innerText = "음성 재생";
     return;
   }
 
@@ -207,14 +234,14 @@ document.getElementById("btn-read-memo").addEventListener("click", function () {
   utterance.onend = function () {
     isReading = false;
     btnIcon.className = "fa-solid fa-volume-high";
-    btnText.innerText = "음성으로 듣기";
+    btnText.innerText = "음성 재생";
   };
 
   utterance.onerror = function () {
     console.warn(">>> 음성 읽기 중단");
     isReading = false;
     btnIcon.className = "fa-solid fa-volume-high";
-    btnText.innerText = "음성으로 듣기";
+    btnText.innerText = "음성 재생";
   };
 
   synth.cancel();
@@ -752,11 +779,12 @@ window.addEventListener("DOMContentLoaded", initScrollToTop);
 window.addEventListener("load", initScrollToTop);
 
 // ============================================================================
-// 🎯 [V4.0.0] 프리미엄 화이트/다크 테마 전환 엔진 (햇님 / 달님)
+// 🎯 [V4.0.0 / V4.2.2] 프리미엄 화이트/다크 테마 전환 엔진 (햇님 / 달님)
 // ============================================================================
 function applyAppTheme(theme, save = true) {
   const isLight = theme === "light";
   const icon = document.getElementById("theme-toggle-icon");
+  const label = document.getElementById("theme-toggle-label");
   const metaDesktop = document.getElementById("meta-theme-color-desktop");
   const metaMobile = document.getElementById("meta-theme-color-mobile");
 
@@ -766,6 +794,7 @@ function applyAppTheme(theme, save = true) {
       icon.className = "fa-solid fa-moon";
       icon.style.color = "#7c3aed"; // 은은한 바이올렛 달님
     }
+    if (label) label.innerText = "다크 모드";
     if (metaDesktop) metaDesktop.setAttribute("content", "#eef1f5");
     if (metaMobile) metaMobile.setAttribute("content", "#eef1f5");
   } else {
@@ -774,6 +803,7 @@ function applyAppTheme(theme, save = true) {
       icon.className = "fa-solid fa-sun";
       icon.style.color = "#f59e0b"; // 따뜻한 골드 햇님
     }
+    if (label) label.innerText = "화이트 모드";
     if (metaDesktop) metaDesktop.setAttribute("content", "#282C26");
     if (metaMobile) metaMobile.setAttribute("content", "#131314");
   }
@@ -814,3 +844,281 @@ function initAppTheme() {
 initAppTheme();
 window.toggleAppTheme = toggleAppTheme;
 window.applyAppTheme = applyAppTheme;
+
+// ============================================================================
+// 🎯 [V4.2.2] 좌측 삼선 통합 노트 메뉴 & 최근 노트(최대 10개) 관리 엔진
+// ============================================================================
+const RECENT_NOTES_STORAGE_KEY = "zen_recent_notes";
+const MAX_RECENT_NOTES = 10;
+
+function getRecentNotes() {
+  try {
+    const raw = localStorage.getItem(RECENT_NOTES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveRecentNotes(list) {
+  try {
+    localStorage.setItem(
+      RECENT_NOTES_STORAGE_KEY,
+      JSON.stringify(list.slice(0, MAX_RECENT_NOTES)),
+    );
+  } catch (e) {
+    console.warn("최근 노트 저장 실패:", e);
+  }
+}
+
+function recordRecentNote(id, parentId, title, isSecure = false) {
+  if (!id) return;
+  const numId = Number(id);
+  let list = getRecentNotes();
+  list = list.filter((item) => Number(item.id) !== numId);
+  list.unshift({
+    id: numId,
+    parentId: parentId !== undefined ? parentId : null,
+    title: (title || "제목 없는 노트").trim() || "제목 없는 노트",
+    isSecure: !!isSecure,
+    openedAt: Date.now(),
+  });
+  saveRecentNotes(list);
+}
+
+function updateRecentNoteTitleIfExist(id, newTitle) {
+  if (!id) return;
+  const numId = Number(id);
+  const list = getRecentNotes();
+  let updated = false;
+  list.forEach((item) => {
+    if (Number(item.id) === numId) {
+      item.title = (newTitle || "제목 없는 노트").trim() || "제목 없는 노트";
+      updated = true;
+    }
+  });
+  if (updated) saveRecentNotes(list);
+}
+
+function removeRecentNote(id) {
+  const numId = Number(id);
+  const list = getRecentNotes().filter((item) => Number(item.id) !== numId);
+  saveRecentNotes(list);
+}
+
+function escapeHtmlSafe(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderRecentNotesList() {
+  const submenu = document.getElementById("recent-notes-submenu");
+  if (!submenu) return;
+
+  const list = getRecentNotes();
+  submenu.innerHTML = "";
+
+  if (list.length === 0) {
+    submenu.innerHTML =
+      '<div class="recent-note-empty">최근 열람한 노트가 없습니다.</div>';
+    return;
+  }
+
+  list.slice(0, MAX_RECENT_NOTES).forEach((item) => {
+    const div = document.createElement("div");
+    const isCurrent = Number(currentMemoId) === Number(item.id);
+    div.className = `recent-note-item ${isCurrent ? "is-current" : ""}`;
+    const iconClass = item.isSecure
+      ? "fa-solid fa-lock sec-lock-icon"
+      : "fa-regular fa-file-lines";
+    div.innerHTML = `
+      <i class="${iconClass}"></i>
+      <span class="recent-note-title">${escapeHtmlSafe(item.title || "제목 없는 노트")}</span>
+    `;
+    div.onclick = (e) => {
+      e.stopPropagation();
+      openRecentNote(item.id, item.parentId);
+    };
+    submenu.appendChild(div);
+  });
+}
+
+function toggleLeftNoteMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById("left-note-menu");
+  if (!menu) return;
+
+  const isOpen = menu.classList.contains("is-active");
+  if (isOpen) {
+    closeLeftNoteMenu();
+  } else {
+    closeAllMemoMenus();
+    menu.classList.add("is-active");
+    updateLeftMenuCurrentFolderPath();
+    const submenu = document.getElementById("recent-notes-submenu");
+    if (submenu && submenu.style.display !== "none") {
+      renderRecentNotesList();
+    }
+  }
+}
+
+function closeLeftNoteMenu() {
+  const menu = document.getElementById("left-note-menu");
+  if (menu) menu.classList.remove("is-active");
+}
+
+function toggleRecentNotesSubmenu(e) {
+  if (e) e.stopPropagation();
+  const submenu = document.getElementById("recent-notes-submenu");
+  const chevron = document.getElementById("recent-notes-chevron");
+  if (!submenu) return;
+
+  const isHidden = submenu.style.display === "none" || submenu.style.display === "";
+  if (isHidden) {
+    renderRecentNotesList();
+    submenu.style.display = "flex";
+    if (chevron) chevron.className = "fa-solid fa-chevron-up left-menu-chevron";
+  } else {
+    submenu.style.display = "none";
+    if (chevron) chevron.className = "fa-solid fa-chevron-down left-menu-chevron";
+  }
+}
+
+function updateLeftMenuCurrentFolderPath() {
+  const pathEl = document.getElementById("left-menu-current-path");
+  if (!pathEl || !db) return;
+
+  const tx = db.transaction(["memos"], "readonly");
+  tx.objectStore("memos").getAll().onsuccess = (e) => {
+    const allData = e.target.result || [];
+    const folderMap = new Map();
+    allData.forEach((m) => {
+      if (m.type === "folder") folderMap.set(m.id, m);
+    });
+
+    function buildPathStr(folderId) {
+      if (folderId === null || folderId === undefined) return "Home";
+      const parts = [];
+      let curr = folderId;
+      while (curr) {
+        const f = folderMap.get(curr);
+        if (!f) break;
+        parts.unshift(f.title);
+        curr = f.parentId;
+      }
+      return parts.length > 0 ? parts.join(" / ") : "바탕 화면";
+    }
+
+    if (currentMemoId) {
+      const curMemo = allData.find((m) => m.id === Number(currentMemoId));
+      if (curMemo) {
+        pathEl.innerText = `위치: ${buildPathStr(curMemo.parentId)}`;
+        return;
+      }
+    }
+
+    const fallbackFolderId =
+      targetNewMemoFolderId !== null ? targetNewMemoFolderId : globalDesktopFolderId;
+    pathEl.innerText = `위치: ${buildPathStr(fallbackFolderId)}`;
+  };
+}
+
+function openCurrentNoteMoveModal() {
+  closeLeftNoteMenu();
+  if (typeof forceSaveImmediate === "function") forceSaveImmediate();
+
+  // 약간의 딜레이 후 저장된 currentMemoId 확인
+  setTimeout(() => {
+    if (!currentMemoId) {
+      showToast("먼저 노트를 작성해 주세요.");
+      return;
+    }
+    closeAllPanelsMobile();
+    if (typeof openMoveModal === "function") {
+      openMoveModal(currentMemoId);
+    }
+  }, 30);
+}
+
+async function openRecentNote(id, recordedParentId) {
+  if (!db) return;
+  if (typeof forceSaveImmediate === "function") forceSaveImmediate();
+
+  const numId = Number(id);
+  const tx = db.transaction(["memos"], "readonly");
+  tx.objectStore("memos").getAll().onsuccess = async (e) => {
+    const allData = e.target.result || [];
+    const folderMap = new Map();
+    allData.forEach((item) => {
+      if (item.type === "folder") folderMap.set(item.id, item);
+    });
+
+    const m = allData.find((item) => item.id === numId);
+
+    // 🎯 1. 노트가 삭제되었거나, 폴더를 옮겨서 원래 위치(recordedParentId)와 달라진 경우 검사
+    function isNoteMissingOrMoved(memo) {
+      if (!memo || memo.type === "folder" || memo.isDeleted || memo.isPermanentlyDeleted) {
+        return true;
+      }
+      if (
+        recordedParentId !== undefined &&
+        memo.parentId !== recordedParentId
+      ) {
+        return true;
+      }
+      let curr = memo.parentId;
+      while (curr) {
+        const pf = folderMap.get(curr);
+        if (!pf || pf.isDeleted || pf.isPermanentlyDeleted || pf.isSystem === "trash") {
+          return true;
+        }
+        curr = pf.parentId;
+      }
+      return false;
+    }
+
+    if (isNoteMissingOrMoved(m)) {
+      removeRecentNote(numId);
+      renderRecentNotesList();
+      showToast("찾을 수 없는 노트입니다.");
+      return;
+    }
+
+    // 최신 제목 동기화
+    updateRecentNoteTitleIfExist(numId, m.title);
+
+    // 🎯 2. 비밀(보안) 폴더 소속 파일인지 검사 -> 비밀번호 물어보기
+    const isSecure = await checkIsUnderSecurity(m.parentId);
+    closeLeftNoteMenu();
+    closeAllPanelsMobile();
+
+    if (isSecure) {
+      pendingRecentSecureMemoId = numId;
+      const hasPw = localStorage.getItem("zen_sec_hash");
+      openSecurityModal(hasPw ? "enter" : "setup");
+      return;
+    }
+
+    // 🎯 3. 일반 노트인 경우 즉시 열기
+    const fmPane = document.getElementById("file-manager-pane");
+    if (fmPane && fmPane.style.display === "flex") {
+      closeFileManager();
+    }
+    loadMemo(numId);
+  };
+}
+
+window.toggleLeftNoteMenu = toggleLeftNoteMenu;
+window.closeLeftNoteMenu = closeLeftNoteMenu;
+window.toggleRecentNotesSubmenu = toggleRecentNotesSubmenu;
+window.openCurrentNoteMoveModal = openCurrentNoteMoveModal;
+window.openRecentNote = openRecentNote;
+window.recordRecentNote = recordRecentNote;
+window.updateRecentNoteTitleIfExist = updateRecentNoteTitleIfExist;
+window.removeRecentNote = removeRecentNote;
+window.updateLeftMenuCurrentFolderPath = updateLeftMenuCurrentFolderPath;
