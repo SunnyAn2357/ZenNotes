@@ -25,7 +25,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.2.4">
+    <link rel="stylesheet" href="css/main.css?v=4.3.0">
 
 </head>
 
@@ -472,23 +472,24 @@
         <div class="table-menu-item text-danger" data-action="delete-table"><i class="fa-solid fa-trash-can"></i> 표 전체 삭제</div>
     </div>
 
-    <script src="js/globals.js?v=4.2.4"></script>
-    <script src="js/db.js?v=4.2.4"></script>
-    <script src="js/ui.js?v=4.2.4"></script>
-    <script src="js/editor.js?v=4.2.4"></script>
-    <script src="js/file_manager.js?v=4.2.4"></script>
-    <script src="js/io.js?v=4.2.4"></script>
-    <script src="js/auth.js?v=4.2.4"></script>
-    <script src="js/migration.js?v=4.2.4"></script>
+    <!-- 🔥 [V4.3.0] Firebase SDK (구글 드라이브 GAPI/GIS 대체) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script src="js/globals.js?v=4.3.0"></script>
+    <script src="js/db.js?v=4.3.0"></script>
+    <script src="js/ui.js?v=4.3.0"></script>
+    <script src="js/editor.js?v=4.3.0"></script>
+    <script src="js/file_manager.js?v=4.3.0"></script>
+    <script src="js/io.js?v=4.3.0"></script>
+    <script src="js/auth.js?v=4.3.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.2.4");
+            console.log("✨ 현재 버전: v4.3.0");
             console.log("=========================================");
         });
     </script>

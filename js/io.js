@@ -1131,7 +1131,7 @@ function backupAllData() {
   }, 300);
 }
 
-// 🎯 [V3.3.3] 모든 데이터 초기화 (IndexedDB + Google Drive 클라우드 파일 영구 삭제)
+// 🎯 [V3.3.3 → V4.3.0] 모든 데이터 초기화 (IndexedDB + Firestore 클라우드 데이터 영구 삭제)
 async function resetAllData() {
   closeAllPanelsMobile();
 
@@ -1141,29 +1141,22 @@ async function resetAllData() {
   );
   if (!firstConfirm) return;
 
-  // 2. 구글 드라이브 연결 상태 확인
-  let isDriveConnected = false;
-  try {
-    if (typeof ensureValidToken === "function") {
-      isDriveConnected = await ensureValidToken();
-    }
-  } catch (e) {
-    isDriveConnected = false;
-  }
+  // 2. 클라우드(Firebase) 연결 상태 확인
+  const isDriveConnected = typeof window.isZenOnline === "function" && window.isZenOnline();
 
   // 3. 2차 상세 확인
   let confirmMsg = "";
   if (isDriveConnected) {
     confirmMsg =
-      "⚠️ [구글 드라이브 연결 상태]\n\n" +
-      "로컬 데이터뿐만 아니라 구글 드라이브에 동기화된 모든 클라우드 데이터(ZenNotes_Sync_Data 폴더 및 백업 파일)가 영구 삭제됩니다.\n\n" +
+      "⚠️ [클라우드 연결 상태]\n\n" +
+      "로컬 데이터뿐만 아니라 클라우드(Firebase)에 동기화된 모든 데이터가 영구 삭제됩니다.\n\n" +
       "삭제된 데이터는 절대 복구할 수 없습니다.\n정말로 모든 데이터를 영구 삭제하시겠습니까?";
   } else {
     confirmMsg =
       "ℹ️ [로그아웃 상태]\n\n" +
       "현재 기기의 로컬 데이터만 초기화됩니다.\n\n" +
-      "※ 중요: 나중에 구글 드라이브에 다시 로그인하면, 클라우드에 보관된 데이터가 현재 기기로 자동 복구됩니다.\n\n" +
-      "※ 구글 드라이브의 클라우드 데이터까지 완전히 삭제하려면, 먼저 상단 구글 드라이브에 로그인한 후 초기화를 진행해 주세요.\n\n" +
+      "※ 중요: 나중에 클라우드에 다시 로그인하면, 클라우드에 보관된 데이터가 현재 기기로 자동 복구됩니다.\n\n" +
+      "※ 클라우드 데이터까지 완전히 삭제하려면, 먼저 구름 아이콘으로 로그인한 후 초기화를 진행해 주세요.\n\n" +
       "현재 기기의 로컬 데이터를 초기화하시겠습니까?";
   }
 
@@ -1183,55 +1176,16 @@ async function resetAllData() {
 
   showToast("데이터를 초기화하는 중입니다. 잠시만 기다려주세요...");
 
-  // 5. 구글 드라이브 파일 영구 삭제 (연결된 경우)
-  if (isDriveConnected && typeof gapi !== "undefined" && gapi.client && gapi.client.drive) {
+  // 5. 🔥 [V4.3.0] Firestore 클라우드 데이터 영구 삭제 (연결된 경우)
+  if (isDriveConnected && typeof deleteAllCloudData === "function") {
     try {
-      // A. ZenNotes_Sync_Data 폴더 및 내부 파일들 삭제
-      const folderRes = await gapi.client.drive.files.list({
-        q: "name = 'ZenNotes_Sync_Data' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-        fields: "files(id, name)",
-      });
-
-      const folders = folderRes.result.files || [];
-      for (const folder of folders) {
-        const insideRes = await gapi.client.drive.files.list({
-          q: `'${folder.id}' in parents and trashed = false`,
-          fields: "files(id, name)",
-          pageSize: 1000,
-        });
-        const insideFiles = insideRes.result.files || [];
-        for (const file of insideFiles) {
-          try {
-            await gapi.client.drive.files.delete({ fileId: file.id });
-          } catch (err) {
-            console.warn("드라이브 파일 삭제 오류:", file.name, err);
-          }
-        }
-        try {
-          await gapi.client.drive.files.delete({ fileId: folder.id });
-        } catch (err) {
-          console.warn("드라이브 폴더 삭제 오류:", folder.id, err);
-        }
-      }
-
-      // B. 레거시 백업 파일 삭제
-      const backupRes = await gapi.client.drive.files.list({
-        q: "(name = 'ZenNotes_Backup.json' or name = 'ZenNotes_Backup_OLD_V2.json') and trashed = false",
-        fields: "files(id, name)",
-      });
-      const backupFiles = backupRes.result.files || [];
-      for (const bFile of backupFiles) {
-        try {
-          await gapi.client.drive.files.delete({ fileId: bFile.id });
-        } catch (err) {
-          console.warn("드라이브 백업 파일 삭제 오류:", bFile.name, err);
-        }
-      }
-      console.log("✅ 구글 드라이브 동기화 데이터 삭제 완료");
-    } catch (driveErr) {
-      console.error("구글 드라이브 삭제 중 에러 발생:", driveErr);
+      await deleteAllCloudData();
+    } catch (cloudErr) {
+      console.error("클라우드 데이터 삭제 중 에러 발생:", cloudErr);
     }
   }
+  // 동기화 커서 초기화 → 다음 로그인 시 클라우드 전체를 다시 받아 복구 가능
+  if (typeof clearFirestoreSyncCursors === "function") clearFirestoreSyncCursors();
 
   // 6. IndexedDB 데이터 완전 삭제
   try {

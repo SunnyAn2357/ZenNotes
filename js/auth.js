@@ -1,267 +1,86 @@
-function gapiLoaded() {
-  gapi.load('client', async () => {
-    try {
-      await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
-      gapiInited = true;
-      console.log("✅ 구글 API 준비 완료!");
-      onAuthAPIsReady();
-    } catch (e) {
-      console.error("❌ GAPI 초기화 실패:", e);
-    }
-  });
-}
+// ============================================================================
+// 🔥 [V4.3.0] ZenNotes Firebase 인증 + Firestore 클라우드 동기화 엔진
+// ============================================================================
+// - 기존 GAPI/GIS(구글 드라이브) 엔진은 `V4.2.4_구글인증동기화(최종)` 폴더에 원본 보존
+// - 인증: Firebase Auth (Google 제공업체). 세션이 브라우저에 영구 보존되어 1시간 토큰 만료/무음 재연결 문제가 사라짐
+// - 저장: Firestore  users/{uid}/items/{syncId}
+//         대용량 본문(이미지·PDF 등 0.9MB 초과)은 users/{uid}/items/{syncId}/chunks/{i} 로 분할 저장
+// - 로컬 IndexedDB가 원본(Offline-First)이며, Firestore는 기기 간 동기화 및 클라우드 보관용
+//
+// [함수 지도]
+// 1. initFirebase() / handleAuthStateChanged()   : SDK 초기화 및 로그인 상태 감시
+// 2. checkAuthState() / btn-auth 클릭           : 구름 아이콘 상태 표시, 로그인·로그아웃 (GEMINI.md 7번 정책)
+// 3. smartSync()                                 : 동기화 총괄 (Pull → Push → 툼스톤 30일 청소)
+// 4. fsPull() / fsApplyPulledDocs()              : serverUpdatedAt 커서 기반 델타 다운로드
+// 5. fsPush() / fsPushItem()                     : 변경분 업로드 (분할 저장 포함), 툼스톤 기록
+// 6. triggerBackgroundSync()                     : 타자 멈춤 3초 후 백그라운드 동기화
+// 7. deleteAllCloudData()                        : 초기화 시 내 Firestore 데이터 전체 삭제
+// 8. window.isZenOnline()                        : 공식 온라인 판정 창구 (로그인 + 네트워크)
 
-function gisLoaded() {
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    // 🎯 매번 무작위 암호를 생성하여 위조된 응답(CSRF)을 방어합니다.
-    state: Math.random().toString(36).substring(2),
-    callback: ''
-  });
-  gisInited = true;
-  console.log("✅ 구글 인증 준비 완료!");
-  onAuthAPIsReady();
-}
+let fbApp = null, fbAuth = null, fbStore = null, fbUser = null;
+let isSyncRunning = false, isSyncQueued = false;
 
-// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
-// 🚀 [상시 로그인 유지 시스템] 영속성 저장, 복원, 무음 갱신(Silent Refresh)
-// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+const FS_INLINE_MAX_BYTES = 900000;   // 본문+평문 합계가 이 크기 이하면 메인 문서에 그대로 저장
+const FS_CHUNK_BYTES = 800000;        // 분할 조각 1개 최대 크기 (Firestore 문서 한도 1MiB 대비 안전마진)
+const FS_PAGE_SIZE = 50;              // Pull 시 한 번에 읽는 문서 수
+const FS_TOMBSTONE_TTL = 30 * 24 * 60 * 60 * 1000; // 영구삭제 꼬리표 보존 기간 (30일)
 
-// 🎯 1. 세션 보관 (localStorage 영속화)
-function saveAuthSession(resp, userEmail = null) {
-  if (!resp || !resp.access_token) return;
+// ============================================================================
+// 1. Firebase 초기화 및 로그인 상태 감시
+// ============================================================================
+function initFirebase() {
+  // 🧹 구버전(GAPI) 토큰 잔재 청소 (zen_user_hint / zen_explicit_logout 은 정책상 계속 사용)
+  ["zen_oauth_token", "zen_token_expiry", "zen_auto_login"].forEach((k) => localStorage.removeItem(k));
 
-  const expiresInSec = resp.expires_in ? parseInt(resp.expires_in, 10) : 3540;
-  // 안전마진 60초 확보하여 만료 시각 계산
-  tokenExpiryTime = Date.now() + (expiresInSec * 1000);
-
-  localStorage.setItem("zen_oauth_token", resp.access_token);
-  localStorage.setItem("zen_token_expiry", tokenExpiryTime.toString());
-  localStorage.setItem("zen_auto_login", "true");
-  // 🌟 성공적으로 로그인되었으므로 명시적 로그아웃 상태를 완전히 해제
-  localStorage.removeItem("zen_explicit_logout");
-
-  if (userEmail) {
-    localStorage.setItem("zen_user_hint", userEmail);
-  }
-  console.log("💾 [Google Auth] 세션 영속화 완료: 계정 힌트 =", userEmail || localStorage.getItem("zen_user_hint"), "유효시간 =", expiresInSec, "초");
-
-  scheduleTokenRefresh();
-}
-
-// 🎯 2. 로그아웃 (명시적 로그아웃 vs 세션 만료)
-function clearAuthSession(isExplicit = false) {
-  if (tokenRefreshTimer) {
-    clearTimeout(tokenRefreshTimer);
-    tokenRefreshTimer = null;
-  }
-  tokenExpiryTime = 0;
-
-  if (gapiInited && window.gapi && gapi.client) {
-    const curToken = gapi.client.getToken();
-    if (curToken && curToken.access_token && window.google?.accounts?.oauth2?.revoke) {
-      try {
-        google.accounts.oauth2.revoke(curToken.access_token, () => {});
-      } catch (e) {}
-    }
-    gapi.client.setToken(null);
-  }
-
-  localStorage.removeItem("zen_oauth_token");
-  localStorage.removeItem("zen_token_expiry");
-
-  if (isExplicit) {
-    // 👤 사용자가 직접 로그아웃 버튼을 눌러 연동을 해제한 경우:
-    // 다음 로그인 시 반드시 계정 선택창이 열리도록 명시적 로그아웃 플래그 설정
-    localStorage.setItem("zen_explicit_logout", "true");
-    localStorage.removeItem("zen_auto_login");
-    localStorage.removeItem("zen_user_hint");
-    console.log("🔒 [Google Auth] 사용자가 명시적으로 로그아웃했습니다. (다음 로그인 시 계정 선택창 표출)");
-  } else {
-    // ⚠️ 토큰 만료 등 비의도적 오프라인 전환: 원클릭 무음 재연결을 위해 hint와 auto_login 정보 보존
-    console.log("⚠️ [Google Auth] 세션 만료로 인한 오프라인 전환 (원클릭 무음 재연결 정보 보존)");
-  }
-
-  checkAuthState();
-}
-
-let isRefreshing = false;
-let refreshPromise = null;
-
-// 🎯 3. 백그라운드 무음 갱신 (Silent Refresh - 팝업/알림 없이 조용히 토큰 갱신)
-async function silentRefreshToken() {
-  if (!gisInited || !tokenClient) return false;
-  if (isRefreshing && refreshPromise) return refreshPromise;
-
-  isRefreshing = true;
-  refreshPromise = new Promise((resolve) => {
-    const hint = localStorage.getItem("zen_user_hint") || "";
-    const requestConfig = {
-      prompt: "none", // 🚀 공식 GIS 규격: 팝업 및 사용자 인터랙션 없이 백그라운드 갱신
-    };
-    if (hint) {
-      requestConfig.hint = hint; // 🚀 특정 계정을 지정하여 계정 선택 팝업 방지
-      requestConfig.login_hint = hint;
-    }
-
-    const prevCallback = tokenClient.callback;
-
-    tokenClient.callback = async (resp) => {
-      isRefreshing = false;
-      refreshPromise = null;
-      tokenClient.callback = prevCallback;
-
-      if (resp && !resp.error && resp.access_token) {
-        console.log("🔄 [Google Auth] 백그라운드 무음 토큰 갱신 성공! (상시 로그인 유지)");
-        if (window.gapi && gapi.client) {
-          gapi.client.setToken(resp);
-        }
-
-        let userEmail = localStorage.getItem("zen_user_hint");
-        if (!userEmail) {
-          userEmail = await fetchUserEmail(resp.access_token);
-        }
-        saveAuthSession(resp, userEmail);
-        checkAuthState();
-        resolve(true);
-      } else {
-        console.warn("⚠️ 백그라운드 무음 갱신 미완료:", resp?.error);
-        resolve(false);
-      }
-    };
-
-    try {
-      tokenClient.requestAccessToken(requestConfig);
-    } catch (e) {
-      console.warn("❌ silentRefreshToken 실행 오류:", e);
-      isRefreshing = false;
-      refreshPromise = null;
-      tokenClient.callback = prevCallback;
-      resolve(false);
-    }
-  });
-
-  return refreshPromise;
-}
-
-// 🎯 4. 만료 5분 전 자동 갱신 스케줄러
-function scheduleTokenRefresh() {
-  if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-
-  const now = Date.now();
-  const leadTime = 5 * 60 * 1000; // 만료 5분 전
-  const delay = Math.max(10000, (tokenExpiryTime - now) - leadTime);
-
-  tokenRefreshTimer = setTimeout(async () => {
-    console.log("⏰ 토큰 만료 5분 전 감지: 백그라운드 무음 갱신을 실행합니다...");
-    const ok = await silentRefreshToken();
-    if (!ok) {
-      console.log("ℹ️ 백그라운드 갱신 대기 (동기화 트리거 시 재시도 예정)");
-    }
-  }, delay);
-}
-
-// 🎯 5. 유저 이메일 획득 (무음 갱신 시 hint로 사용하여 팝업 차단)
-async function fetchUserEmail(accessToken) {
-  if (!accessToken) return null;
-
-  // 1차: userinfo API
-  try {
-    const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.email) return data.email;
-    }
-  } catch (e) {
-    // 무시
-  }
-
-  // 2차: Drive REST API about (GAPI 초기화 여부와 무관하게 직접 fetch로 안정적 획득)
-  try {
-    const res = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)", {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.user && data.user.emailAddress) {
-        return data.user.emailAddress;
-      }
-    }
-  } catch (e) {
-    // 무시
-  }
-
-  // 3차: GAPI Drive client fallback
-  try {
-    if (window.gapi && gapi.client && gapi.client.drive) {
-      const about = await gapi.client.drive.about.get({ fields: "user(emailAddress)" });
-      if (about?.result?.user?.emailAddress) {
-        return about.result.user.emailAddress;
-      }
-    }
-  } catch (e) {
-    // 무시
-  }
-
-  return null;
-}
-
-// 🎯 6. 앱 초기화 시 토큰 복원 또는 자동 로그인
-async function onAuthAPIsReady() {
-  if (!gapiInited || !gisInited) return;
-
-  const savedToken = localStorage.getItem("zen_oauth_token");
-  const savedExpiry = parseInt(localStorage.getItem("zen_token_expiry") || "0", 10);
-  const autoLogin = localStorage.getItem("zen_auto_login") === "true";
-  const now = Date.now();
-
-  // Case A: 로컬스토리지에 유효한 토큰이 남아있는 경우 (새로고침/재접속 시 즉시 연결!)
-  if (savedToken && savedExpiry > (now + 60 * 1000)) {
-    console.log("🔑 [Google Auth] 저장된 토큰 복원 완료! 즉시 클라우드 온라인 활성화");
-    gapi.client.setToken({ access_token: savedToken });
-    tokenExpiryTime = savedExpiry;
+  if (typeof firebase === "undefined") {
+    console.warn("⚠️ [Firebase] SDK를 불러오지 못했습니다(오프라인 등). 로컬 모드로 동작합니다.");
     checkAuthState();
-    scheduleTokenRefresh();
-    setTimeout(() => { smartSync(); }, 1500);
     return;
   }
 
-  // Case B: 토큰이 만료되었지만 이전에 로그인했던 이력이 있는 경우 -> 백그라운드 무음 갱신
-  if (autoLogin) {
-    // 📱 모바일 브라우저는 사용자 터치(User Gesture) 없이 백그라운드 팝업/아이프레임 실행 시 '팝업 차단' 경고를 띄웁니다.
-    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
-    if (isMobileDevice) {
-      console.log("📱 [Google Auth] 모바일 환경 감지: 팝업 차단 방지를 위해 자동 갱신을 생략하고 원클릭 재연결 대기 상태로 유지합니다.");
-      checkAuthState();
-    } else {
-      console.log("🔄 [Google Auth] 자동 로그인 감지: 백그라운드 무음 토큰 발급 시도...");
-      const success = await silentRefreshToken();
-      if (success) {
-        setTimeout(() => { smartSync(); }, 1500);
-      } else {
-        checkAuthState();
-      }
-    }
-  } else {
+  try {
+    fbApp = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbStore = firebase.firestore();
+    fbAuth.onAuthStateChanged(handleAuthStateChanged);
+    console.log("✅ [Firebase] 초기화 완료");
+  } catch (e) {
+    console.error("❌ [Firebase] 초기화 실패:", e);
     checkAuthState();
   }
 }
 
+function handleAuthStateChanged(user) {
+  fbUser = user || null;
+
+  if (fbUser) {
+    // 🌟 [정책 ③] 로그인 성공 시 명시적 로그아웃 상태 해제 + 계정 힌트 영구 보존
+    localStorage.removeItem("zen_explicit_logout");
+    if (fbUser.email) localStorage.setItem("zen_user_hint", fbUser.email);
+    console.log("🔑 [Firebase Auth] 로그인 상태:", fbUser.email);
+    checkAuthState();
+    smartSync();
+  } else {
+    console.log("🔒 [Firebase Auth] 로그아웃 상태");
+    checkAuthState();
+  }
+}
+
+// ============================================================================
+// 2. 구름 아이콘 상태 표시 및 로그인/로그아웃
+// ============================================================================
 function checkAuthState() {
-  const hasToken = window.isZenOnline();
+  const isOnline = window.isZenOnline();
   const authBtn = document.getElementById("btn-auth");
   const authBtnIcon = authBtn ? authBtn.querySelector("i") : null;
   const savedHint = localStorage.getItem("zen_user_hint");
   const isExplicitLogout = localStorage.getItem("zen_explicit_logout") === "true";
 
   if (authBtn) {
-    if (hasToken) {
+    if (isOnline) {
       authBtn.classList.add("is-logged-in");
       authBtn.classList.remove("is-logged-out");
-      authBtn.setAttribute("title", savedHint ? `구글 드라이브 연결됨 (${savedHint})` : "구글 드라이브 연결됨 (클릭 시 로그아웃)");
+      authBtn.setAttribute("title", savedHint ? `클라우드 연결됨 (${savedHint})` : "클라우드 연결됨 (클릭 시 로그아웃)");
       if (authBtnIcon) {
         authBtnIcon.className = "fa-solid fa-cloud";
         authBtnIcon.style.color = "var(--accent)";
@@ -269,12 +88,14 @@ function checkAuthState() {
     } else {
       authBtn.classList.remove("is-logged-in");
       authBtn.classList.add("is-logged-out");
-      if (isExplicitLogout) {
-        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 로그인 및 계정 선택)");
+      if (fbUser && !navigator.onLine) {
+        authBtn.setAttribute("title", "오프라인 (인터넷 연결 시 자동 동기화)");
+      } else if (isExplicitLogout) {
+        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 로그인 및 계정 선택)");
       } else if (savedHint) {
-        authBtn.setAttribute("title", `오프라인 (클릭 시 ${savedHint} 계정으로 즉시 연결)`);
+        authBtn.setAttribute("title", `오프라인 (클릭 시 ${savedHint} 계정으로 연결)`);
       } else {
-        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 드라이브 즉시 연결)");
+        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 로그인)");
       }
       if (authBtnIcon) {
         authBtnIcon.className = "fa-solid fa-cloud";
@@ -283,10 +104,10 @@ function checkAuthState() {
     }
   }
 
-  window.ZEN_IS_ONLINE = hasToken;
+  window.ZEN_IS_ONLINE = isOnline;
 
-  if (hasToken) {
-    if (typeof updateUnsyncedCount === 'function') updateUnsyncedCount();
+  if (isOnline) {
+    if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
     else updateUIState("online-idle");
   } else {
     updateUIState("offline-idle");
@@ -297,588 +118,583 @@ window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
 
-// 🎯 구름 버튼 토글 (로그인 상태면 로그아웃 확인 후 해제, 로그아웃 상태면 구글 로그인 연결)
-document.getElementById("btn-auth").addEventListener("click", () => {
-  if (!gapiInited || !gisInited) {
-    if (typeof showToast === 'function') {
-      showToast("구글 서비스 준비 중입니다. 잠시 후 다시 시도해주세요.");
-    } else {
-      alert("구글 서비스 준비 중입니다. 잠시 후 다시 시도해주세요.");
-    }
+// 🎯 구름 버튼 토글 (로그인 상태면 로그아웃 확인, 로그아웃 상태면 구글 로그인)
+document.getElementById("btn-auth").addEventListener("click", async () => {
+  if (!fbAuth) {
+    showToast("클라우드 서비스를 불러오지 못했습니다.\n인터넷 연결 후 새로고침해 주세요.");
     return;
   }
   closeAllPanelsMobile();
 
-  const isOnline = window.isZenOnline();
+  // 1. 로그인 상태 → 명시적 로그아웃 (정책 ①)
+  if (fbUser) {
+    const confirmLogout = confirm("클라우드 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.");
+    if (!confirmLogout) return;
 
-  // 1. 오직 실제로 온라인(정상 로그인) 상태일 때만 클릭 시 로그아웃 확인창 표시
-  if (isOnline) {
-    const confirmLogout = confirm("구글 드라이브 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.");
-    if (confirmLogout) {
-      clearAuthSession(true); // 명시적 로그아웃!
-      if (typeof showToast === 'function') {
-        showToast("구글 드라이브 연동이 해제되었습니다.");
-      }
+    localStorage.setItem("zen_explicit_logout", "true");
+    localStorage.removeItem("zen_user_hint");
+    try {
+      await fbAuth.signOut();
+      showToast("클라우드 연동이 해제되었습니다.");
+    } catch (e) {
+      console.error("❌ 로그아웃 실패:", e);
     }
     return;
   }
 
-  // 2. 오프라인 또는 세션 만료 상태일 때: 클릭 시 로그인 진행
+  if (!navigator.onLine) {
+    showToast("인터넷에 연결되어 있지 않습니다.");
+    return;
+  }
+
+  // 2. 로그아웃 상태 → 로그인 (정책 ① vs ②)
+  // ⚠️ 팝업 차단 방지: 사용자 클릭 직후 await 없이 바로 signInWithPopup 호출
   const isExplicitLogout = localStorage.getItem("zen_explicit_logout") === "true";
   const savedHint = localStorage.getItem("zen_user_hint");
+  const provider = new firebase.auth.GoogleAuthProvider();
 
-  tokenClient.callback = async (resp) => {
-    if (resp.error !== undefined) {
-      console.warn(">>> 동기화 취소 또는 에러", resp.error);
-      return;
-    }
+  if (isExplicitLogout || !savedHint) {
+    // ① 명시적 로그아웃 후 또는 최초 로그인 → 계정 선택창 표출
+    provider.setCustomParameters({ prompt: "select_account" });
+  } else {
+    // ② 로그아웃한 적 없이 세션만 끊긴 경우 → 계정 선택창 없이 기존 계정으로 연결
+    provider.setCustomParameters({ login_hint: savedHint });
+  }
 
-    if (window.gapi && gapi.client) {
-      gapi.client.setToken(resp);
-    }
-
-    let userEmail = localStorage.getItem("zen_user_hint");
-    if (!userEmail) {
-      userEmail = await fetchUserEmail(resp.access_token);
-    }
-    saveAuthSession(resp, userEmail);
-
-    checkAuthState();
-
-    if (typeof showToast === 'function') {
-      showToast("구글 드라이브에 성공적으로 연결되었습니다!");
-    }
-
-    // 아이콘 깜빡임 효과
+  try {
+    await fbAuth.signInWithPopup(provider);
+    showToast("클라우드에 성공적으로 연결되었습니다!");
     const icon = document.querySelector("#btn-auth i");
     if (icon) {
       icon.classList.add("blink-active");
       setTimeout(() => icon.classList.remove("blink-active"), 1500);
     }
-
-    await checkAndMigrateV3();
-  };
-
-  // 🎯 [구글 로그인 정책] 명시적 로그아웃 vs 비의도적 세션 만료 엄격 분기
-  if (isExplicitLogout) {
-    // ① 사용자가 직접 로그아웃 버튼을 누른 경우 -> 계정 선택창 표출
-    console.log("👤 [Google Auth] 명시적 로그아웃 상태: 계정 선택창 표출");
-    tokenClient.requestAccessToken({ prompt: "select_account" });
-  } else {
-    // ② 사용자가 로그아웃한 적 없이 토큰 만료/브라우저 재오픈된 경우 -> 계정 선택창 없이 원클릭 무음 재연결
-    console.log("⚡ [Google Auth] 세션 만료에 따른 재연결: 계정 선택창 없이 원클릭 무음 재연결 (힌트:", savedHint || "없음", ")");
-    const requestConfig = { prompt: "" };
-    if (savedHint) {
-      requestConfig.hint = savedHint;
-      requestConfig.login_hint = savedHint;
+  } catch (e) {
+    const code = e && e.code ? e.code : "";
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
+    if (code === "auth/popup-blocked") {
+      showToast("팝업이 차단되었습니다.\n브라우저에서 팝업을 허용해 주세요.");
+    } else if (code === "auth/unauthorized-domain") {
+      showToast("승인되지 않은 도메인입니다.\nFirebase 콘솔의 승인된 도메인을 확인해 주세요.");
+    } else if (code === "auth/network-request-failed") {
+      showToast("네트워크 오류로 로그인하지 못했습니다.");
+    } else {
+      showToast("로그인에 실패했습니다.");
     }
-    tokenClient.requestAccessToken(requestConfig);
+    console.error("❌ [Firebase Auth] 로그인 실패:", e);
   }
 });
 
-// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
-// 🚀 [ZenNotes V3] CLOUD SYNC ENGINE (구글 드라이브 증분 동기화 코어)
-// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
-
-// 1. smartSync()                     : V3 동기화 메인 총괄 매니저 (비교, 다운, 업로드)
-// 2. v3_uploadFile(...)              : 구글 API 파일 전송 헬퍼
-// 3. ensureValidToken()              : 59분 토큰 만료 검문소 (오프라인 전환)
-// 4. triggerBackgroundSync()         : 타자 멈춤 3초 감지 및 백그라운드 동기화 트리거
-// 5. checkAndMigrateV3()             : 구형 V2 유저 확인 및 마이그레이션 안내
+// 🌐 네트워크 복구/단절 및 화면 복귀 시 상태 갱신·동기화
+window.addEventListener("online", () => {
+  checkAuthState();
+  triggerBackgroundSync();
+});
+window.addEventListener("offline", () => {
+  checkAuthState();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && window.isZenOnline()) triggerBackgroundSync();
+});
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 1. V3 동기화 메인 총괄 매니저 (비교, 다운, 업로드, 삭제)
+// 3. 동기화 총괄 매니저 (Pull → Push → 툼스톤 청소)
 // ============================================================================
-
 async function smartSync() {
-  const isValid = await ensureValidToken();
-  if (!isValid) return;
-  if (!db) return;
+  if (!window.isZenOnline()) {
+    checkAuthState();
+    return;
+  }
+  if (isSyncRunning) {
+    isSyncQueued = true; // 진행 중이면 끝난 뒤 한 번 더 실행
+    return;
+  }
 
-  updateUIState("syncing");
-  console.log(">>> [V3 엔진] 클라우드 동기화 시작...");
-
+  isSyncRunning = true;
   try {
-    const token = gapi.client.getToken().access_token;
+    if (!(await waitForAppReady())) return;
 
-    // 1. V3 폴더 확보
-    const folderRes = await gapi.client.drive.files.list({
-      q: "name = 'ZenNotes_Sync_Data' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-      fields: "files(id)"
-    });
+    const uid = fbUser.uid;
+    const syncStart = Date.now();
+    updateUIState("syncing");
+    console.log(">>> [Firestore] 클라우드 동기화 시작...");
 
-    let folderId;
-    if (!folderRes.result.files || folderRes.result.files.length === 0) {
-      console.log("🌱 V3 폴더가 존재하지 않아 새로 생성합니다.");
-      const metadata = { name: 'ZenNotes_Sync_Data', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] };
-      const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(metadata)
-      });
-      const createdFolder = await createRes.json();
-      folderId = createdFolder.id;
-    } else {
-      folderId = folderRes.result.files[0].id;
+    // 1) 클라우드 → 기기 (먼저 받아야 다른 기기의 영구삭제 꼬리표로 좀비 업로드를 막을 수 있음)
+    const pulledChanged = await fsPull();
+
+    // 2) 기기 → 클라우드
+    const pushResult = await fsPush(syncStart);
+
+    // 3) 30일 지난 영구삭제 꼬리표 청소 (하루 1회)
+    await fsPurgeOldTombstones();
+
+    if (pushResult.failed > 0) {
+      throw new Error(`업로드 실패 ${pushResult.failed}건 (다음 동기화 때 재시도)`);
     }
 
-    // 2. 구글 드라이브 파일 전체 스캔 및 중복 파일 청소 (지도 생성)
-    const allFilesRes = await gapi.client.drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: "files(id, name, modifiedTime)",
-      pageSize: 1000
-    });
-
-    const driveFiles = allFilesRes.result.files || [];
-    const cloudFileMap = new Map();
-
-    // 🚀 [핵심 1] 최신 파일이 배열 앞에 오도록 정렬하여 중복 방어
-    driveFiles.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime));
-
-    for (const f of driveFiles) {
-      if (!cloudFileMap.has(f.name)) {
-        // 처음 본 이름(최신 파일)만 지도에 등록
-        cloudFileMap.set(f.name, f.id);
-      } else {
-        // 이미 지도에 이름이 있다면 구글의 랙으로 생긴 과거의 쓰레기(중복) 파일!
-        console.log(`🗑️ 중복 쓰레기 파일 발견 및 구글 서버에서 삭제: ${f.name}`);
-        try {
-          await gapi.client.drive.files.delete({ fileId: f.id });
-        } catch (e) {
-          console.warn("중복 파일 삭제 실패:", e);
-        }
-      }
+    if (fbUser && fbUser.uid === uid) {
+      localStorage.setItem("zen_last_sync_time", String(syncStart));
     }
-
-    // 3. index.json(명부) 다운로드
-    let cloudIndex = [];
-    const indexFileId = cloudFileMap.get('index.json');
-    if (indexFileId) {
-      const indexFile = await gapi.client.drive.files.get({ fileId: indexFileId, alt: "media" });
-      cloudIndex = typeof indexFile.result === 'string' ? JSON.parse(indexFile.result) : indexFile.result;
-    }
-
-    // 4. 로컬 DB 읽기 및 싱크 ID 보정
-    const localData = await new Promise((resolve) => {
-      db.transaction(["memos"], "readonly").objectStore("memos").getAll().onsuccess = (e) => resolve(e.target.result);
-    });
-
-    const localMap = new Map();
-    const itemsToPatch = [];
-    localData.forEach(m => {
-      if (!m.syncId) {
-        m.syncId = generateSyncId(); // 🚀 무조건 고유 난수 발급으로 변경!
-        itemsToPatch.push(m);
-      }
-      localMap.set(m.syncId, m);
-    });
-
-    if (itemsToPatch.length > 0) {
-      const patchTx = db.transaction(["memos"], "readwrite");
-      itemsToPatch.forEach(m => patchTx.objectStore("memos").put(m));
-    }
-
-    // 5. 비교 분석 (다운로드/업로드/삭제 분류)
-    const toDownload = [];
-    const toUpload = [];
-    const toCloudDelete = [];
-    let needIndexPatch = false; // 명부 강제 덮어쓰기 깃발
-    let needUIUpdate = false;   // 화면 새로고침 깃발을 친구들 옆으로 모아둠!
-    const toLocalDelete = [];   // 사망진단서를 보고 내 기기에서 치울 명단
-
-    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    const originalLength = cloudIndex.length;
-
-    // [30일 청소기] 명부를 훑으면서 30일 지난 진단서는 파쇄(제외)합니다.
-    cloudIndex = cloudIndex.filter(cMeta => {
-      if (cMeta.isPermanentlyDeleted && (now - cMeta.updatedAt > THIRTY_DAYS)) {
-        return false; // 30일 지났으면 파쇄! (배열에서 제거됨)
-      }
-      return true;
-    });
-
-    if (cloudIndex.length !== originalLength) needIndexPatch = true; // 청소했으면 덮어쓰기 예약
-
-    // [클라우드 -> 로컬] 구글이 더 최신인 경우
-    for (const cMeta of cloudIndex) {
-      if (!cMeta.syncId) continue;
-      const lMemo = localMap.get(cMeta.syncId);
-
-      // 🚀 [신규: 시체 치우기] 구글 명부에 사망진단서가 붙어있다면?
-      if (cMeta.isPermanentlyDeleted) {
-        if (lMemo) {
-          toLocalDelete.push(lMemo.id); // 내 기기의 시체를 사형 큐에 넣음 (사망진단서가 있으면 무조건 사형 집행!)
-        }
-        continue; // 진단서는 다운로드(toDownload) 안 함!
-      }
-
-      if (!lMemo || cMeta.updatedAt > lMemo.updatedAt) toDownload.push(cMeta);
-    }
-
-    // [로컬 -> 클라우드] 기기가 더 최신인 경우
-    for (const lMemo of localData) {
-      const cMeta = cloudIndex.find(c => c.syncId === lMemo.syncId);
-
-      if (lMemo.isPermanentlyDeleted) {
-        toCloudDelete.push(lMemo);
-        continue;
-      }
-
-      // 🚀 [핵심 방어막] 파일은 안 바뀌었지만 구글 명부에 족보(parentSyncId)가 빠져있다면?
-      if (cMeta && cMeta.parentSyncId === undefined && lMemo.parentId !== null) {
-        // 🚀 [수정됨] String()으로 감싸서 타입 불일치 에러 완벽 차단!
-        const pNode = localData.find(d => String(d.id) === String(lMemo.parentId));
-        if (pNode) {
-          cMeta.parentSyncId = pNode.syncId; // 명부에 몰래 족보를 적어줍니다.
-          needIndexPatch = true; // 명부 강제 덮어쓰기 예약!
-        }
-      }
-
-      if (!cMeta || lMemo.updatedAt > cMeta.updatedAt) {
-        if ((lMemo.type === 'folder' || lMemo.isDeleted) && cMeta) {
-          const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-
-          let pSyncId = null;
-          if (lMemo.parentId !== null) {
-            // 🚀 [수정됨] 여기도 String() 방어막 적용!
-            const pNode = localData.find(d => String(d.id) === String(lMemo.parentId));
-            if (pNode) pSyncId = pNode.syncId;
-          }
-
-          const meta = { ...lMemo, parentSyncId: pSyncId };
-          delete meta.content; delete meta.plainText;
-          if (cIdx > -1) cloudIndex[cIdx] = meta;
-          needIndexPatch = true; // 🚀 [추가]
-          continue;
-        }
-        toUpload.push(lMemo);
-      }
-    }
-
-    // 🚀 [신규: 시체 치우기 실행] 진단서 확인 후 로컬 기기 물리적 폭파!
-    if (toLocalDelete.length > 0) {
-      const delTx = db.transaction(["memos"], "readwrite");
-      toLocalDelete.forEach(id => delTx.objectStore("memos").delete(id));
-      needUIUpdate = true;
-    }
-
-    // 6. 다운로드 실행
-    if (toDownload.length > 0) {
-      console.log(`⬇️ 클라우드 -> 기기: ${toDownload.length}개 다운로드 중...`);
-      const downloadedMemos = [];
-      for (const cMeta of toDownload) {
-        // 🚀 cMeta.isDeleted 제거! 휴지통에 있어도 본문은 무조건 다운받습니다!
-        if (cMeta.type === 'folder' || cMeta.isPermanentlyDeleted) {
-          downloadedMemos.push({ ...cMeta });
-        } else {
-          const bodyFileId = cloudFileMap.get(`memo_${cMeta.syncId}.json`);
-          if (bodyFileId) {
-            try {
-              const bodyFile = await gapi.client.drive.files.get({ fileId: bodyFileId, alt: "media" });
-              const bodyData = typeof bodyFile.result === 'string' ? JSON.parse(bodyFile.result) : bodyFile.result;
-              // 🚀 껍데기만 덮어쓰는 걸 막기 위해 fallback(|| "") 안전장치 추가
-              downloadedMemos.push({ ...cMeta, content: bodyData.content || "", plainText: bodyData.plainText || "" });
-            } catch (err) {
-              console.warn("본문 다운로드 실패. 빈 껍데기 덮어쓰기 방어!", err);
-              continue; // 에러 시 건너뜀
-            }
-          }
-        }
-      }
-
-      await new Promise((resolve) => {
-        const tx = db.transaction(["memos"], "readwrite");
-        const store = tx.objectStore("memos");
-        downloadedMemos.forEach(m => {
-          const existing = localMap.get(m.syncId);
-          if (existing) m.id = existing.id; else delete m.id;
-          store.put(m);
-        });
-        tx.oncomplete = () => resolve();
-      });
-      needUIUpdate = true;
-    }
-
-    // 🚀 [핵심 4] 클라우드 영구 삭제 실행 (DELETE)
-    const locallyDeletedIds = [];
-    if (toCloudDelete.length > 0) {
-      for (const lMemo of toCloudDelete) {
-        const fileName = `memo_${lMemo.syncId}.json`;
-        const cloudId = cloudFileMap.get(fileName);
-
-        try {
-          // 1. 구글 서버에 물리적 삭제 요청
-          if (cloudId) {
-            await gapi.client.drive.files.delete({ fileId: cloudId });
-          }
-
-          // 🚀 [수정됨] 명부에서 파내지 않고 사망진단서를 덮어씁니다.
-          const idx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-          const tombstone = {
-            syncId: lMemo.syncId,
-            isPermanentlyDeleted: true, // 사망 판정
-            updatedAt: Date.now()
-          };
-
-          if (idx > -1) cloudIndex[idx] = tombstone;
-          else cloudIndex.push(tombstone);
-
-          needIndexPatch = true; // 명부 덮어쓰기 예약!
-          locallyDeletedIds.push(lMemo.id); // 🎯 [V3.4.4] 클라우드 명부 업로드 성공 후 지우도록 예약
-
-        } catch (e) {
-          console.warn("클라우드 삭제 실패 (로컬 파일은 보존됩니다):", e);
-        }
-      }
-    }
-
-    // 7. 업로드 실행 (글로벌 족보 시스템 적용 버전)
-
-    if (toUpload.length > 0) {
-      console.log(`⬆️ 기기 -> 클라우드: ${toUpload.length}개 업로드 중...`);
-      for (const lMemo of toUpload) {
-
-        // 🚀 [신규] 내 부모의 '글로벌 주민번호(syncId)'를 찾아내는 통역 과정
-        let pSyncId = null;
-        if (lMemo.parentId !== null) {
-          // 🎯 [V3.4.4 교정] String() 방어막으로 타입 불일치 에러 완벽 차단!
-          const pNode = localData.find(d => String(d.id) === String(lMemo.parentId));
-          if (pNode) pSyncId = pNode.syncId;
-        }
-
-        if (lMemo.type !== 'folder') {
-          const fileName = `memo_${lMemo.syncId}.json`;
-
-          // 🚀 본문 파일 내용물에 parentSyncId를 추가하여 업로드
-          const fileContent = JSON.stringify({
-            syncId: lMemo.syncId,
-            parentSyncId: pSyncId,
-            content: lMemo.content || "",
-            plainText: lMemo.plainText || ""
-          });
-
-          const existingId = cloudFileMap.get(fileName);
-          await v3_uploadFile(token, fileName, fileContent, folderId, existingId);
-        }
-
-        // 명부(index.json) 업데이트 준비
-        const cIdx = cloudIndex.findIndex(c => c.syncId === lMemo.syncId);
-
-        // 🚀 명부 데이터에도 parentSyncId를 포함시켜서 나중에 검색/복원을 돕습니다.
-        const meta = { ...lMemo, parentSyncId: pSyncId };
-        delete meta.content;
-        delete meta.plainText;
-
-        if (cIdx > -1) cloudIndex[cIdx] = meta;
-        else cloudIndex.push(meta);
-      }
-    }
-
-    // 변경사항이 있었다면 최종 명부(index.json)도 PATCH로 덮어쓰기
-    // 🚀 [교정] needIndexPatch 깃발이 올라갔을 때도 덮어쓰도록 추가!
-    if (toUpload.length > 0 || toCloudDelete.length > 0 || needIndexPatch) {
-      await v3_uploadFile(token, 'index.json', JSON.stringify(cloudIndex), folderId, indexFileId);
-
-      // 🎯 [V3.4.4 핵심 교정] 클라우드 명부 업로드가 100% 성공한 뒤에만 로컬 DB에서 최종 영구 삭제 (좀비 부활 원천 차단!)
-      if (locallyDeletedIds.length > 0) {
-        const delTx = db.transaction(["memos"], "readwrite");
-        locallyDeletedIds.forEach(id => delTx.objectStore("memos").delete(id));
-      }
-    }
-
-    // 8. 마무리
-    console.log("✅ [V3 엔진] 증분 동기화 완벽 종료!");
-    localStorage.setItem("zen_last_sync_time", Date.now());
+    console.log("✅ [Firestore] 동기화 완료!");
     updateUnsyncedCount();
     updateUIState("synced");
 
-    if (needUIUpdate) {
-      const checkTx = db.transaction(["memos"], "readonly");
-      checkTx.objectStore("memos").get(currentMemoId || -1).onsuccess = (ev) => {
-        const currentOpen = ev.target.result;
-        if (!currentOpen || currentOpen.isDeleted || currentOpen.isPermanentlyDeleted) {
-          console.log("🚨 현재 편집 중인 노트가 다른 기기에서 삭제되었습니다. 화면을 초기화합니다.");
-          if (typeof openTopDesktopMemo === 'function') openTopDesktopMemo();
-        }
-        healDatabase(() => {
-          loadMemoList();
-          if (document.getElementById("file-manager-pane").style.display === "flex") {
-            loadFileManager(currentFmFolderId);
-          }
-        });
-      };
-    }
-
+    if (pulledChanged || pushResult.localChanged) refreshAfterSync();
   } catch (err) {
-    console.error("❌ V3 동기화 실패:", err);
+    console.error("❌ [Firestore] 동기화 실패:", err);
     updateUIState("sync-error");
-  }
-}
-
-// ============================================================================
-// 🚀 [ZenNotes V3] 2. 구글 API 파일 전송 헬퍼
-// ============================================================================
-async function v3_uploadFile(token, fileName, fileContent, folderId, existingFileId = null) {
-  let fileId = existingFileId;
-
-  if (!fileId) {
-    const res = await gapi.client.drive.files.list({
-      q: `name = '${fileName}' and '${folderId}' in parents and trashed = false`,
-      fields: "files(id)"
-    });
-    if (res.result.files && res.result.files.length > 0) fileId = res.result.files[0].id;
-  }
-
-  if (fileId) {
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-      method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: fileContent
-    });
-  } else {
-    const metadata = { name: fileName, mimeType: 'application/json', parents: [folderId] };
-    const boundary = '-------314159265358979323846';
-    const delimiter = `\r\n--${boundary}\r\n`;
-    const close_delim = `\r\n--${boundary}--`;
-    const body = delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + delimiter + 'Content-Type: application/json\r\n\r\n' + fileContent + close_delim;
-
-    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
-      body: body
-    });
-  }
-}
-
-// ============================================================================
-// 🚀 [ZenNotes V3] 3. 토큰 유효성 검문소 (만료 임박 시 무음 자동 연장)
-// ============================================================================
-async function ensureValidToken() {
-  if (!gisInited || !tokenClient) return false;
-
-  const currentTime = Date.now();
-
-  // 토큰이 없거나 수명이 2분 미만으로 남았다면?
-  if (gapi.client.getToken() === null || (tokenExpiryTime - currentTime) < 2 * 60 * 1000) {
-    // 🌟 자동 로그인이 활성화되어 있다면 백그라운드 무음 갱신을 먼저 시도합니다!
-    if (localStorage.getItem("zen_auto_login") === "true") {
-      console.log("🔄 [동기화 검문소] 토큰 만료 임박 감지: 무음 갱신을 시도합니다...");
-      const refreshed = await silentRefreshToken();
-      if (refreshed) {
-        return true; // 성공 시 동기화 계속 진행!
-      }
+  } finally {
+    isSyncRunning = false;
+    if (isSyncQueued) {
+      isSyncQueued = false;
+      setTimeout(smartSync, 500);
     }
-
-    // 무음 갱신마저 실패(오프라인 등)한 경우에만 조용히 일시 정지 (글쓰기 방해 팝업 차단)
-    console.log("⚠️ 토큰 만료 및 무음 갱신 실패: 글쓰기 방해를 막기 위해 조용히 로컬 모드를 유지합니다.");
-    checkAuthState();
-    return false;
   }
+}
 
-  // 아직 유효하므로 동기화 통과!
+// 앱(IndexedDB + 4대장 폴더) 준비가 끝날 때까지 대기
+async function waitForAppReady(maxMs = 15000) {
+  const t0 = Date.now();
+  while (!db || globalDesktopFolderId === null) {
+    if (Date.now() - t0 > maxMs) return false;
+    await new Promise((r) => setTimeout(r, 300));
+  }
   return true;
 }
 
-// ============================================================================
-// 🚀 [ZenNotes V3] 4. 타자 멈춤 3초 감지 및 백그라운드 동기화 트리거
-// ============================================================================
-function triggerBackgroundSync() {
-  // 이미 타이머가 돌고 있다면 취소 (타자를 계속 치고 있다는 뜻)
-  if (backgroundSyncTimer) clearTimeout(backgroundSyncTimer);
-
-  // 3초 뒤에 조용히 실행하도록 알람 설정
-  backgroundSyncTimer = setTimeout(async () => {
-    // 구글에 로그인되어 있고, 토큰(50분)이 살아있을 때만 조용히 실행
-    if (gapiInited && gapi.client && gapi.client.getToken() !== null) {
-      const isValid = await ensureValidToken();
-      if (isValid) {
-        console.log("🤫 [V3] 유저 타자 멈춤(3초) 감지: 조용히 동기화를 시작합니다...");
-        smartSync();
-      }
+// 동기화로 로컬이 바뀌었을 때 화면 갱신
+function refreshAfterSync() {
+  const checkTx = db.transaction(["memos"], "readonly");
+  checkTx.objectStore("memos").get(currentMemoId || -1).onsuccess = (ev) => {
+    const currentOpen = ev.target.result;
+    if (currentMemoId && (!currentOpen || currentOpen.isDeleted || currentOpen.isPermanentlyDeleted)) {
+      console.log("🚨 현재 편집 중인 노트가 다른 기기에서 삭제되었습니다. 화면을 초기화합니다.");
+      if (typeof openTopDesktopMemo === "function") openTopDesktopMemo();
     }
-  }, 3000); // 👈 3초 (원하시면 5000으로 바꿔서 5초로 설정하셔도 됩니다)
+    healDatabase(() => {
+      loadMemoList();
+      if (document.getElementById("file-manager-pane").style.display === "flex") {
+        loadFileManager(currentFmFolderId);
+      }
+    });
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Firestore / IndexedDB 헬퍼
+// ---------------------------------------------------------------------------
+function fsItemsCol() {
+  return fbStore.collection("users").doc(fbUser.uid).collection("items");
+}
+
+function fsKey(name) {
+  return `zen_fs_${name}_${fbUser.uid}`;
+}
+
+function idbGetAll() {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(["memos"], "readonly").objectStore("memos").getAll();
+    req.onsuccess = (e) => resolve(e.target.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbPutMany(records) {
+  return new Promise((resolve, reject) => {
+    if (!records.length) return resolve();
+    const tx = db.transaction(["memos"], "readwrite");
+    const store = tx.objectStore("memos");
+    records.forEach((r) => store.put(r));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function idbDeleteMany(ids) {
+  return new Promise((resolve, reject) => {
+    if (!ids.length) return resolve();
+    const tx = db.transaction(["memos"], "readwrite");
+    const store = tx.objectStore("memos");
+    ids.forEach((id) => store.delete(id));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// UTF-8 바이트 길이 계산 (Firestore 크기 한도는 UTF-8 기준)
+function utf8Len(str) {
+  let n = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+
+// 문자열을 UTF-8 기준 maxBytes 이하 조각으로 분할 (서로게이트 쌍은 쪼개지 않음)
+function splitByBytes(str, maxBytes) {
+  const out = [];
+  let start = 0, bytes = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    let w, step = 1;
+    if (c < 0x80) w = 1;
+    else if (c < 0x800) w = 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) { w = 4; step = 2; }
+    else w = 3;
+
+    if (bytes + w > maxBytes) {
+      out.push(str.slice(start, i));
+      start = i;
+      bytes = 0;
+    }
+    bytes += w;
+    i += step - 1;
+  }
+  out.push(str.slice(start));
+  return out;
 }
 
 // ============================================================================
-// 🚀 [ZenNotes V3] 5. 구형 V2 유저 확인 및 마이그레이션 안내
+// 4. Pull: 클라우드 → 기기 (serverUpdatedAt 커서 기반 델타)
 // ============================================================================
-async function checkAndMigrateV3() {
-  if (!gapi.client || !gapi.client.getToken()) return;
+// 기기마다 시계가 다를 수 있으므로 "무엇이 새로 올라왔는가"는 서버 시각(serverUpdatedAt)으로 판단하고,
+// "누가 더 최신인가"는 기존과 동일하게 updatedAt(최종 수정 시각)으로 판단합니다.
+async function fsPull() {
+  const cursorKey = fsKey("pull");
+  const cursor = parseInt(localStorage.getItem(cursorKey) || "0", 10);
+  let changed = false;
+  let maxOk = cursor;
+  let minFailed = Infinity;
+  let lastDoc = null;
 
-  try {
-    // 1. 새 V3 폴더가 이미 있는지 확인
-    const folderRes = await gapi.client.drive.files.list({
-      q: "name = 'ZenNotes_Sync_Data' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-      fields: "files(id)"
-    });
+  while (true) {
+    let q = fsItemsCol()
+      .where("serverUpdatedAt", ">", firebase.firestore.Timestamp.fromMillis(cursor))
+      .orderBy("serverUpdatedAt")
+      .limit(FS_PAGE_SIZE);
+    if (lastDoc) q = q.startAfter(lastDoc);
 
-    if (folderRes.result.files && folderRes.result.files.length > 0) {
-      console.log("✅ V3 유저 확인: 일반 스마트 동기화를 진행합니다.");
-      smartSync();
-      return;
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    const r = await fsApplyPulledDocs(snap.docs);
+    if (r.changed) changed = true;
+    maxOk = Math.max(maxOk, r.maxOk);
+    minFailed = Math.min(minFailed, r.minFailed);
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < FS_PAGE_SIZE) break;
+  }
+
+  // 다운로드에 실패한 문서가 있으면 그 직전까지만 커서를 전진시켜 다음 번에 재시도
+  let newCursor = maxOk;
+  if (minFailed !== Infinity) newCursor = Math.min(newCursor, minFailed - 1);
+  if (newCursor > cursor) localStorage.setItem(cursorKey, String(newCursor));
+
+  if (changed) console.log("⬇️ [Firestore] 클라우드 변경분을 기기에 반영했습니다.");
+  return changed;
+}
+
+async function fsApplyPulledDocs(docs) {
+  const localAll = await idbGetAll();
+  const bySync = new Map();
+  localAll.forEach((m) => { if (m.syncId) bySync.set(m.syncId, m); });
+
+  const toPut = [];
+  const toDelete = [];
+  let maxOk = 0;
+  let minFailed = Infinity;
+
+  for (const d of docs) {
+    const c = d.data();
+    const ts = c.serverUpdatedAt && c.serverUpdatedAt.toMillis ? c.serverUpdatedAt.toMillis() : 0;
+    const syncId = c.syncId || d.id;
+    const local = bySync.get(syncId);
+
+    // 🪦 영구삭제 꼬리표 → 내 기기에서도 물리 삭제
+    if (c.isPermanentlyDeleted) {
+      if (local) toDelete.push(local.id);
+      maxOk = Math.max(maxOk, ts);
+      continue;
     }
 
-    // 2. 옛날 백업 파일(V2)이 있는지 확인
-    const oldFileRes = await gapi.client.drive.files.list({
-      q: "name = 'ZenNotes_Backup.json' and trashed = false",
-      fields: "files(id)"
-    });
+    // 내 기기 쪽이 같거나 더 최신이면 건너뜀 (내가 올린 것의 메아리 포함)
+    if (local && !(Number(c.updatedAt || 0) > Number(local.updatedAt || 0))) {
+      maxOk = Math.max(maxOk, ts);
+      continue;
+    }
 
-    // 3. 옛날 파일이 발견되었다면! migration.js의 튼튼한 함수 호출!
-    if (oldFileRes.result.files && oldFileRes.result.files.length > 0) {
-      const confirmMigration = confirm("새로운 동기화 방식(V3)으로 데이터 업그레이드가 필요합니다.\n지금 바로 진행할까요? (약 10~30초 소요)");
+    const rec = { ...c };
+    delete rec.serverUpdatedAt;
+    delete rec.chunkCount;
+    delete rec.rev;
+    delete rec.content;
+    delete rec.plainText;
+    rec.syncId = syncId;
 
-      if (confirmMigration) {
-        // 🚀 기획자님이 갖고 계신 그 튼튼한 migration.js의 함수를 그대로 호출!
-        if (typeof runV3MigrationTest === 'function') {
-          // 옛날 파일 ID를 넘겨주어, 이사가 끝나면 이름을 바꾸게 합니다.
-          await runV3MigrationTest(oldFileRes.result.files[0].id);
-        } else {
-          alert("migration.js 파일이 연결되지 않았습니다. index.html을 확인해주세요.");
-        }
+    if (c.type !== "folder") {
+      try {
+        const body = await fsReadBody(d.ref, c);
+        rec.content = body.content;
+        rec.plainText = body.plainText;
+      } catch (err) {
+        // 다른 기기가 분할 업로드 중이거나 조각 일부 누락 → 빈 껍데기 덮어쓰기 방지, 다음 번 재시도
+        console.warn(`⚠️ 본문 다운로드 보류 (${syncId}):`, err.message);
+        minFailed = Math.min(minFailed, ts);
+        continue;
       }
-    } else {
-      console.log("🌱 신규 유저: V3 환경을 구성합니다.");
-      smartSync();
     }
-  } catch (err) {
-    console.error("❌ 이사 체크 중 오류:", err);
-    smartSync();
+
+    // 로컬 PK 및 부모 폴더 연결 (parentSyncId → 내 기기의 로컬 id)
+    if (local) rec.id = local.id; else delete rec.id;
+    if (rec.parentSyncId === null || rec.parentSyncId === undefined) {
+      rec.parentId = null;
+    } else {
+      const p = bySync.get(rec.parentSyncId);
+      rec.parentId = p ? p.id : -1; // 부모가 아직 없으면 2차 연결 대상
+    }
+
+    toPut.push(rec);
+    maxOk = Math.max(maxOk, ts);
+  }
+
+  await idbPutMany(toPut);
+  await idbDeleteMany(toDelete);
+
+  // 2차 연결: 같은 묶음에서 새로 생긴 부모 폴더에 자식 연결 (못 찾으면 healDatabase가 바탕 화면으로 착륙)
+  const orphans = toPut.filter((r) => r.parentId === -1);
+  if (orphans.length) {
+    const all = await idbGetAll();
+    const map = new Map();
+    all.forEach((m) => { if (m.syncId) map.set(m.syncId, m); });
+    const fixes = [];
+    orphans.forEach((r) => {
+      const self = map.get(r.syncId);
+      const p = map.get(r.parentSyncId);
+      if (self && p) {
+        self.parentId = p.id;
+        fixes.push(self);
+      }
+    });
+    await idbPutMany(fixes);
+  }
+
+  return { changed: toPut.length > 0 || toDelete.length > 0, maxOk, minFailed };
+}
+
+// 본문 읽기 (분할 저장된 경우 조각을 모아 복원)
+async function fsReadBody(ref, c) {
+  if (!c.chunkCount) {
+    return { content: c.content || "", plainText: c.plainText || "" };
+  }
+  const snap = await ref.collection("chunks").get();
+  const parts = [];
+  snap.forEach((ch) => {
+    const x = ch.data();
+    if (x.rev === c.rev && typeof x.i === "number") parts[x.i] = x.data;
+  });
+  for (let i = 0; i < c.chunkCount; i++) {
+    if (typeof parts[i] !== "string") throw new Error(`분할 조각 ${i + 1}/${c.chunkCount} 누락`);
+  }
+  const body = JSON.parse(parts.join(""));
+  return { content: body.content || "", plainText: body.plainText || "" };
+}
+
+// ============================================================================
+// 5. Push: 기기 → 클라우드
+// ============================================================================
+async function fsPush(syncStart) {
+  const pushKey = fsKey("push");
+  const pushCursor = parseInt(localStorage.getItem(pushKey) || "0", 10); // 0이면 최초 → 전체 업로드
+  const localAll = await idbGetAll();
+
+  // syncId 없는 레코드 보정
+  const patched = localAll.filter((m) => !m.syncId);
+  patched.forEach((m) => { m.syncId = generateSyncId(); });
+  await idbPutMany(patched);
+  const patchedSet = new Set(patched.map((m) => m.id));
+
+  const byId = new Map(localAll.map((m) => [String(m.id), m]));
+  const targets = localAll.filter(
+    (m) => m.isPermanentlyDeleted || patchedSet.has(m.id) || Number(m.updatedAt || 0) > pushCursor
+  );
+
+  if (targets.length) console.log(`⬆️ [Firestore] 업로드 검사 대상 ${targets.length}개`);
+
+  let failed = 0;
+  const localDeleteIds = [];
+
+  for (const m of targets) {
+    try {
+      const result = await fsPushItem(m, byId);
+      // 🎯 [V3.4.4 원칙 유지] 클라우드에 꼬리표가 기록된 뒤에만 로컬에서 물리 삭제 (좀비 부활 차단)
+      if (result === "tombstone") localDeleteIds.push(m.id);
+    } catch (err) {
+      failed++;
+      console.warn(`⚠️ 업로드 실패 (${m.syncId}):`, err);
+    }
+  }
+
+  await idbDeleteMany(localDeleteIds);
+
+  if (failed === 0 && fbUser) localStorage.setItem(pushKey, String(syncStart));
+  return { failed, localChanged: localDeleteIds.length > 0 };
+}
+
+async function fsPushItem(m, byId) {
+  const ref = fsItemsCol().doc(m.syncId);
+  const oldSnap = await ref.get();
+  const old = oldSnap.exists ? oldSnap.data() : null;
+  const oldChunks = old && old.chunkCount ? old.chunkCount : 0;
+  const serverTs = firebase.firestore.FieldValue.serverTimestamp();
+
+  // 🪦 영구 삭제 → 꼬리표(Tombstone) 기록 + 조각 삭제
+  if (m.isPermanentlyDeleted) {
+    if (!(old && old.isPermanentlyDeleted)) {
+      await ref.set({
+        syncId: m.syncId,
+        isPermanentlyDeleted: true,
+        updatedAt: Date.now(),
+        chunkCount: 0,
+        serverUpdatedAt: serverTs,
+      });
+    }
+    await fsDeleteChunks(ref, 0, oldChunks);
+    return "tombstone";
+  }
+
+  if (old) {
+    if (old.isPermanentlyDeleted) return "skip"; // 다른 기기에서 영구 삭제됨 → 다음 Pull에서 로컬 정리
+    if (Number(old.updatedAt || 0) >= Number(m.updatedAt || 0)) return "skip"; // 클라우드가 같거나 최신
+  }
+
+  // 부모 폴더의 글로벌 주민번호(syncId) 통역
+  let pSyncId = null;
+  if (m.parentId !== null && m.parentId !== undefined) {
+    const p = byId.get(String(m.parentId));
+    pSyncId = p ? p.syncId : (m.parentSyncId ?? null);
+  }
+
+  const meta = { ...m };
+  delete meta.id;       // 로컬 PK는 기기마다 다르므로 올리지 않음
+  delete meta.parentId; // 부모는 parentSyncId로만 전달
+  delete meta.content;
+  delete meta.plainText;
+  meta.parentSyncId = pSyncId;
+  const docData = JSON.parse(JSON.stringify(meta)); // undefined 필드 제거 (Firestore 저장 불가)
+
+  let newChunks = 0;
+  if (m.type !== "folder") {
+    const content = m.content || "";
+    const plainText = m.plainText || "";
+
+    if (utf8Len(content) + utf8Len(plainText) <= FS_INLINE_MAX_BYTES) {
+      docData.content = content;
+      docData.plainText = plainText;
+    } else {
+      // 📦 대용량 노트 분할 저장: 조각을 먼저 모두 올린 뒤 메인 문서를 갱신
+      // (rev가 일치하는 조각만 유효 → 업로드 도중 다른 기기가 읽어도 깨진 본문을 받지 않음)
+      const rev = generateSyncId();
+      const parts = splitByBytes(JSON.stringify({ content, plainText }), FS_CHUNK_BYTES);
+      for (let i = 0; i < parts.length; i++) {
+        await ref.collection("chunks").doc(String(i)).set({ i, rev, data: parts[i] });
+      }
+      newChunks = parts.length;
+      docData.rev = rev;
+      console.log(`📦 대용량 노트 분할 업로드: ${m.title || m.syncId} (${parts.length}조각)`);
+    }
+  }
+
+  docData.chunkCount = newChunks;
+  docData.serverUpdatedAt = serverTs;
+  await ref.set(docData);
+
+  // 이전보다 조각 수가 줄었으면 남은 옛 조각 삭제
+  await fsDeleteChunks(ref, newChunks, oldChunks);
+  return "uploaded";
+}
+
+async function fsDeleteChunks(ref, from, to) {
+  for (let i = from; i < to; i++) {
+    await ref.collection("chunks").doc(String(i)).delete();
   }
 }
 
-// // 🎯 [신규] 공식 인증 상태 확인 창구 (Single Source of Truth)
-// // 다른 파일(db.js 등)에서 window.isZenOnline()을 호출하여 현재 연결 상태를 확인할 수 있습니다.
-// window.isZenOnline = function () {
-//   try {
-//     const currentTime = Date.now();
-//     // 1. API 로드 완료 여부 2. 토큰 존재 여부 3. 59분 수명 내인지 여부를 통합 판단
-//     return (
-//       typeof gapiInited !== 'undefined' && gapiInited &&
-//       typeof gisInited !== 'undefined' && gisInited &&
-//       window.gapi && window.gapi.client &&
-//       window.gapi.client.getToken() !== null &&
-//       typeof tokenExpiryTime !== 'undefined' &&
-//       currentTime < tokenExpiryTime
-//     );
-//   } catch (e) {
-//     console.error("인증 상태 확인 중 오류:", e);
-//     return false;
-//   }
-// };
+// 30일 지난 영구삭제 꼬리표 청소 (하루 1회)
+async function fsPurgeOldTombstones() {
+  const key = fsKey("purge");
+  const last = parseInt(localStorage.getItem(key) || "0", 10);
+  const now = Date.now();
+  if (now - last < 24 * 60 * 60 * 1000) return;
 
+  try {
+    const snap = await fsItemsCol().where("isPermanentlyDeleted", "==", true).get();
+    let count = 0;
+    for (const d of snap.docs) {
+      if (now - Number(d.data().updatedAt || 0) > FS_TOMBSTONE_TTL) {
+        await d.ref.delete();
+        count++;
+      }
+    }
+    if (count) console.log(`🧹 [Firestore] 30일 지난 영구삭제 꼬리표 ${count}개 청소`);
+    localStorage.setItem(key, String(now));
+  } catch (e) {
+    console.warn("꼬리표 청소 실패 (다음에 재시도):", e);
+  }
+}
 
+// ============================================================================
+// 6. 타자 멈춤 3초 감지 및 백그라운드 동기화 트리거
+// ============================================================================
+function triggerBackgroundSync() {
+  if (backgroundSyncTimer) clearTimeout(backgroundSyncTimer);
+  backgroundSyncTimer = setTimeout(() => {
+    if (window.isZenOnline()) {
+      console.log("🤫 [Firestore] 타자 멈춤(3초) 감지: 조용히 동기화를 시작합니다...");
+      smartSync();
+    }
+  }, 3000);
+}
+
+// ============================================================================
+// 7. 초기화용: 내 Firestore 데이터 전체 삭제
+// ============================================================================
+async function deleteAllCloudData() {
+  if (!window.isZenOnline()) return false;
+  const col = fsItemsCol();
+  while (true) {
+    const snap = await col.limit(100).get();
+    if (snap.empty) break;
+    for (const d of snap.docs) {
+      const c = d.data();
+      if (c.chunkCount || c.rev) {
+        const chunks = await d.ref.collection("chunks").get();
+        for (const ch of chunks.docs) await ch.ref.delete();
+      }
+      await d.ref.delete();
+    }
+  }
+  console.log("✅ [Firestore] 클라우드 데이터 삭제 완료");
+  return true;
+}
+
+// 초기화 시 동기화 커서(zen_fs_*) 제거 → 다음 로그인 때 클라우드 전체를 다시 받음
+function clearFirestoreSyncCursors() {
+  Object.keys(localStorage)
+    .filter((k) => k.startsWith("zen_fs_"))
+    .forEach((k) => localStorage.removeItem(k));
+}
+
+// ============================================================================
+// 8. 공식 온라인 판정 창구 (Single Source of Truth)
+// ============================================================================
+// 다른 파일(ui.js 등)에서 window.isZenOnline()으로 현재 클라우드 연결 상태를 확인합니다.
 window.isZenOnline = function () {
-  const currentTime = Date.now();
-  // 🚀 와이파이 연결 상태가 아닌, 오직 '구글 API 토큰'이 유효하게 살아있는지 검사합니다!
-  return (
-    typeof gapiInited !== 'undefined' && gapiInited &&
-    typeof gisInited !== 'undefined' && gisInited &&
-    window.gapi &&
-    gapi.client &&
-    gapi.client.getToken() !== null &&
-    Boolean(gapi.client.getToken()?.access_token) &&
-    currentTime < tokenExpiryTime
-  );
+  return Boolean(fbAuth && fbUser) && navigator.onLine !== false;
 };
+
+initFirebase();

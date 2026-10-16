@@ -1,14 +1,13 @@
-// 🎯 [Google API 설정]
-const CLIENT_ID = '765080058790-uhqk1gj2ko8a197f26ujnq0gb4nl97ha.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyD1Z5E5e8tRfmG9fDruBM72pliOt6ZkShw';
-const DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
-const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email openid";
-let tokenClient, gapiInited = false, gisInited = false;
-let hasLoadedFromCloud = false;
-
-// 🎯 [V3 추가] 토큰 만료 시간 추적용 변수
-let tokenExpiryTime = 0;
-let tokenRefreshTimer = null;
+// 🎯 [V4.3.0] Firebase 설정 (구글 드라이브 GAPI/GIS 설정을 대체)
+// ※ apiKey는 웹 앱 공개용 식별자입니다. 데이터 보호는 Firestore 보안 규칙(본인 UID만 접근)이 담당합니다.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCPI34XN0NMTXXr5DYQeAtLwEcl5IaBN6g",
+  authDomain: "zennotes-ads.firebaseapp.com",
+  projectId: "zennotes-ads",
+  storageBucket: "zennotes-ads.firebasestorage.app",
+  messagingSenderId: "68150500972",
+  appId: "1:68150500972:web:77f20999bf01eb7aa10249"
+};
 
 // 🎯 [V3 추가] 타자 멈춤 감지용 백그라운드 동기화 타이머
 let backgroundSyncTimer = null;
