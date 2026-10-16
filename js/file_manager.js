@@ -1268,10 +1268,10 @@ function closeMoveModal(fromPopstate = false) {
   }
 }
 
-function renderDestFolders() {
+function renderDestFolders(scrollToFolderId = undefined) {
   const container = document.getElementById("fm-dest-list");
   container.innerHTML =
-    '<div style="padding:10px; font-size:12px; color:var(--text-muted);">이동할 위치를 선택하세요:</div>';
+    '<div style="padding:8px 10px 10px; font-size:12px; color:var(--text-muted); line-height:1.4;">이동할 위치를 선택하세요 <span style="opacity:0.8;">(폴더 선택 후 <b>+ 새 폴더</b> 클릭 시 하위 폴더로 생성)</span></div>';
 
   const tx = db.transaction(["memos"], "readonly");
   tx.objectStore("memos").getAll().onsuccess = (e) => {
@@ -1283,21 +1283,19 @@ function renderDestFolders() {
       if (m.type === "folder") folderMap.set(m.id, m);
     });
 
-    // 🎯 [V4.2.2] FM이 열려있는지, 아니면 메인 편집창 삼선 메뉴에서 호출되었는지 판별
+    // 🎯 [V4.2.2 / V4.2.3] FM이 열려있는지, 아니면 메인 편집창 삼선 메뉴에서 호출되었는지 판별
     const fmPane = document.getElementById("file-manager-pane");
     const isFmOpen = fmPane && fmPane.style.display === "flex";
-    let excludedFolderId = currentFmFolderId;
+    let currentOriginFolderId = currentFmFolderId;
     if (!isFmOpen && movingItemIds.length === 1) {
       const targetItem = allData.find(
         (m) => m.id === Number(movingItemIds[0]),
       );
-      excludedFolderId = targetItem ? targetItem.parentId : undefined;
+      currentOriginFolderId = targetItem ? targetItem.parentId : undefined;
     }
 
-    // 🎯 2. 목적지 자격 검사 (휴지통 소속이거나, 영구삭제(유령)이거나, 선택한 항목의 자식이면 안됨)
+    // 🎯 2. 목적지 자격 검사 (휴지통 소속이거나, 영구삭제(유령)이거나, 선택한 항목 자신/자식이면 제외)
     function isValidDestination(folderId) {
-      if (excludedFolderId !== undefined && folderId === excludedFolderId)
-        return false; // 현재 소속된 폴더는 목적지 후보에서 제외
       if (movingItemIds.includes(folderId)) return false; // 내 자신에게 이동 불가
 
       let curr = folderId;
@@ -1307,7 +1305,7 @@ function renderDestFolders() {
         const f = folderMap.get(curr);
         if (!f) break;
 
-        // 🎯 [완벽 교정] 조상 중에 하나라도 휴지통 소속이거나, 일반 삭제됐거나, '영구 삭제된 유령(isPermanentlyDeleted)'이면 절대 불가!
+        // 조상 중에 하나라도 휴지통 소속이거나, 일반 삭제됐거나, 영구 삭제된 유령이면 절대 불가!
         if (f.isDeleted || f.isPermanentlyDeleted || f.isSystem === "trash")
           return false;
 
@@ -1316,21 +1314,50 @@ function renderDestFolders() {
       return true;
     }
 
-    // 🎯 3. 전체 경로 텍스트 다이어트 (군더더기 접두사 제거)
-    function getFolderPath(folderId) {
-      if (folderId === null) return "Home";
-      let path = [];
-      let curr = folderId;
-      while (curr) {
-        const f = folderMap.get(curr);
-        if (!f) break;
-        path.unshift(f.title);
-        curr = f.parentId;
+    // 🎯 3. 유효한 일반 하위 폴더들을 부모 ID 기준으로 그룹핑 (트리 계층 구조 렌더링용)
+    const childrenByParent = new Map();
+    allData.forEach((m) => {
+      if (
+        m.type === "folder" &&
+        !m.isSystem &&
+        !m.isDeleted &&
+        !m.isPermanentlyDeleted &&
+        isValidDestination(m.id)
+      ) {
+        const pid = m.parentId !== undefined ? m.parentId : null;
+        if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+        childrenByParent.get(pid).push(m);
       }
-      return path.join(" / "); // 앞에 붙던 Home / 제거
+    });
+
+    // 각 부모 아래 자식 폴더들을 이름순 정렬
+    childrenByParent.forEach((list) => {
+      list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    });
+
+    // 재귀적으로 자식 폴더 트리를 추가하는 헬퍼
+    function appendSubtree(parentId, depth) {
+      const children = childrenByParent.get(parentId) || [];
+      children.forEach((child) => {
+        const isCurrentLoc =
+          currentOriginFolderId !== undefined &&
+          child.id === currentOriginFolderId &&
+          !isCurrentInTrash;
+        container.appendChild(
+          createDestItem(
+            child.id,
+            child.title,
+            "fa-folder",
+            "var(--text-main)",
+            depth,
+            isCurrentLoc,
+          ),
+        );
+        appendSubtree(child.id, depth + 1);
+      });
     }
 
-    // 🎯 4. 상단 고정 4대장 리스트업 (텍스트 다이어트 완료)
+    // 🎯 4. 상단 고정 4대장 리스트업 + 각 기둥 소속 하위 폴더 트리 출력
     const systemItems = [
       { id: null, title: "Home", icon: "fa-house", color: "var(--text-main)" },
       {
@@ -1355,49 +1382,80 @@ function renderDestFolders() {
 
     systemItems.forEach((sys) => {
       if (isValidDestination(sys.id)) {
+        const isCurrentLoc =
+          currentOriginFolderId !== undefined &&
+          sys.id === currentOriginFolderId &&
+          !isCurrentInTrash;
         container.appendChild(
-          createDestItem(sys.id, sys.title, sys.icon, sys.color),
+          createDestItem(sys.id, sys.title, sys.icon, sys.color, 0, isCurrentLoc),
         );
+        // Home(null) 직속 일반 폴더는 구분선 아래에 모아서 보여주므로, 3대 기둥(바탕화면/보안폴더/쓸어담기)의 하위 폴더만 바로 아래에 트리 전개
+        if (sys.id !== null) {
+          appendSubtree(sys.id, 1);
+        }
       }
     });
 
     container.appendChild(document.createElement("hr")).style.cssText =
       "margin:8px 0; border:none; border-top:1px solid var(--border);";
 
-    // 🎯 5. 유령 폴더를 제외한 '진짜 일반 폴더들' 전체 경로로 출력
-    // [완벽 교정] 본인 스스로가 지워졌거나(isDeleted) 영구 삭제된 유령(isPermanentlyDeleted)인 경우도 1차로 깐깐하게 걸러냅니다!
-    const validFolders = allData.filter(
-      (m) =>
+    // 🎯 5. Home(null) 직속 일반 폴더 및 그 하위 폴더들을 깔끔한 트리 계층(들여쓰기)으로 출력
+    appendSubtree(null, 0);
+
+    // 만약 부모가 특이한 경우(위 트리에 포함되지 않은 고아성 유효 폴더)가 있다면 누락 없이 출력
+    const renderedIds = new Set(
+      Array.from(container.querySelectorAll(".fm-dest-item")).map((el) =>
+        el.dataset.folderId === "null" ? null : Number(el.dataset.folderId),
+      ),
+    );
+    allData.forEach((m) => {
+      if (
         m.type === "folder" &&
         !m.isSystem &&
         !m.isDeleted &&
         !m.isPermanentlyDeleted &&
-        isValidDestination(m.id),
-    );
-
-    // 보기 좋게 이름(경로) 알파벳 순으로 정렬
-    validFolders.sort((a, b) =>
-      getFolderPath(a.id).localeCompare(getFolderPath(b.id)),
-    );
-
-    validFolders.forEach((f) => {
-      container.appendChild(
-        createDestItem(
-          f.id,
-          getFolderPath(f.id),
-          "fa-folder",
-          "var(--text-main)",
-        ),
-      );
+        isValidDestination(m.id) &&
+        !renderedIds.has(m.id)
+      ) {
+        const isCurrentLoc =
+          currentOriginFolderId !== undefined &&
+          m.id === currentOriginFolderId &&
+          !isCurrentInTrash;
+        container.appendChild(
+          createDestItem(m.id, m.title, "fa-folder", "var(--text-main)", 0, isCurrentLoc),
+        );
+      }
     });
+
+    // 방금 새 폴더를 만든 경우 해당 폴더로 부드럽게 스크롤
+    if (scrollToFolderId !== undefined) {
+      const targetEl = container.querySelector(
+        `.fm-dest-item[data-folder-id="${scrollToFolderId}"]`,
+      );
+      if (targetEl) {
+        targetEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
   };
 }
 
-// 🎯 6. 아이콘 색상 및 긴 글자 자동 줄바꿈 적용
-function createDestItem(id, title, icon, colorStyle) {
+// 🎯 6. 아이콘 색상, 트리 들여쓰기(depth), 현재 위치 배지 적용
+function createDestItem(id, title, icon, colorStyle, depth = 0, isCurrentLoc = false) {
   const div = document.createElement("div");
   div.className = `fm-dest-item ${selectedDestId === id ? "active" : ""}`;
-  div.innerHTML = `<i class="fa-solid ${icon}" style="color: ${colorStyle}; width: 20px; text-align: center; flex-shrink: 0;"></i> <span style="line-height: 1.4; word-break: break-all;">${title}</span>`;
+  div.dataset.folderId = id === null ? "null" : String(id);
+  div.dataset.isCurrentLoc = isCurrentLoc ? "true" : "false";
+
+  const indentPx = 14 + Math.min(depth, 6) * 18;
+  div.style.paddingLeft = `${indentPx}px`;
+
+  const branchHtml =
+    depth > 0 ? `<span class="fm-dest-tree-branch">└</span>` : "";
+  const badgeHtml = isCurrentLoc
+    ? `<span class="fm-dest-current-badge">현재 위치</span>`
+    : "";
+
+  div.innerHTML = `${branchHtml}<i class="fa-solid ${icon}" style="color: ${colorStyle}; width: 20px; text-align: center; flex-shrink: 0;"></i> <span style="line-height: 1.4; word-break: break-all;">${title}</span>${badgeHtml}`;
   div.onclick = () => {
     selectedDestId = id;
     document
@@ -1407,6 +1465,79 @@ function createDestItem(id, title, icon, colorStyle) {
   };
   return div;
 }
+
+// 🎯 [V4.2.3] 이동 모달 내부에서 즉시 새 폴더를 만들고 이동 목적지로 자동 선택하는 함수
+async function createFolderInMoveModal() {
+  if (!db) return;
+
+  // 1. 새 폴더가 만들어질 부모 폴더 결정:
+  // 사용자가 모달에서 특정 폴더를 선택해 두었다면 그 폴더 내부에 생성하고,
+  // 아직 아무것도 선택하지 않았다면 Home(null)에 생성합니다.
+  const parentFolderId = selectedDestId !== undefined ? selectedDestId : null;
+
+  // 2. 보안 폴더(또는 그 하위 폴더) 내부에 만들려는 경우 잠금 해제 여부 확인
+  const isParentUnderSec = await checkIsUnderSecurity(parentFolderId);
+  if (isParentUnderSec && !isSecurityUnlocked) {
+    showToast("잠긴 보안 폴더 내부에는 새 폴더를 만들 수 없습니다.\n먼저 보안 폴더의 잠금을 해제해주세요.");
+    return;
+  }
+
+  // 3. 부모 폴더 이름 및 syncId 조회
+  let parentTitle = "Home";
+  let parentSyncId = null;
+  if (parentFolderId !== null) {
+    const parentObj = await new Promise((resolve) => {
+      db
+        .transaction(["memos"], "readonly")
+        .objectStore("memos")
+        .get(parentFolderId).onsuccess = (e) => resolve(e.target.result);
+    });
+    if (parentObj) {
+      parentTitle = parentObj.title || "폴더";
+      parentSyncId = parentObj.syncId || null;
+    }
+  }
+
+  const folderName = prompt(
+    `[${parentTitle}] 안에 생성할 새 폴더 이름을 입력하세요:`,
+    "새 폴더",
+  );
+  if (!folderName || folderName.trim() === "") return;
+
+  const trimmedName = folderName.trim();
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+
+  let createdFolderId = null;
+  store.add({
+    title: trimmedName,
+    type: "folder",
+    parentId: parentFolderId,
+    parentSyncId: parentSyncId,
+    updatedAt: Date.now(),
+    isDeleted: false,
+    syncId: generateSyncId(),
+  }).onsuccess = (e) => {
+    createdFolderId = e.target.result;
+  };
+
+  tx.oncomplete = () => {
+    if (createdFolderId !== null) {
+      // 새로 만든 폴더를 즉시 이동 목적지로 자동 선택!
+      selectedDestId = createdFolderId;
+      renderDestFolders(createdFolderId);
+
+      const fmPane = document.getElementById("file-manager-pane");
+      if (fmPane && fmPane.style.display === "flex") {
+        loadFileManager(currentFmFolderId);
+      }
+      updateUnsyncedCount();
+      if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+      showToast(`'${trimmedName}' 폴더가 생성되어 이동 위치로 선택되었습니다.`);
+    }
+  };
+}
+window.createFolderInMoveModal = createFolderInMoveModal;
 
 // 🎯 [V4.1.7] 폴더 간 아이템(노트/폴더) 이동을 실행하는 핵심 공용 엔진
 async function moveItemsToFolder(itemIds, targetFolderId) {
@@ -1542,6 +1673,17 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     return;
   }
 
+  // 현재 위치 배지가 붙은 폴더를 그대로 누른 경우(휴지통 복구가 아닐 때) 모달을 닫지 않고 친절하게 안내
+  const activeDestEl = document.querySelector(".fm-dest-item.active");
+  if (
+    activeDestEl &&
+    activeDestEl.dataset.isCurrentLoc === "true" &&
+    !isCurrentInTrash
+  ) {
+    showToast("이미 현재 위치한 폴더입니다.\n이동할 다른 폴더를 선택하거나 '+ 새 폴더'를 눌러주세요.");
+    return;
+  }
+
   const targetId = selectedDestId;
   const items = [...movingItemIds];
 
@@ -1571,10 +1713,11 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
   await moveItemsToFolder(items, targetId);
 };
 
-// 🎯 [수정] 파일 관리창 열기/닫기 (에디터 강제 초기화 및 완벽 잠금)
+// 🎯 [수정 / V4.2.3 스마트 폴더 진입] 파일 관리창 열기/닫기 (에디터 강제 초기화 및 완벽 잠금)
 function openFileManager() {
   if (document.activeElement) document.activeElement.blur();
   closeAllMemoMenus();
+  if (typeof closeLeftNoteMenu === "function") closeLeftNoteMenu();
   forceSaveImmediate();
 
   closeAllPanelsMobile();
@@ -1591,15 +1734,76 @@ function openFileManager() {
   document.getElementById("global-menu-btn").style.display = "none";
 
   document.getElementById("file-manager-pane").style.display = "flex";
-
   document.getElementById("fm-search-input").value = ""; // 🎯 진입 시 검색창 초기화
-  fmPath = [{ id: null, title: "Home" }];
-  history.pushState({ fmOpen: true, fmFolderId: null, fmPath: fmPath }, "");
-  loadFileManager(null);
 
   // 🎯 에디터 완벽 비활성화 (검색창 타이핑 시 글자 새는 현상 2차 원천 차단)
   quill.blur();
   quill.disable();
+
+  // 🎯 [V4.2.3 스마트 폴더 포커스]
+  // 현재 편집 중인 노트가 '바탕 화면'이 아닌 특정 폴더(예: 쓸어 담기, 일반 하위 폴더, 잠금 해제된 보안 폴더) 소속이라면
+  // Home부터 해당 폴더까지의 히스토리 스택(fmPath)을 정석대로 쌓고 즉시 그 폴더를 열어줍니다!
+  // 바탕 화면 소속 노트이거나 새 노트라면 기존과 100% 동일하게 Home(0층)을 엽니다.
+  if (currentMemoId && db) {
+    const tx = db.transaction(["memos"], "readonly");
+    tx.objectStore("memos").getAll().onsuccess = (e) => {
+      const allData = e.target.result || [];
+      const curMemo = allData.find((m) => m.id === Number(currentMemoId));
+      if (
+        curMemo &&
+        curMemo.parentId !== null &&
+        curMemo.parentId !== undefined &&
+        curMemo.parentId !== globalDesktopFolderId
+      ) {
+        const folderMap = new Map();
+        allData.forEach((m) => {
+          if (m.type === "folder") folderMap.set(m.id, m);
+        });
+
+        // 조상 경로 추적 및 유효성/보안 잠금 여부 검증
+        const chain = [];
+        let curr = curMemo.parentId;
+        let isValidChain = true;
+        while (curr) {
+          const f = folderMap.get(curr);
+          if (!f || f.isDeleted || f.isPermanentlyDeleted || f.isSystem === "trash") {
+            isValidChain = false;
+            break;
+          }
+          if (f.id === globalSecurityFolderId && !isSecurityUnlocked) {
+            isValidChain = false;
+            break;
+          }
+          chain.unshift({ id: f.id, title: f.title });
+          curr = f.parentId;
+        }
+
+        if (isValidChain && chain.length > 0) {
+          // 0층 Home 상태부터 차곡차곡 pushState하여 뒤로가기(←) 및 resetFmToHome()과 100% 호환 유지
+          fmPath = [{ id: null, title: "Home" }];
+          history.pushState({ fmOpen: true, fmFolderId: null, fmPath: [...fmPath] }, "");
+          chain.forEach((step) => {
+            fmPath.push(step);
+            history.pushState(
+              { fmOpen: true, fmFolderId: step.id, fmPath: [...fmPath] },
+              "",
+            );
+          });
+          loadFileManager(curMemo.parentId);
+          return;
+        }
+      }
+
+      // 기본 동작: Home(0층) 열기
+      fmPath = [{ id: null, title: "Home" }];
+      history.pushState({ fmOpen: true, fmFolderId: null, fmPath: fmPath }, "");
+      loadFileManager(null);
+    };
+  } else {
+    fmPath = [{ id: null, title: "Home" }];
+    history.pushState({ fmOpen: true, fmFolderId: null, fmPath: fmPath }, "");
+    loadFileManager(null);
+  }
 }
 
 function closeFileManager() {

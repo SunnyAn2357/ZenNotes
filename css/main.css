@@ -2715,16 +2715,43 @@ body.light-theme #markdown-help-modal .fm-modal-footer button {
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
 }
 
+/* 🎯 [V4.2.3] 이동 모달 헤더 '+ 새 폴더' 버튼 및 트리 계층 들여쓰기 스타일 */
+.fm-move-new-folder-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(120, 169, 255, 0.12);
+    border: 1px solid rgba(120, 169, 255, 0.3);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.fm-move-new-folder-btn:hover {
+    background: rgba(120, 169, 255, 0.22);
+    color: var(--accent);
+}
+
+body.light-theme .fm-move-new-folder-btn {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.25);
+}
+
 .fm-dest-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    gap: 10px;
+    padding: 9px 14px;
     border-radius: 8px;
     cursor: pointer;
-    transition: background 0.2s;
-    margin-bottom: 4px;
-    font-size: 13px;
+    transition: background 0.15s ease, color 0.15s ease;
+    margin-bottom: 3px;
+    font-size: 13.5px;
+    border: 1px solid transparent;
 }
 
 .fm-dest-item:hover {
@@ -2733,9 +2760,34 @@ body.light-theme #markdown-help-modal .fm-modal-footer button {
 }
 
 .fm-dest-item.active {
-    background: rgba(120, 169, 255, 0.1);
+    background: rgba(120, 169, 255, 0.12);
     color: var(--accent);
     border: 1px dashed var(--accent);
+    font-weight: 600;
+}
+
+body.light-theme .fm-dest-item.active {
+    background: rgba(37, 99, 235, 0.1);
+}
+
+.fm-dest-tree-branch {
+    color: var(--text-muted);
+    opacity: 0.55;
+    font-family: monospace;
+    font-size: 13px;
+    margin-right: -4px;
+    flex-shrink: 0;
+}
+
+.fm-dest-current-badge {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--surface-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+    font-weight: 500;
 }
 
 /* 🎯 [최종 교정] 다중 선택 바 다이어트 및 스크롤 숨김 애니메이션, padding 값으로 상하 높이 조절: 현재 12px*/
