@@ -32,10 +32,27 @@ const StrikeLineStyle = new Parchment.ClassAttributor('strike-line', 'ql-strike-
 });
 Quill.register(StrikeLineStyle, true);
 
-// 🎯 [V4.2.0] 인용구 내부 리스트(글머리 기호, 번호, 체크리스트) 지원용 블록 클래스 Attributor
+// 🎯 [V4.2.0] & [V4.3.5] 인용구 내부 리스트(글머리 기호, 번호, 체크리스트) 지원용 블록 클래스 Attributor
 const QuoteItemStyle = new Parchment.ClassAttributor('quote-item', 'ql-quote-item', {
     scope: Parchment.Scope.BLOCK
 });
+QuoteItemStyle.add = function(domNode, value) {
+    if (value) {
+        domNode.classList.add('ql-quote-item');
+        return true;
+    } else {
+        domNode.classList.remove('ql-quote-item');
+        domNode.classList.remove('ql-quote-item-true');
+        return true;
+    }
+};
+QuoteItemStyle.remove = function(domNode) {
+    domNode.classList.remove('ql-quote-item');
+    domNode.classList.remove('ql-quote-item-true');
+};
+QuoteItemStyle.value = function(domNode) {
+    return (domNode.classList.contains('ql-quote-item') || domNode.classList.contains('ql-quote-item-true')) ? true : undefined;
+};
 Quill.register(QuoteItemStyle, true);
 
 // ============================================================================
@@ -161,6 +178,41 @@ const quill = new Quill('#editor', {
                         return false; // 중간 행에서는 아무 동작도 하지 않음 (순정 동일)
                     }
                 },
+                // 🎯 [V4.3.5] 인용구 내부 리스트 줄바꿈 시 quote-item 속성 유지
+                'quote-item enter': {
+                    key: 'Enter',
+                    collapsed: true,
+                    format: ['quote-item'],
+                    empty: false,
+                    handler: function (range, context) {
+                        const [line] = this.quill.getLine(range.index);
+                        const listFormat = (context.format && context.format.list) || (line && line.formats().list) || 'bullet';
+                        const nextList = (listFormat === 'checked') ? 'unchecked' : listFormat;
+                        
+                        this.quill.insertText(range.index, '\n', Quill.sources.USER);
+                        this.quill.setSelection(range.index + 1, Quill.sources.SILENT);
+                        this.quill.formatLine(range.index + 1, 1, {
+                            'list': nextList,
+                            'quote-item': true
+                        }, Quill.sources.USER);
+                        return false;
+                    }
+                },
+                // 🎯 [V4.2.0] & [V4.3.5] 인용구 내부 리스트 빈 줄에서 Enter:
+                // 1번째 Enter: 리스트 서식 해제하고 일반 인용구(blockquote)로 전환
+                // 2번째 Enter: 아래 blockquote empty enter에 의해 본문으로 완전 탈출
+                'quote-item empty enter': {
+                    key: 'Enter',
+                    collapsed: true,
+                    format: ['quote-item'],
+                    empty: true,
+                    handler: function (range, context) {
+                        this.quill.formatLine(range.index, 1, 'list', false, Quill.sources.USER);
+                        this.quill.formatLine(range.index, 1, 'quote-item', false, Quill.sources.USER);
+                        this.quill.formatLine(range.index, 1, 'blockquote', true, Quill.sources.USER);
+                        return false;
+                    }
+                },
                 // 🎯 [V4.2.0] 인용구 빈 줄에서 Enter: 인용구 서식 해제 및 일반 본문으로 탈출
                 'blockquote empty enter': {
                     key: 'Enter',
@@ -168,19 +220,7 @@ const quill = new Quill('#editor', {
                     format: ['blockquote'],
                     empty: true,
                     handler: function (range, context) {
-                        this.quill.format('blockquote', false, Quill.sources.USER);
-                        return false;
-                    }
-                },
-                // 🎯 [V4.2.0] 인용구 내부 리스트(글머리, 번호, 체크) 빈 줄에서 Enter: 리스트 및 인용구 탈출
-                'quote-item empty enter': {
-                    key: 'Enter',
-                    collapsed: true,
-                    format: ['quote-item'],
-                    empty: true,
-                    handler: function (range, context) {
-                        this.quill.format('list', false, Quill.sources.USER);
-                        this.quill.format('quote-item', false, Quill.sources.USER);
+                        this.quill.formatLine(range.index, 1, 'blockquote', false, Quill.sources.USER);
                         return false;
                     }
                 }
@@ -222,7 +262,7 @@ const quill = new Quill('#editor', {
                 'markdown-help': function () {
                     openMarkdownHelpModal();
                 },
-                // 🎯 [V4.2.0] 인용구 내부 리스트(글머리, 번호, 체크) 연동 툴바 핸들러
+                // 🎯 [V4.2.0] & [V4.3.5] 인용구 내부 리스트(글머리, 번호, 체크) 연동 툴바 핸들러
                 // 🎯 [V4.3.3] 체크리스트 버그 해결: 툴바 check 버튼은 'check'를 넘기므로,
                 //     이미 checked/unchecked/check 상태이면 토글 해제(false),
                 //     아니면 'unchecked'로 지정하여 Quill 2 정규 체크박스 생성
@@ -230,8 +270,10 @@ const quill = new Quill('#editor', {
                     const range = this.quill.getSelection();
                     if (!range) return;
                     const formats = this.quill.getFormat(range);
-                    const wasInQuote = !!(formats.blockquote || formats['quote-item']);
-                    const currentList = formats.list;
+                    const [line] = this.quill.getLine(range.index);
+                    const lineFormats = (line && typeof line.formats === 'function') ? line.formats() : formats;
+                    const wasInQuote = !!(formats.blockquote || lineFormats.blockquote || formats['quote-item'] || lineFormats['quote-item'] || (line && line.domNode && (line.domNode.tagName === 'BLOCKQUOTE' || line.domNode.classList.contains('ql-quote-item') || line.domNode.classList.contains('ql-quote-item-true'))));
+                    const currentList = formats.list || lineFormats.list;
 
                     let targetList;
                     if (value === 'check') {
@@ -244,27 +286,33 @@ const quill = new Quill('#editor', {
                         targetList = (currentList === value) ? false : value;
                     }
 
-                    this.quill.format('list', targetList, Quill.sources.USER);
+                    const targetLen = Math.max(range.length, 1);
+                    this.quill.formatLine(range.index, targetLen, 'list', targetList, Quill.sources.USER);
                     if (wasInQuote) {
                         if (targetList) {
-                            this.quill.format('quote-item', true, Quill.sources.USER);
+                            this.quill.formatLine(range.index, targetLen, 'quote-item', true, Quill.sources.USER);
                         } else {
-                            this.quill.format('blockquote', true, Quill.sources.USER);
-                            this.quill.format('quote-item', false, Quill.sources.USER);
+                            this.quill.formatLine(range.index, targetLen, 'blockquote', true, Quill.sources.USER);
+                            this.quill.formatLine(range.index, targetLen, 'quote-item', false, Quill.sources.USER);
                         }
                     }
                 },
-                // 🎯 [V4.2.0] 인용구 툴바 핸들러: 리스트 항목에서 인용구 누르면 quote-item 토글
+                // 🎯 [V4.2.0] & [V4.3.5] 인용구 툴바 핸들러: 리스트 항목에서 인용구 누르면 quote-item 토글
                 'blockquote': function (value) {
                     const range = this.quill.getSelection();
                     if (!range) return;
                     const formats = this.quill.getFormat(range);
-                    if (formats.list) {
-                        const isQuoted = !!formats['quote-item'];
-                        this.quill.format('quote-item', !isQuoted, Quill.sources.USER);
+                    const [line] = this.quill.getLine(range.index);
+                    const lineFormats = (line && typeof line.formats === 'function') ? line.formats() : formats;
+                    const hasList = !!(formats.list || lineFormats.list || (line && line.domNode && line.domNode.tagName === 'LI'));
+                    const targetLen = Math.max(range.length, 1);
+
+                    if (hasList) {
+                        const isQuoted = !!(formats['quote-item'] || lineFormats['quote-item'] || (line && line.domNode && (line.domNode.classList.contains('ql-quote-item') || line.domNode.classList.contains('ql-quote-item-true'))));
+                        this.quill.formatLine(range.index, targetLen, 'quote-item', !isQuoted, Quill.sources.USER);
                     } else {
-                        const isQuote = !!formats.blockquote;
-                        this.quill.format('blockquote', !isQuote, Quill.sources.USER);
+                        const isQuote = !!(formats.blockquote || lineFormats.blockquote || (line && line.domNode && line.domNode.tagName === 'BLOCKQUOTE'));
+                        this.quill.formatLine(range.index, targetLen, 'blockquote', !isQuote, Quill.sources.USER);
                     }
                 },
                 // 🎯 [V3.4.4] 하이퍼링크 커스텀 핸들러: 선택 블록 자동 입력 + 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
@@ -634,21 +682,37 @@ quill.on('text-change', function (delta, oldDelta, source) {
 
         // --- [A. 블록 포맷 감지: H1-H3, 인용구, 리스트, 구분선, 코드블록] ---
         // 🎯 [V4.3.3] 체크리스트 글머리기호 버그 해결: [ ], [x], - [ ], - [x], * [ ], * [x] 모두 인식
-        // 🎯 [V4.3.4] 코드 블록 언어 태그 입력 지원 (```javascript, ```python, ``` 등)
-        const blockMatch = text.match(/^(#{1,3}|>|(?:\*|-)\s+\[\s\]|(?:\*|-)\s+\[x\]|\*|-|1\.|\-{3}|`{3}[a-zA-Z0-9_\-+]*|\[\s\]|\[x\])\s$/i);
+        // 🎯 [V4.3.5] 인용구 내부 리스트 단축키 지원 (> -, > *, > 1., > [ ], > - [ ] 등)
+        const blockMatch = text.match(/^(#{1,3}|>\s*(?:\*|-)\s+\[\s\]|>\s*(?:\*|-)\s+\[x\]|>\s*\[\s\]|>\s*\[x\]|>\s*1\.|>\s*\*|>\s*-|>|(?:\*|-)\s+\[\s\]|(?:\*|-)\s+\[x\]|\*|-|1\.|\-{3}|`{3}[a-zA-Z0-9_\-+]*|\[\s\]|\[x\])\s$/i);
         if (blockMatch) {
             const prefix = blockMatch[1];
             const deleteLength = prefix.length + 1;
             const formatIndex = range.index - deleteLength;
 
-            const currentLineFormat = quill.getFormat(formatIndex);
-            const isInsideQuote = !!(currentLineFormat.blockquote || currentLineFormat['quote-item']);
+            const lineFormats = (line && typeof line.formats === 'function') ? line.formats() : quill.getFormat(formatIndex);
+            const isInsideQuote = !!(lineFormats.blockquote || lineFormats['quote-item'] || (line.domNode && (line.domNode.tagName === 'BLOCKQUOTE' || line.domNode.classList.contains('ql-quote-item') || line.domNode.classList.contains('ql-quote-item-true'))));
 
             quill.deleteText(formatIndex, deleteLength, Quill.sources.USER);
 
             if (prefix === '#') quill.formatLine(formatIndex, 1, 'header', 1, Quill.sources.SILENT);
             else if (prefix === '##') quill.formatLine(formatIndex, 1, 'header', 2, Quill.sources.SILENT);
             else if (prefix === '###') quill.formatLine(formatIndex, 1, 'header', 3, Quill.sources.SILENT);
+            else if (/^>\s*(?:\*|-)\s+\[\s\]$/i.test(prefix) || /^>\s*\[\s\]$/i.test(prefix)) {
+                quill.formatLine(formatIndex, 1, 'list', 'unchecked', Quill.sources.USER);
+                quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
+            }
+            else if (/^>\s*(?:\*|-)\s+\[x\]$/i.test(prefix) || /^>\s*\[x\]$/i.test(prefix)) {
+                quill.formatLine(formatIndex, 1, 'list', 'checked', Quill.sources.USER);
+                quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
+            }
+            else if (/^>\s*1\.$/i.test(prefix)) {
+                quill.formatLine(formatIndex, 1, 'list', 'ordered', Quill.sources.USER);
+                quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
+            }
+            else if (/^>\s*(\*|-)$/i.test(prefix)) {
+                quill.formatLine(formatIndex, 1, 'list', 'bullet', Quill.sources.USER);
+                quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
+            }
             else if (prefix === '>') quill.formatLine(formatIndex, 1, 'blockquote', true, Quill.sources.SILENT);
             else if (/^(\*|-)\s+\[\s\]$/i.test(prefix) || prefix === '[ ]') {
                 quill.formatLine(formatIndex, 1, 'list', 'unchecked', Quill.sources.USER);

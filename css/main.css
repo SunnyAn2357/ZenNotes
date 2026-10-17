@@ -2194,32 +2194,60 @@ body.light-theme .ql-editor {
     padding-bottom: 8px !important;
 }
 
+/* 🎯 [V4.3.5] 인용구 바로 뒤에 인용구 리스트가 이어질 때: 인용구 하단 여백 제거하여 카드 일체화 */
+.ql-editor blockquote:has(+ ol:has(> li.ql-quote-item)),
+.ql-editor blockquote:has(+ ul:has(> li.ql-quote-item)),
+.ql-editor blockquote:has(+ ol:has(> li.ql-quote-item-true)),
+.ql-editor blockquote:has(+ ul:has(> li.ql-quote-item-true)) {
+    margin-bottom: 0 !important;
+    border-radius: 0 !important;
+    padding-bottom: 2px !important;
+}
+
 /* 단독(한 줄짜리) 인용구 */
-.ql-editor blockquote:not(:has(+ blockquote)):not(blockquote + blockquote) {
+.ql-editor blockquote:not(:has(+ blockquote)):not(blockquote + blockquote):not(:has(+ ol:has(> li.ql-quote-item))):not(:has(+ ul:has(> li.ql-quote-item))) {
     margin: 16px 0 !important;
     border-radius: 0 8px 8px 0 !important;
     padding: 8px 16px !important;
 }
 
-/* 🎯 [V4.2.0] 인용구 내부 리스트 아이템 (글머리 기호, 번호, 체크리스트) */
-.ql-editor li.ql-quote-item {
+/* 🎯 [V4.3.5] 인용구 리스트 컨테이너: 기본 리스트의 들여쓰기(1.5em) 및 하단 여백(20px) 제거하여 인용구 카드에 정확히 정렬 */
+.ql-editor ol:has(> li.ql-quote-item),
+.ql-editor ul:has(> li.ql-quote-item),
+.ql-editor ol:has(> li.ql-quote-item-true),
+.ql-editor ul:has(> li.ql-quote-item-true) {
+    padding-left: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* 🎯 [V4.2.0] & [V4.3.5] 인용구 내부 리스트 아이템 (글머리 기호, 번호, 체크리스트) */
+.ql-editor li.ql-quote-item,
+.ql-editor li.ql-quote-item-true {
     border-left: 4px solid var(--accent) !important;
     background-color: var(--surface) !important;
     color: var(--text-muted) !important;
     font-style: normal !important;
+    padding-left: 2.4em !important;
+    padding-right: 16px !important;
     padding-top: 2px !important;
     padding-bottom: 2px !important;
     line-height: 1.6;
+    margin: 0 !important;
 }
 
 /* 인용구 바로 뒤에 이어지는 리스트 컨테이너 */
-.ql-editor blockquote + ol,
-.ql-editor blockquote + ul {
+.ql-editor blockquote + ol:has(> li.ql-quote-item),
+.ql-editor blockquote + ul:has(> li.ql-quote-item),
+.ql-editor blockquote + ol:has(> li.ql-quote-item-true),
+.ql-editor blockquote + ul:has(> li.ql-quote-item-true) {
     margin-top: 0 !important;
 }
 
 .ql-editor blockquote + ol > li.ql-quote-item:first-child,
-.ql-editor blockquote + ul > li.ql-quote-item:first-child {
+.ql-editor blockquote + ul > li.ql-quote-item:first-child,
+.ql-editor blockquote + ol > li.ql-quote-item-true:first-child,
+.ql-editor blockquote + ul > li.ql-quote-item-true:first-child {
     padding-top: 2px !important;
     border-radius: 0 !important;
     margin-top: 0 !important;
@@ -2227,7 +2255,9 @@ body.light-theme .ql-editor {
 
 /* 단독 인용구 리스트 (첫 머리) */
 .ql-editor ol:not(blockquote + ol) > li.ql-quote-item:first-child,
-.ql-editor ul:not(blockquote + ul) > li.ql-quote-item:first-child {
+.ql-editor ul:not(blockquote + ul) > li.ql-quote-item:first-child,
+.ql-editor ol:not(blockquote + ol) > li.ql-quote-item-true:first-child,
+.ql-editor ul:not(blockquote + ul) > li.ql-quote-item-true:first-child {
     margin-top: 16px !important;
     padding-top: 8px !important;
     border-radius: 0 8px 0 0 !important;
@@ -2235,15 +2265,31 @@ body.light-theme .ql-editor {
 
 /* 인용구 리스트의 마지막 항목 (뒤에 blockquote가 이어지지 않는 경우) */
 .ql-editor ol:not(:has(+ blockquote)) > li.ql-quote-item:last-child,
-.ql-editor ul:not(:has(+ blockquote)) > li.ql-quote-item:last-child {
+.ql-editor ul:not(:has(+ blockquote)) > li.ql-quote-item:last-child,
+.ql-editor ol:not(:has(+ blockquote)) > li.ql-quote-item-true:last-child,
+.ql-editor ul:not(:has(+ blockquote)) > li.ql-quote-item-true:last-child {
     margin-bottom: 16px !important;
     padding-bottom: 8px !important;
     border-radius: 0 0 8px 0 !important;
 }
 
+/* 단독 1줄짜리 인용구 리스트 항목 */
+.ql-editor ol:not(blockquote + ol):not(:has(+ blockquote)) > li.ql-quote-item:only-child,
+.ql-editor ul:not(blockquote + ul):not(:has(+ blockquote)) > li.ql-quote-item:only-child,
+.ql-editor ol:not(blockquote + ol):not(:has(+ blockquote)) > li.ql-quote-item-true:only-child,
+.ql-editor ul:not(blockquote + ul):not(:has(+ blockquote)) > li.ql-quote-item-true:only-child {
+    margin-top: 16px !important;
+    margin-bottom: 16px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    border-radius: 0 8px 8px 0 !important;
+}
+
 /* 인용구 리스트 뒤에 바로 이어지는 인용구 */
 .ql-editor ol:has(> li.ql-quote-item) + blockquote,
-.ql-editor ul:has(> li.ql-quote-item) + blockquote {
+.ql-editor ul:has(> li.ql-quote-item) + blockquote,
+.ql-editor ol:has(> li.ql-quote-item-true) + blockquote,
+.ql-editor ul:has(> li.ql-quote-item-true) + blockquote {
     margin-top: 0 !important;
     border-radius: 0 !important;
     padding-top: 2px !important;

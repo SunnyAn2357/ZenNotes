@@ -676,19 +676,15 @@ function convertQuillToMarkdown() {
     const indentSpaces = "  ".repeat(indentLvl);
     const itemText = convertInline(li).trim();
     const listType = li.getAttribute("data-list");
+    const isQuoted = li.classList.contains("ql-quote-item") || li.classList.contains("ql-quote-item-true");
+    const qPrefix = isQuoted ? "> " : "";
 
     if (listType === "checked") {
-      const isQuoted = li.classList.contains("ql-quote-item");
-      const qPrefix = isQuoted ? "> " : "";
-
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) >= indentLvl) delete counters[k];
       });
       return `${qPrefix}${indentSpaces}- [x] ${itemText}`;
     } else if (listType === "unchecked" || listType === "check") {
-      const isQuoted = li.classList.contains("ql-quote-item");
-      const qPrefix = isQuoted ? "> " : "";
-
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) >= indentLvl) delete counters[k];
       });
@@ -697,18 +693,12 @@ function convertQuillToMarkdown() {
       listType === "ordered" ||
       (li.parentElement && li.parentElement.tagName.toLowerCase() === "ol" && !listType)
     ) {
-      const isQuoted = li.classList.contains("ql-quote-item");
-      const qPrefix = isQuoted ? "> " : "";
-
       counters[indentLvl] = (counters[indentLvl] || 0) + 1;
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) > indentLvl) delete counters[k];
       });
       return `${qPrefix}${indentSpaces}${counters[indentLvl]}. ${itemText}`;
     } else {
-      const isQuoted = li.classList.contains("ql-quote-item");
-      const qPrefix = isQuoted ? "> " : "";
-
       Object.keys(counters).forEach((k) => {
         if (parseInt(k, 10) >= indentLvl) delete counters[k];
       });
