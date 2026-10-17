@@ -1469,15 +1469,33 @@ body.light-theme .auth-toggle-btn.is-logged-in {
    🎯 [수정] 옵시디언 스타일 프리미엄 체크리스트 (클릭 버그 & 가독성 해결)
 ============================================================================ */
 
-/* 1. 텍스트 스르륵 변하는 애니메이션 (글자색 전환을 부드럽게) */
+/* 1. 텍스트 스르륵 변하는 애니메이션 & 불릿 기호 제거 */
 .ql-editor li[data-list="checked"],
-.ql-editor li[data-list="unchecked"] {
+.ql-editor li[data-list="unchecked"],
+.ql-editor li[data-list="check"] {
+    list-style-type: none !important;
     transition: color 0.2s ease-in-out !important;
 }
 
-/* 2. 실제 클릭을 담당하는 진짜 마커(.ql-ui) 디자인 엎어치기 */
-.ql-editor li[data-list="unchecked"]>.ql-ui::before,
-.ql-editor li[data-list="checked"]>.ql-ui::before {
+/* 🎯 [V4.3.3] 체크리스트 앞 stray 불릿(글머리기호) 원천 차단 */
+.ql-editor li[data-list="checked"]::before,
+.ql-editor li[data-list="unchecked"]::before,
+.ql-editor li[data-list="check"]::before {
+    content: none !important;
+    display: none !important;
+}
+
+/* 2. 실제 클릭을 담당하는 진짜 마커(.ql-ui) 디자인 */
+.ql-editor li[data-list="unchecked"] > .ql-ui,
+.ql-editor li[data-list="checked"] > .ql-ui,
+.ql-editor li[data-list="check"] > .ql-ui {
+    cursor: pointer !important;
+    user-select: none !important;
+}
+
+.ql-editor li[data-list="unchecked"] > .ql-ui::before,
+.ql-editor li[data-list="checked"] > .ql-ui::before,
+.ql-editor li[data-list="check"] > .ql-ui::before {
     content: '' !important;
     /* 기존 투박한 윈도우 체크문자(☐, ☑) 영구 삭제 */
     display: inline-block !important;
@@ -1489,23 +1507,31 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     box-sizing: border-box !important;
     vertical-align: middle !important;
     margin-top: -2px !important;
+    margin-right: 4px !important;
     /* 텍스트와 수직 중앙 정렬 완벽하게 맞춤 */
 }
 
 /* 3. [상태 1] 체크 안 된 빈 박스 (Unchecked) */
-.ql-editor li[data-list="unchecked"]>.ql-ui::before {
-    border: 2px solid var(--border) !important;
+.ql-editor li[data-list="unchecked"] > .ql-ui::before,
+.ql-editor li[data-list="check"] > .ql-ui::before {
+    border: 2px solid #6b7280 !important;
     background-color: transparent !important;
 }
 
+body.light-theme .ql-editor li[data-list="unchecked"] > .ql-ui::before,
+body.light-theme .ql-editor li[data-list="check"] > .ql-ui::before {
+    border: 2px solid #9ca3af !important;
+}
+
 /* 빈 박스에 마우스 올렸을 때의 반응 */
-.ql-editor li[data-list="unchecked"]>.ql-ui:hover::before {
+.ql-editor li[data-list="unchecked"] > .ql-ui:hover::before,
+.ql-editor li[data-list="check"] > .ql-ui:hover::before {
     border-color: var(--accent) !important;
-    background-color: rgba(120, 169, 255, 0.1) !important;
+    background-color: rgba(120, 169, 255, 0.15) !important;
 }
 
 /* 4. [상태 2] 체크 완료된 박스 (Checked) */
-.ql-editor li[data-list="checked"]>.ql-ui::before {
+.ql-editor li[data-list="checked"] > .ql-ui::before {
     border: 2px solid var(--accent) !important;
     background-color: var(--accent) !important;
 
@@ -1519,6 +1545,10 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 .ql-editor li[data-list="checked"] {
     text-decoration: line-through !important;
     color: #6b7280 !important;
+}
+
+body.light-theme .ql-editor li[data-list="checked"] {
+    color: #9ca3af !important;
 }
 
 /* ============================================================================

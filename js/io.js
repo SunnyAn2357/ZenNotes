@@ -684,7 +684,7 @@ function convertQuillToMarkdown() {
         if (parseInt(k, 10) >= indentLvl) delete counters[k];
       });
       return `${qPrefix}${indentSpaces}- [x] ${itemText}`;
-    } else if (listType === "unchecked") {
+    } else if (listType === "unchecked" || listType === "check") {
       const isQuoted = li.classList.contains("ql-quote-item");
       const qPrefix = isQuoted ? "> " : "";
 
@@ -999,7 +999,7 @@ function convertMarkdownToHTML(mdText) {
       while (i < lines.length && /^>\s?(.*)$/.test(lines[i])) {
         const qm = lines[i].match(/^>\s?(.*)$/);
         const innerLine = qm[1] || "";
-        const checkMatch = innerLine.match(/^\s*(\*|-)\s+\[([ xX])\]\s*(.*)$/);
+        const checkMatch = innerLine.match(/^\s*(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/);
         const orderedMatch = innerLine.match(/^\s*(\d+)\.\s+(.*)$/);
         const bulletMatch = innerLine.match(/^\s*(\*|-)\s+(.*)$/);
 
@@ -1018,10 +1018,10 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // E. 체크리스트 (- [ ] 또는 - [x] 또는 * [ ]) - 🎯 [V3.4.4] 들여쓰기 지원
-    if (/^\s*(\*|-)\s+\[([ xX])\]\s*(.*)$/.test(line)) {
-      while (i < lines.length && /^\s*(\*|-)\s+\[([ xX])\]\s*(.*)$/.test(lines[i])) {
-        const cm = lines[i].match(/^(\s*)(\*|-)\s+\[([ xX])\]\s*(.*)$/);
+    // E. 체크리스트 (- [ ], - [x], * [ ], [ ] 등) - 🎯 [V3.4.4] 들여쓰기 지원 & [V4.3.3] 패턴 강화
+    if (/^\s*(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/.test(line)) {
+      while (i < lines.length && /^\s*(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/.test(lines[i])) {
+        const cm = lines[i].match(/^(\s*)(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/);
         const indentLvl = getLeadingIndent(cm[1]);
         const isChecked = cm[3].toLowerCase() === "x";
         const text = parseInline(cm[4]);

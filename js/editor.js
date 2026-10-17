@@ -223,13 +223,26 @@ const quill = new Quill('#editor', {
                     openMarkdownHelpModal();
                 },
                 // 🎯 [V4.2.0] 인용구 내부 리스트(글머리, 번호, 체크) 연동 툴바 핸들러
+                // 🎯 [V4.3.3] 체크리스트 버그 해결: 툴바 check 버튼은 'check'를 넘기므로,
+                //     이미 checked/unchecked/check 상태이면 토글 해제(false),
+                //     아니면 'unchecked'로 지정하여 Quill 2 정규 체크박스 생성
                 'list': function (value) {
                     const range = this.quill.getSelection();
                     if (!range) return;
                     const formats = this.quill.getFormat(range);
                     const wasInQuote = !!(formats.blockquote || formats['quote-item']);
                     const currentList = formats.list;
-                    const targetList = (currentList === value) ? false : value;
+
+                    let targetList;
+                    if (value === 'check') {
+                        if (currentList === 'checked' || currentList === 'unchecked' || currentList === 'check') {
+                            targetList = false;
+                        } else {
+                            targetList = 'unchecked';
+                        }
+                    } else {
+                        targetList = (currentList === value) ? false : value;
+                    }
 
                     this.quill.format('list', targetList, Quill.sources.USER);
                     if (wasInQuote) {
@@ -620,7 +633,8 @@ quill.on('text-change', function (delta, oldDelta, source) {
         const lineStart = quill.getIndex(line);
 
         // --- [A. 블록 포맷 감지: H1-H3, 인용구, 리스트, 구분선, 코드블록] ---
-        const blockMatch = text.match(/^(#{1,3}|>|\*|-|1\.|\-{3}|`{3}|\[\s\]|\[x\])\s$/);
+        // 🎯 [V4.3.3] 체크리스트 글머리기호 버그 해결: [ ], [x], - [ ], - [x], * [ ], * [x] 모두 인식
+        const blockMatch = text.match(/^(#{1,3}|>|(?:\*|-)\s+\[\s\]|(?:\*|-)\s+\[x\]|\*|-|1\.|\-{3}|`{3}|\[\s\]|\[x\])\s$/i);
         if (blockMatch) {
             const prefix = blockMatch[1];
             const deleteLength = prefix.length + 1;
@@ -635,6 +649,14 @@ quill.on('text-change', function (delta, oldDelta, source) {
             else if (prefix === '##') quill.formatLine(formatIndex, 1, 'header', 2, Quill.sources.SILENT);
             else if (prefix === '###') quill.formatLine(formatIndex, 1, 'header', 3, Quill.sources.SILENT);
             else if (prefix === '>') quill.formatLine(formatIndex, 1, 'blockquote', true, Quill.sources.SILENT);
+            else if (/^(\*|-)\s+\[\s\]$/i.test(prefix) || prefix === '[ ]') {
+                quill.formatLine(formatIndex, 1, 'list', 'unchecked', Quill.sources.USER);
+                if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
+            }
+            else if (/^(\*|-)\s+\[x\]$/i.test(prefix) || /^\[x\]$/i.test(prefix)) {
+                quill.formatLine(formatIndex, 1, 'list', 'checked', Quill.sources.USER);
+                if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
+            }
             else if (prefix === '*' || prefix === '-') {
                 quill.formatLine(formatIndex, 1, 'list', 'bullet', Quill.sources.SILENT);
                 if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.SILENT);
@@ -655,11 +677,6 @@ quill.on('text-change', function (delta, oldDelta, source) {
                 quill.setSelection(formatIndex + 1, 0, Quill.sources.USER);
             }
             else if (prefix === '```') quill.formatLine(formatIndex, 1, 'code-block', true, Quill.sources.SILENT);
-            else if (prefix === '[ ]' || prefix === '[x]') {
-                const listVal = prefix === '[x]' ? 'checked' : 'unchecked';
-                quill.formatLine(formatIndex, 1, 'list', listVal, Quill.sources.USER);
-                if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
-            }
 
             return;
         }
@@ -1749,4 +1766,14 @@ window.addEventListener("DOMContentLoaded", () => {
             }
         });
     });
+
+    // 🎯 [V4.3.3] 레거시 data-list="check" 클릭 시 정상 체크 토글 지원 및 자동 정규화
+    quill.root.addEventListener('click', (e) => {
+        const ui = e.target.closest('.ql-ui');
+        const li = e.target.closest('li[data-list="check"]');
+        if (li && (ui || e.target === li)) {
+            li.setAttribute('data-list', 'checked');
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+        }
+    }, true);
 });
