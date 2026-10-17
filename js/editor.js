@@ -1277,10 +1277,13 @@ window.addEventListener("popstate", (e) => {
         } else {
             backPressTimer = now;
             if (document.activeElement) document.activeElement.blur();
-            if (window.quill && quill.hasFocus()) quill.blur();
+            const isOnline = typeof window.isZenOnline === "function" && window.isZenOnline();
+            const syncStatusMsg = isOnline
+                ? "(클라우드 동기화 완료됨)"
+                : "(오프라인: 재연결 시 자동 동기화)";
 
             showToast(
-                "뒤로가기 버튼을 한 번 더 누르면 종료됩니다.\n(온라인 동기화: 다음 로그인 시)",
+                `뒤로가기 버튼을 한 번 더 누르면 종료됩니다.\n${syncStatusMsg}`,
             );
             history.pushState({ page: "main" }, "");
         }
