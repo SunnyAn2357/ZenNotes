@@ -647,7 +647,8 @@ function convertQuillToMarkdown() {
       return innerText ? `*${innerText}*` : "";
     }
     if (tag === "u") {
-      return innerText ? `__${innerText}__` : "";
+      // 🎯 [V4.3.4] 마크다운 표준 밑줄 호환성: Obsidian, GitHub, Notion 표준 규격인 <u> 태그로 내보내기
+      return innerText ? `<u>${innerText}</u>` : "";
     }
     if (tag === "s" || tag === "del" || node.classList.contains("ql-strike-line")) {
       return innerText ? `~~${innerText}~~` : "";
@@ -740,21 +741,30 @@ function convertQuillToMarkdown() {
     else if (el.classList.contains("ql-code-block-container") || tag === "pre") {
       const codeLines = [];
       const codeBlocks = el.querySelectorAll(".ql-code-block");
+      // 🎯 [V4.3.4] 코드 블록 언어 태그 추출 (GFM 표준 호환)
+      let lang = "";
       if (codeBlocks.length > 0) {
+        lang = codeBlocks[0].getAttribute("data-language") || "";
         codeBlocks.forEach((cb) => codeLines.push(cb.textContent));
       } else {
         codeLines.push(el.textContent);
       }
-      lines.push("```\n" + codeLines.join("\n") + "\n```");
+      if (!lang) {
+        lang = el.getAttribute("data-language") || el.querySelector("select.ql-ui")?.value || "";
+      }
+      if (lang === "plain") lang = "";
+      lines.push("```" + lang + "\n" + codeLines.join("\n") + "\n```");
     }
     // 4. 단일 코드 블록 행
     else if (el.classList.contains("ql-code-block")) {
+      let lang = el.getAttribute("data-language") || "";
+      if (lang === "plain") lang = "";
       const codeLines = [el.textContent];
       while (i + 1 < children.length && children[i + 1].classList.contains("ql-code-block")) {
         i++;
         codeLines.push(children[i].textContent);
       }
-      lines.push("```\n" + codeLines.join("\n") + "\n```");
+      lines.push("```" + lang + "\n" + codeLines.join("\n") + "\n```");
     }
     // 5. 구분선 (HR)
     else if (tag === "hr") {
@@ -926,6 +936,21 @@ function convertMarkdownToHTML(mdText) {
 
     // A. 코드 블록 (``` ~ ```)
     if (/^```/.test(line.trim())) {
+      // 🎯 [V4.3.4] 코드 블록 언어 태그 파싱 (GFM: ```javascript, ```python 등)
+      const langMatch = line.trim().match(/^```([a-zA-Z0-9_\-+]+)?/);
+      let lang = (langMatch && langMatch[1]) ? langMatch[1].toLowerCase().trim() : "plain";
+      if (lang === "js") lang = "javascript";
+      else if (lang === "ts") lang = "typescript";
+      else if (lang === "py") lang = "python";
+      else if (lang === "sh" || lang === "shell" || lang === "zsh") lang = "bash";
+      else if (lang === "c++") lang = "cpp";
+      else if (lang === "c#") lang = "csharp";
+      else if (lang === "yml") lang = "yaml";
+      else if (lang === "md") lang = "markdown";
+      else if (lang === "htm") lang = "html";
+
+      const dataLangAttr = (lang && lang !== "plain") ? ` data-language="${lang}"` : "";
+
       const codeLines = [];
       i++;
       while (i < lines.length && !/^```/.test(lines[i].trim())) {
@@ -940,10 +965,10 @@ function convertMarkdownToHTML(mdText) {
       i++; // 닫는 ``` 건너뜀
       // Quill의 code-block 클래스 컨테이너와 동기화
       const codeHtml = codeLines
-        .map((cl) => `<div class="ql-code-block">${cl || "<br>"}</div>`)
+        .map((cl) => `<div class="ql-code-block"${dataLangAttr}>${cl || "<br>"}</div>`)
         .join("");
       htmlParts.push(
-        `<div class="ql-code-block-container" spellcheck="false">${codeHtml}</div>`
+        `<div class="ql-code-block-container" spellcheck="false"${dataLangAttr}>${codeHtml}</div>`
       );
       continue;
     }

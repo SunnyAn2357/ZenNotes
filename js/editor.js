@@ -634,7 +634,8 @@ quill.on('text-change', function (delta, oldDelta, source) {
 
         // --- [A. 블록 포맷 감지: H1-H3, 인용구, 리스트, 구분선, 코드블록] ---
         // 🎯 [V4.3.3] 체크리스트 글머리기호 버그 해결: [ ], [x], - [ ], - [x], * [ ], * [x] 모두 인식
-        const blockMatch = text.match(/^(#{1,3}|>|(?:\*|-)\s+\[\s\]|(?:\*|-)\s+\[x\]|\*|-|1\.|\-{3}|`{3}|\[\s\]|\[x\])\s$/i);
+        // 🎯 [V4.3.4] 코드 블록 언어 태그 입력 지원 (```javascript, ```python, ``` 등)
+        const blockMatch = text.match(/^(#{1,3}|>|(?:\*|-)\s+\[\s\]|(?:\*|-)\s+\[x\]|\*|-|1\.|\-{3}|`{3}[a-zA-Z0-9_\-+]*|\[\s\]|\[x\])\s$/i);
         if (blockMatch) {
             const prefix = blockMatch[1];
             const deleteLength = prefix.length + 1;
@@ -676,7 +677,19 @@ quill.on('text-change', function (delta, oldDelta, source) {
                 quill.updateContents(delta, Quill.sources.USER);
                 quill.setSelection(formatIndex + 1, 0, Quill.sources.USER);
             }
-            else if (prefix === '```') quill.formatLine(formatIndex, 1, 'code-block', true, Quill.sources.SILENT);
+            else if (/^`{3}/.test(prefix)) {
+                let lang = prefix.replace(/^`{3}/, '').toLowerCase().trim();
+                if (lang === "js") lang = "javascript";
+                else if (lang === "ts") lang = "typescript";
+                else if (lang === "py") lang = "python";
+                else if (lang === "sh" || lang === "shell" || lang === "zsh") lang = "bash";
+                else if (lang === "c++") lang = "cpp";
+                else if (lang === "c#") lang = "csharp";
+                else if (lang === "yml") lang = "yaml";
+                else if (lang === "md") lang = "markdown";
+                else if (lang === "htm") lang = "html";
+                quill.formatLine(formatIndex, 1, 'code-block', lang || true, Quill.sources.USER);
+            }
 
             return;
         }
@@ -732,6 +745,10 @@ quill.on('text-change', function (delta, oldDelta, source) {
         // 4. 기울임 (*내용* 또는 _내용_)
         const italicMatch = fullText.match(/(\*|_)(.+?)\1 $/);
         if (italicMatch) { applyInlineFormat(italicMatch[0], italicMatch[2], 'italic'); return; }
+
+        // 5. 🎯 [V4.3.4] 인라인 코드 (`내용`)
+        const codeMatch = fullText.match(/`([^`]+)` $/);
+        if (codeMatch) { applyInlineFormat(codeMatch[0], codeMatch[1], 'code'); return; }
     }
 });
 
