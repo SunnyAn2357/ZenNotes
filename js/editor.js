@@ -64,6 +64,7 @@ let activeMenuSelection = null;    // 팝업/모달 열릴 때 백업용 (닫힐
 const icons = Quill.import('ui/icons');
 
 // 1. 커스텀 기능 아이콘 (엔진이 모르는 기능들)
+icons['special-char'] = '<i class="fa-regular fa-face-smile" style="font-size: 14px; color: var(--text-muted);" title="특수문자 / 이모티콘 (Ctrl+F10)"></i>';
 icons['strike-line'] = '<i class="fa-solid fa-pen-slash" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['divider'] = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['markdown-help'] = '<i class="fa-brands fa-markdown" style="font-size: 15px; color: var(--text-muted);" title="마크다운 문법 (MD)"></i>';
@@ -253,12 +254,15 @@ const quill = new Quill('#editor', {
                 [{ 'list': 'check' }, { 'list': 'ordered' }, { 'list': 'bullet' }],
                 [{ 'align': [] }],
                 ['table', 'table-insert-row', 'table-delete-row', 'table-insert-column', 'table-delete-column'],
-                ['blockquote', 'code-block', 'divider'],
+                ['special-char', 'blockquote', 'code-block', 'divider'],
                 ['link', 'image', 'video'],
                 ['clean'],
                 ['markdown-help']
             ],
             handlers: {
+                'special-char': function () {
+                    openSpecialCharModal();
+                },
                 'markdown-help': function () {
                     openMarkdownHelpModal();
                 },
@@ -637,6 +641,13 @@ const mdHelpBtn = document.querySelector('.ql-markdown-help');
 if (mdHelpBtn) {
     mdHelpBtn.setAttribute('title', '마크다운 문법 (MD)');
     mdHelpBtn.setAttribute('aria-label', '마크다운 문법 안내');
+}
+
+// 🎯 [V4.3.8] 툴바 특수문자/이모티콘 버튼 툴팁 등록
+const specCharBtn = document.querySelector('.ql-special-char');
+if (specCharBtn) {
+    specCharBtn.setAttribute('title', '특수문자 / 이모티콘 (Ctrl+F10)');
+    specCharBtn.setAttribute('aria-label', '특수문자 및 이모티콘');
 }
 
 // 🎯 [통합 완료] 이미지 붙여넣기 완벽 제어 엔진
@@ -1123,6 +1134,24 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        const insertModal = document.getElementById("table-insert-modal");
+        if (insertModal && insertModal.classList.contains("is-open")) {
+            closeTableInsertModal();
+            return;
+        }
+
+        const deleteModal = document.getElementById("table-delete-modal");
+        if (deleteModal && deleteModal.classList.contains("is-open")) {
+            closeTableDeleteModal();
+            return;
+        }
+
+        const specModal = document.getElementById("special-char-modal");
+        if (specModal && specModal.classList.contains("is-open")) {
+            closeSpecialCharModal();
+            return;
+        }
+
         const pdfModal = document.getElementById("pdf-import-modal");
         if (pdfModal && pdfModal.style.display === "flex") {
             const cancelBtn = document.getElementById("pdf-modal-cancel-btn");
@@ -1271,6 +1300,24 @@ window.addEventListener("popstate", (e) => {
     const mdModal = document.getElementById("markdown-help-modal");
     if (mdModal && mdModal.style.display === "flex") {
         closeMarkdownHelpModal(true);
+        return;
+    }
+
+    const insertModal = document.getElementById("table-insert-modal");
+    if (insertModal && insertModal.classList.contains("is-open")) {
+        closeTableInsertModal();
+        return;
+    }
+
+    const deleteModal = document.getElementById("table-delete-modal");
+    if (deleteModal && deleteModal.classList.contains("is-open")) {
+        closeTableDeleteModal();
+        return;
+    }
+
+    const specModal = document.getElementById("special-char-modal");
+    if (specModal && specModal.classList.contains("is-open")) {
+        closeSpecialCharModal();
         return;
     }
 
@@ -1897,3 +1944,476 @@ window.addEventListener("DOMContentLoaded", () => {
         }
     }, true);
 });
+
+// ============================================================================
+// 🎯 [V4.3.8] 특수문자 및 이모티콘 입력 엔진 (Ctrl+F10 / 인용구 앞 툴바 버튼)
+// ============================================================================
+const SPECIAL_CHARS_1 = [
+    '·', '•', '□', '■', '○', '●', '※',
+    '▶', '▷', '▲', '▼', '◆', '◇', '★',
+    '☆', '✓', '✔', '✕', '→', '←', '↑',
+    '↓', '↔', '―', '~', '℃', '±', '◈',
+    '▣', '◐', '◑', '☎', '☞', '㈜', '№'
+];
+
+const SPECIAL_CHARS_2 = [
+    '①', '②', '③', '④', '⑤', '⑥', '⑦',
+    '⑧', '⑨', '⑩', '⑴', '⑵', '⑶', '⑷',
+    '⑸', '㈎', '㈏', '㈐', '㈑', '㈒', '㉠',
+    '㉡', '㉢', '㉣', '㉤', '『', '』', '「',
+    '」', '【', '】', '《', '》', '§', '¶'
+];
+
+// 알록달록 귀여운 이모티콘 35선 (7열 x 5행 대칭)
+const SPECIAL_CHARS_3 = [
+    '😀', '😊', '🥰', '😎', '🥳', '🤔', '👍',
+    '👏', '🙌', '💪', '❤️', '🧡', '💛', '💚',
+    '🐶', '🐱', '🐰', '🍀', '🌸', '⭐', '✨',
+    '🎉', '🎁', '🎈', '☕', '🍰', '🍔', '🍕',
+    '🔥', '💡', '📌', '🚀', '🎯', '⏰', '🏆'
+];
+
+let currentSpecTab = 1;
+const MAX_RECENT_CHARS = 8;
+let recentSpecialChars = [];
+try {
+    const stored = localStorage.getItem('zennotes_recent_special_chars');
+    if (stored) recentSpecialChars = JSON.parse(stored);
+} catch (e) {
+    recentSpecialChars = [];
+}
+
+let savedSpecialCharRange = null;
+
+function renderSpecialCharRecent() {
+    const listEl = document.getElementById('recentCharList');
+    if (!listEl) return;
+    if (!recentSpecialChars || recentSpecialChars.length === 0) {
+        listEl.innerHTML = '<span style="color:var(--text-muted);font-size:11px;padding-left:4px;">최근 입력 없음</span>';
+        return;
+    }
+    listEl.innerHTML = recentSpecialChars.map(ch => 
+        `<button type="button" class="recent-char-chip" data-char="${ch}" title="${ch}">${ch}</button>`
+    ).join('');
+
+    listEl.querySelectorAll('.recent-char-chip').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            insertSpecialChar(btn.dataset.char);
+        };
+    });
+}
+
+function renderSpecialCharGrid() {
+    const grid = document.getElementById('specialCharGrid');
+    if (!grid) return;
+    let list = SPECIAL_CHARS_1;
+    if (currentSpecTab === 2) list = SPECIAL_CHARS_2;
+    else if (currentSpecTab === 3) list = SPECIAL_CHARS_3;
+
+    grid.innerHTML = list.map(ch => 
+        `<button type="button" class="spec-btn" data-char="${ch}" title="${ch}">${ch}</button>`
+    ).join('');
+
+    grid.querySelectorAll('.spec-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            insertSpecialChar(btn.dataset.char);
+        };
+    });
+}
+
+function switchSpecTab(tabNum) {
+    currentSpecTab = tabNum;
+    const tab1 = document.getElementById('tabSpecialChar1');
+    const tab2 = document.getElementById('tabSpecialChar2');
+    const tab3 = document.getElementById('tabSpecialChar3');
+    if (tab1) tab1.classList.toggle('active', tabNum === 1);
+    if (tab2) tab2.classList.toggle('active', tabNum === 2);
+    if (tab3) tab3.classList.toggle('active', tabNum === 3);
+    renderSpecialCharGrid();
+}
+
+function insertSpecialChar(ch) {
+    if (!ch || !quill) return;
+    quill.focus();
+    let index = 0;
+    if (savedSpecialCharRange && typeof savedSpecialCharRange.index === 'number') {
+        index = savedSpecialCharRange.index;
+    } else {
+        const curSel = quill.getSelection();
+        index = curSel ? curSel.index : quill.getLength() - 1;
+    }
+
+    quill.insertText(index, ch, Quill.sources.USER);
+    savedSpecialCharRange = { index: index + ch.length, length: 0 };
+    quill.setSelection(savedSpecialCharRange.index, 0, Quill.sources.SILENT);
+
+    recentSpecialChars = [ch, ...recentSpecialChars.filter(c => c !== ch)];
+    if (recentSpecialChars.length > MAX_RECENT_CHARS) {
+        recentSpecialChars = recentSpecialChars.slice(0, MAX_RECENT_CHARS);
+    }
+    try {
+        localStorage.setItem('zennotes_recent_special_chars', JSON.stringify(recentSpecialChars));
+    } catch (e) {}
+    renderSpecialCharRecent();
+
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+function openSpecialCharModal() {
+    savedSpecialCharRange = quill.getSelection();
+    const modal = document.getElementById('special-char-modal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    switchSpecTab(currentSpecTab || 1);
+    renderSpecialCharRecent();
+}
+
+function closeSpecialCharModal() {
+    const modal = document.getElementById('special-char-modal');
+    if (modal) modal.classList.remove('is-open');
+    if (quill) {
+        quill.focus();
+        if (savedSpecialCharRange) {
+            quill.setSelection(savedSpecialCharRange.index, 0);
+        }
+    }
+}
+
+window.openSpecialCharModal = openSpecialCharModal;
+window.closeSpecialCharModal = closeSpecialCharModal;
+window.switchSpecTab = switchSpecTab;
+window.insertSpecialChar = insertSpecialChar;
+
+// ============================================================================
+// 🎯 [V4.3.8] 아래한글(HWP) 스타일 표 단축키 및 줄/칸 추가/삭제 모달
+// ============================================================================
+let savedTableRange = null;
+
+function isCursorInTable() {
+    if (!quill) return false;
+    const tableModule = quill.getModule('table');
+    const range = quill.getSelection();
+    if (tableModule && range) {
+        try {
+            const [table] = tableModule.getTable(range);
+            if (table) return true;
+        } catch (e) {}
+    }
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode) {
+        const node = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+        if (node && node.closest('table')) return true;
+    }
+    return false;
+}
+
+function createDefaultTable() {
+    const tableModule = quill.getModule('table');
+    if (!tableModule) return;
+    tableModule.insertTable(3, 3);
+    if (typeof showToast === 'function') {
+        showToast("✨ 기본 표(3×3)가 생성되었습니다.");
+    }
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+// --- 줄/칸 추가하기 (Alt+Insert) ---
+let selectedInsertDir = 'below'; // below, above, left, right
+
+function openTableInsertModal() {
+    if (!isCursorInTable()) {
+        if (typeof showToast === 'function') {
+            showToast("💡 표 안에서 실행해주세요. (Ctrl+N, T로 표 생성)");
+        }
+        return;
+    }
+    savedTableRange = quill.getSelection();
+    const modal = document.getElementById('table-insert-modal');
+    if (!modal) return;
+
+    selectedInsertDir = 'below';
+    modal.querySelectorAll('.table-option-card').forEach(card => {
+        const isMatch = card.dataset.val === 'below';
+        card.classList.toggle('active', isMatch);
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio) radio.checked = isMatch;
+    });
+
+    modal.classList.add('is-open');
+}
+
+function closeTableInsertModal() {
+    const modal = document.getElementById('table-insert-modal');
+    if (modal) modal.classList.remove('is-open');
+    if (quill) {
+        quill.focus();
+        if (savedTableRange) quill.setSelection(savedTableRange);
+    }
+}
+
+function confirmTableInsert() {
+    const tableModule = quill.getModule('table');
+    if (!tableModule) {
+        closeTableInsertModal();
+        return;
+    }
+    if (savedTableRange) {
+        quill.setSelection(savedTableRange.index, savedTableRange.length, Quill.sources.SILENT);
+    }
+    quill.focus();
+
+    switch (selectedInsertDir) {
+        case 'above':
+            tableModule.insertRowAbove();
+            if (typeof showToast === 'function') showToast("위쪽에 행을 추가했습니다.");
+            break;
+        case 'below':
+            tableModule.insertRowBelow();
+            if (typeof showToast === 'function') showToast("아래쪽에 행을 추가했습니다.");
+            break;
+        case 'left':
+            tableModule.insertColumnLeft();
+            if (typeof showToast === 'function') showToast("왼쪽에 열을 추가했습니다.");
+            break;
+        case 'right':
+            tableModule.insertColumnRight();
+            if (typeof showToast === 'function') showToast("오른쪽에 열을 추가했습니다.");
+            break;
+    }
+
+    const modal = document.getElementById('table-insert-modal');
+    if (modal) modal.classList.remove('is-open');
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+// --- 줄/칸 지우기 (Alt+Delete) ---
+let selectedDeleteTarget = 'row'; // row, col
+
+function openTableDeleteModal() {
+    if (!isCursorInTable()) {
+        if (typeof showToast === 'function') {
+            showToast("💡 표 안에서 실행해주세요.");
+        }
+        return;
+    }
+    savedTableRange = quill.getSelection();
+    const modal = document.getElementById('table-delete-modal');
+    if (!modal) return;
+
+    selectedDeleteTarget = 'row';
+    modal.querySelectorAll('.table-option-card').forEach(card => {
+        const isMatch = card.dataset.val === 'row';
+        card.classList.toggle('active', isMatch);
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio) radio.checked = isMatch;
+    });
+
+    modal.classList.add('is-open');
+}
+
+function closeTableDeleteModal() {
+    const modal = document.getElementById('table-delete-modal');
+    if (modal) modal.classList.remove('is-open');
+    if (quill) {
+        quill.focus();
+        if (savedTableRange) quill.setSelection(savedTableRange);
+    }
+}
+
+function confirmTableDelete() {
+    const tableModule = quill.getModule('table');
+    if (!tableModule) {
+        closeTableDeleteModal();
+        return;
+    }
+    if (savedTableRange) {
+        quill.setSelection(savedTableRange.index, savedTableRange.length, Quill.sources.SILENT);
+    }
+    quill.focus();
+
+    if (selectedDeleteTarget === 'row') {
+        tableModule.deleteRow();
+        if (typeof showToast === 'function') showToast("행을 삭제했습니다.");
+    } else {
+        tableModule.deleteColumn();
+        if (typeof showToast === 'function') showToast("열을 삭제했습니다.");
+    }
+
+    const modal = document.getElementById('table-delete-modal');
+    if (modal) modal.classList.remove('is-open');
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+window.openTableInsertModal = openTableInsertModal;
+window.closeTableInsertModal = closeTableInsertModal;
+window.confirmTableInsert = confirmTableInsert;
+window.openTableDeleteModal = openTableDeleteModal;
+window.closeTableDeleteModal = closeTableDeleteModal;
+window.confirmTableDelete = confirmTableDelete;
+window.createDefaultTable = createDefaultTable;
+
+// --- 모달 옵션 카드 클릭 이벤트 등록 ---
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('#table-insert-modal .table-option-card').forEach(card => {
+        card.addEventListener('click', () => {
+            selectedInsertDir = card.dataset.val;
+            document.querySelectorAll('#table-insert-modal .table-option-card').forEach(c => {
+                const isMatch = c.dataset.val === selectedInsertDir;
+                c.classList.toggle('active', isMatch);
+                const radio = c.querySelector('input[type="radio"]');
+                if (radio) radio.checked = isMatch;
+            });
+        });
+    });
+
+    document.querySelectorAll('#table-delete-modal .table-option-card').forEach(card => {
+        card.addEventListener('click', () => {
+            selectedDeleteTarget = card.dataset.val;
+            document.querySelectorAll('#table-delete-modal .table-option-card').forEach(c => {
+                const isMatch = c.dataset.val === selectedDeleteTarget;
+                c.classList.toggle('active', isMatch);
+                const radio = c.querySelector('input[type="radio"]');
+                if (radio) radio.checked = isMatch;
+            });
+        });
+    });
+});
+
+// ============================================================================
+// 🎯 [V4.3.8] 전역 단축키 핸들러 (Ctrl+N, T / Ctrl+Alt+T / Alt+Ins / Alt+Del / Ctrl+F10)
+// ============================================================================
+let isWaitingForTableN = false;
+let waitingForTableTimer = null;
+
+window.addEventListener('keydown', function (e) {
+    const insertModal = document.getElementById('table-insert-modal');
+    const isInsertOpen = insertModal && insertModal.classList.contains('is-open');
+
+    const deleteModal = document.getElementById('table-delete-modal');
+    const isDeleteOpen = deleteModal && deleteModal.classList.contains('is-open');
+
+    const specModal = document.getElementById('special-char-modal');
+    const isSpecOpen = specModal && specModal.classList.contains('is-open');
+
+    // [1] 열린 모달 내부 키보드 제어
+    if (isInsertOpen) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeTableInsertModal();
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmTableInsert();
+            return;
+        }
+        let newDir = null;
+        if (e.key === 'ArrowUp' || e.key === '1') newDir = 'above';
+        else if (e.key === 'ArrowDown' || e.key === '2') newDir = 'below';
+        else if (e.key === 'ArrowLeft' || e.key === '3') newDir = 'left';
+        else if (e.key === 'ArrowRight' || e.key === '4') newDir = 'right';
+
+        if (newDir) {
+            e.preventDefault();
+            selectedInsertDir = newDir;
+            insertModal.querySelectorAll('.table-option-card').forEach(c => {
+                const isMatch = c.dataset.val === selectedInsertDir;
+                c.classList.toggle('active', isMatch);
+                const radio = c.querySelector('input[type="radio"]');
+                if (radio) radio.checked = isMatch;
+            });
+            return;
+        }
+    }
+
+    if (isDeleteOpen) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeTableDeleteModal();
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmTableDelete();
+            return;
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Tab' || e.key === '1' || e.key === '2') {
+            e.preventDefault();
+            if (e.key === '1') selectedDeleteTarget = 'row';
+            else if (e.key === '2') selectedDeleteTarget = 'col';
+            else selectedDeleteTarget = selectedDeleteTarget === 'row' ? 'col' : 'row';
+
+            deleteModal.querySelectorAll('.table-option-card').forEach(c => {
+                const isMatch = c.dataset.val === selectedDeleteTarget;
+                c.classList.toggle('active', isMatch);
+                const radio = c.querySelector('input[type="radio"]');
+                if (radio) radio.checked = isMatch;
+            });
+            return;
+        }
+    }
+
+    if (isSpecOpen) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeSpecialCharModal();
+            return;
+        }
+        if (e.altKey && (e.key === '1' || e.key === '2' || e.key === '3')) {
+            e.preventDefault();
+            switchSpecTab(parseInt(e.key, 10));
+            return;
+        }
+    }
+
+    // [2] 단축키: Ctrl + F10 -> 특수문자/이모티콘
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'F10' || e.keyCode === 121)) {
+        e.preventDefault();
+        openSpecialCharModal();
+        return;
+    }
+
+    // [3] 단축키: Alt + Insert -> 줄/칸 삽입 팝업
+    if (e.altKey && !e.ctrlKey && !e.shiftKey && (e.key === 'Insert' || e.keyCode === 45)) {
+        e.preventDefault();
+        openTableInsertModal();
+        return;
+    }
+
+    // [4] 단축키: Alt + Delete -> 줄/칸 삭제 팝업
+    if (e.altKey && !e.ctrlKey && !e.shiftKey && (e.key === 'Delete' || e.keyCode === 46)) {
+        e.preventDefault();
+        openTableDeleteModal();
+        return;
+    }
+
+    // [5] 단축키: Ctrl+Alt+T -> 즉시 기본 표(3×3) 생성
+    if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        createDefaultTable();
+        return;
+    }
+
+    // [6] 단축키: Ctrl + N -> T (아래한글 시퀀스)
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        isWaitingForTableN = true;
+        clearTimeout(waitingForTableTimer);
+        waitingForTableTimer = setTimeout(() => {
+            isWaitingForTableN = false;
+        }, 1500);
+        if (typeof showToast === 'function') {
+            showToast("💡 'T'를 누르면 기본 표(3×3)가 생성됩니다.");
+        }
+        return;
+    }
+    if (isWaitingForTableN && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        isWaitingForTableN = false;
+        clearTimeout(waitingForTableTimer);
+        createDefaultTable();
+        return;
+    }
+}, true);
