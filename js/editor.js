@@ -2151,49 +2151,58 @@ function getValidTableContext() {
 function tableInsertRowBelowSafe() {
     const ctx = getValidTableContext();
     if (!ctx) return;
-    const { tableModule, row, cell } = ctx;
-    const cellIndex = row.children.indexOf(cell);
+    const { table, row, cell } = ctx;
+    const rows = table.rows();
+    const rowIndex = rows.indexOf(row);
+    const colIndex = Math.max(0, row.children.indexOf(cell));
 
-    tableModule.insertRowBelow();
+    table.insertRow(rowIndex + 1);
+    quill.update(Quill.sources.USER);
 
-    setTimeout(() => {
-        try {
-            const nextRow = row.next;
-            if (nextRow && nextRow.children) {
-                const targetCell = nextRow.children.at(Math.max(0, cellIndex)) || nextRow.children.head;
-                if (targetCell) {
-                    const newIdx = targetCell.offset(quill.scroll);
-                    quill.setSelection(newIdx, 0, Quill.sources.USER);
-                    quill.focus();
-                }
+    try {
+        const updatedRows = table.rows();
+        const newRow = updatedRows[rowIndex + 1];
+        if (newRow && newRow.children) {
+            const targetCell = newRow.children.at(colIndex) || newRow.children.head;
+            if (targetCell) {
+                const targetOffset = targetCell.offset(quill.scroll);
+                quill.setSelection(targetOffset, 0, Quill.sources.USER);
+                quill.focus();
             }
-        } catch (e) {}
-    }, 10);
+        }
+    } catch (e) {
+        console.error("tableInsertRowBelowSafe selection error:", e);
+    }
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
 
 function tableDeleteRowSafe() {
     const ctx = getValidTableContext();
     if (!ctx) return;
-    const { tableModule, table, row, cell } = ctx;
+    const { table, row, cell } = ctx;
     const rows = table.rows();
     if (rows.length <= 1) return; // 1행만 남은 경우 표 파괴 방지
 
-    const cellIndex = row.children.indexOf(cell);
-    const targetRow = row.prev || row.next;
-    let targetOffset = -1;
-    if (targetRow && targetRow.children) {
-        const targetCell = targetRow.children.at(Math.max(0, cellIndex)) || targetRow.children.head;
-        if (targetCell) {
-            targetOffset = targetCell.offset(quill.scroll);
+    const rowIndex = rows.indexOf(row);
+    const colIndex = Math.max(0, row.children.indexOf(cell));
+    const survivingRowIndex = Math.min(rowIndex, rows.length - 2);
+
+    row.remove();
+    quill.update(Quill.sources.USER);
+
+    try {
+        const survivingRows = table.rows();
+        const targetRow = survivingRows[survivingRowIndex];
+        if (targetRow && targetRow.children) {
+            const targetCell = targetRow.children.at(colIndex) || targetRow.children.head;
+            if (targetCell) {
+                const targetOffset = targetCell.offset(quill.scroll);
+                quill.setSelection(targetOffset, 0, Quill.sources.USER);
+                quill.focus();
+            }
         }
-    }
-
-    tableModule.deleteRow();
-
-    if (targetOffset >= 0) {
-        quill.setSelection(targetOffset, 0, Quill.sources.USER);
-        quill.focus();
+    } catch (e) {
+        console.error("tableDeleteRowSafe selection error:", e);
     }
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
@@ -2285,14 +2294,15 @@ window.addEventListener('keydown', function (e) {
 
     // [4] 표 전용 행/열 즉시 편집: Alt + 방향키 (표 안에서만 발동, 토스트 없음)
     if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-        const isDown  = e.key === 'ArrowDown'  || e.key === 'Down'  || e.keyCode === 40;
-        const isUp    = e.key === 'ArrowUp'    || e.key === 'Up'    || e.keyCode === 38;
-        const isRight = e.key === 'ArrowRight' || e.key === 'Right' || e.keyCode === 39;
-        const isLeft  = e.key === 'ArrowLeft'  || e.key === 'Left'  || e.keyCode === 37;
+        const isDown  = e.key === 'ArrowDown'  || e.key === 'Down'  || e.code === 'ArrowDown'  || e.code === 'Numpad2' || e.keyCode === 40;
+        const isUp    = e.key === 'ArrowUp'    || e.key === 'Up'    || e.code === 'ArrowUp'    || e.code === 'Numpad8' || e.keyCode === 38;
+        const isRight = e.key === 'ArrowRight' || e.key === 'Right' || e.code === 'ArrowRight' || e.code === 'Numpad6' || e.keyCode === 39;
+        const isLeft  = e.key === 'ArrowLeft'  || e.key === 'Left'  || e.code === 'ArrowLeft'  || e.code === 'Numpad4' || e.keyCode === 37;
 
         if (isDown || isUp || isRight || isLeft) {
             if (isCursorInTable()) {
                 e.preventDefault();
+                e.stopPropagation();
                 if (isDown) tableInsertRowBelowSafe();
                 else if (isUp) tableDeleteRowSafe();
                 else if (isRight) tableInsertColumnRightSafe();

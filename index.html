@@ -25,7 +25,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.4.0">
+    <link rel="stylesheet" href="css/main.css?v=4.4.1">
 
 </head>
 
@@ -235,6 +235,27 @@
             <div id="editor"></div>
         </div>
         <div id="print-doc-footer" class="print-doc-footer">ZenNotes</div>
+
+        <!-- 🎯 [V4.4.1] 특수문자 및 이모티콘 모달 (가운데 편집창 정중앙 배치 & 투명 백드롭) -->
+        <div id="special-char-modal" class="special-char-overlay" onclick="if(event.target===this) closeSpecialCharModal()">
+            <div class="fm-modal spec-modal-container" style="width: 350px; max-width: 95vw; padding: 0;">
+                <div class="fm-modal-header" style="padding: 8px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                    <div class="spec-tabs" style="display: flex; gap: 4px; align-items: center;">
+                        <button type="button" id="tabSpecialChar1" class="spec-tab-btn active" onclick="switchSpecTab(1)">특수키1</button>
+                        <button type="button" id="tabSpecialChar2" class="spec-tab-btn" onclick="switchSpecTab(2)">특수키2</button>
+                        <button type="button" id="tabSpecialChar3" class="spec-tab-btn" onclick="switchSpecTab(3)">이모티콘</button>
+                    </div>
+                    <i class="fa-solid fa-xmark" style="cursor:pointer; color: var(--text-muted); padding: 4px;" onclick="closeSpecialCharModal()"></i>
+                </div>
+                <div id="specialCharGrid" class="spec-grid" style="padding: 10px 12px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; max-height: 220px; overflow-y: auto;">
+                    <!-- 35개 문자 렌더링 -->
+                </div>
+                <div id="specialCharRecentBar" class="spec-recent-bar" style="padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 6px; min-height: 38px; box-sizing: border-box; overflow: hidden;">
+                    <span style="font-weight: 700; color: var(--text-muted); flex: none; font-size: 11px;">최근 입력:</span>
+                    <div id="recentCharList" style="display: flex; gap: 4px; align-items: center; flex: 1; overflow-x: auto; -webkit-overflow-scrolling: touch;"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="col-right is-closed" id="col-right">
@@ -477,26 +498,6 @@
         </div>
     </div>
 
-    <!-- 🎯 [V4.3.8] 특수문자 및 이모티콘 모달 (Ctrl+F10 / 인용구 앞 툴바 버튼) -->
-    <div id="special-char-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeSpecialCharModal()">
-        <div class="fm-modal" style="width: 350px; max-width: 95vw; padding: 0;">
-            <div class="fm-modal-header" style="padding: 8px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                <div class="spec-tabs" style="display: flex; gap: 4px; align-items: center;">
-                    <button type="button" id="tabSpecialChar1" class="spec-tab-btn active" onclick="switchSpecTab(1)">특수키1</button>
-                    <button type="button" id="tabSpecialChar2" class="spec-tab-btn" onclick="switchSpecTab(2)">특수키2</button>
-                    <button type="button" id="tabSpecialChar3" class="spec-tab-btn" onclick="switchSpecTab(3)">이모티콘</button>
-                </div>
-                <i class="fa-solid fa-xmark" style="cursor:pointer; color: var(--text-muted); padding: 4px;" onclick="closeSpecialCharModal()"></i>
-            </div>
-            <div id="specialCharGrid" class="spec-grid" style="padding: 10px 12px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; max-height: 220px; overflow-y: auto;">
-                <!-- 35개 문자 렌더링 -->
-            </div>
-            <div id="specialCharRecentBar" class="spec-recent-bar" style="padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 6px; min-height: 38px; box-sizing: border-box; overflow: hidden;">
-                <span style="font-weight: 700; color: var(--text-muted); flex: none; font-size: 11px;">최근 입력:</span>
-                <div id="recentCharList" style="display: flex; gap: 4px; align-items: center; flex: 1; overflow-x: auto; -webkit-overflow-scrolling: touch;"></div>
-            </div>
-        </div>
-    </div>
 
     <!-- 🎯 [V3.3.2] 편집기 상단 이동 플로팅 버튼 -->
     <button id="scroll-to-top-btn" class="scroll-to-top-btn" title="맨 위로 이동" aria-label="맨 위로 이동">
@@ -523,19 +524,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=4.4.0"></script>
-    <script src="js/db.js?v=4.4.0"></script>
-    <script src="js/ui.js?v=4.4.0"></script>
-    <script src="js/editor.js?v=4.4.0"></script>
-    <script src="js/file_manager.js?v=4.4.0"></script>
-    <script src="js/io.js?v=4.4.0"></script>
-    <script src="js/auth.js?v=4.4.0"></script>
+    <script src="js/globals.js?v=4.4.1"></script>
+    <script src="js/db.js?v=4.4.1"></script>
+    <script src="js/ui.js?v=4.4.1"></script>
+    <script src="js/editor.js?v=4.4.1"></script>
+    <script src="js/file_manager.js?v=4.4.1"></script>
+    <script src="js/io.js?v=4.4.1"></script>
+    <script src="js/auth.js?v=4.4.1"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.4.0");
+            console.log("✨ 현재 버전: v4.4.1");
             console.log("=========================================");
         });
     </script>

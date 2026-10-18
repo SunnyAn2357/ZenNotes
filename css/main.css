@@ -4281,11 +4281,44 @@ body.light-theme .scroll-to-top-btn:hover {
 }
 
 /* ==========================================================================
-   🎯 [V4.4.0] 특수문자/이모티콘 툴바 및 모달 스타일
+   🎯 [V4.4.1] 특수문자/이모티콘 모달 (가운데 편집창 정중앙 & 투명 백드롭 & 14px 4면 라운딩)
    ========================================================================== */
+#special-char-modal {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    z-index: 3000 !important;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
 #special-char-modal.is-open,
 .fm-modal-overlay.is-open {
     display: flex !important;
+}
+
+#special-char-modal .fm-modal {
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+}
+
+#special-char-modal .fm-modal-header {
+    border-top-left-radius: 14px !important;
+    border-top-right-radius: 14px !important;
+}
+
+#special-char-modal .spec-recent-bar {
+    border-bottom-left-radius: 14px !important;
+    border-bottom-right-radius: 14px !important;
 }
 
 .ql-toolbar.ql-snow button.ql-special-char:hover i {
