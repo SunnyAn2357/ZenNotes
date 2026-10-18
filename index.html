@@ -25,7 +25,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.3.6">
+    <link rel="stylesheet" href="css/main.css?v=4.3.7">
 
 </head>
 
@@ -356,97 +356,107 @@
 
     <!-- 🎯 [V3.3.3] 마크다운 문법 안내 모달 (Markdown Cheat Sheet Modal) -->
     <div id="markdown-help-modal" class="fm-modal-overlay" onclick="if(event.target === this) closeMarkdownHelpModal();">
-        <div class="fm-modal" style="max-width: 420px;">
+        <div class="fm-modal" style="max-width: 480px;">
             <div class="fm-modal-header" style="padding: 16px 20px;">
                 <span style="font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-brands fa-markdown" style="color: var(--accent); font-size: 18px;"></i> 마크다운 문법
+                    <i class="fa-brands fa-markdown" style="color: var(--accent); font-size: 19px;"></i> 마크다운 단축키 안내
                 </span>
                 <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeMarkdownHelpModal()"></i>
             </div>
-            <div class="fm-modal-body" style="padding: 16px 18px; max-height: 65vh; overflow-y: auto;">
-                <table class="md-help-table" style="width: 100%; border-collapse: collapse; font-size: 13.5px; text-align: left;">
+            <div class="fm-modal-body" style="padding: 14px 18px; max-height: 65vh; overflow-y: auto;">
+                <table class="md-help-table">
                     <thead>
-                        <tr style="border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 13px;">
-                            <th style="padding: 8px 10px; text-align: left; width: 16%; font-weight: 600;">툴바</th>
-                            <th style="padding: 8px 10px; text-align: left; width: 44%; font-weight: 600;">키보드 입력</th>
-                            <th style="padding: 8px 10px; text-align: left; width: 40%; font-weight: 600;">변환 결과</th>
+                        <tr>
+                            <th style="width: 14%;">툴바</th>
+                            <th style="width: 52%;">키보드 입력</th>
+                            <th style="width: 34%;">변환 결과</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td><span class="md-tb-badge">H1</span></td>
-                            <td><code># </code></td>
-                            <td>대제목 (H1)</td>
+                            <td><code class="md-key"># </code></td>
+                            <td><span style="font-weight: 700;">대제목 (H1)</span></td>
                         </tr>
                         <tr>
                             <td><span class="md-tb-badge">H2</span></td>
-                            <td><code>## </code></td>
-                            <td>중제목 (H2)</td>
+                            <td><code class="md-key">## </code></td>
+                            <td><span style="font-weight: 700;">중제목 (H2)</span></td>
                         </tr>
                         <tr>
                             <td><span class="md-tb-badge">H3</span></td>
-                            <td><code>### </code></td>
-                            <td>소제목 (H3)</td>
+                            <td><code class="md-key">### </code></td>
+                            <td><span style="font-weight: 600;">소제목 (H3)</span></td>
                         </tr>
                         <tr>
                             <td><span class="md-tb-badge" style="font-weight: 800; font-size: 13px;">B</span></td>
-                            <td><code>**단어** </code></td>
+                            <td><code class="md-key">**단어** </code></td>
                             <td><strong>굵게</strong></td>
                         </tr>
                         <tr>
                             <td><span class="md-tb-badge" style="font-style: italic; font-family: serif; font-size: 13px;">I</span></td>
-                            <td><code>*단어* </code></td>
+                            <td><code class="md-key">*단어* </code></td>
                             <td><em>기울임꼴</em></td>
                         </tr>
                         <tr>
                             <td><span class="md-tb-badge" style="text-decoration: underline; font-size: 13px;">U</span></td>
-                            <td><code>__단어__ </code></td>
+                            <td><code class="md-key">__단어__ </code></td>
                             <td><u>밑줄</u></td>
                         </tr>
                         <tr>
                             <td><span class="md-tb-badge" style="text-decoration: line-through; font-size: 13px;">S</span></td>
-                            <td><code>~~단어~~ </code></td>
+                            <td><code class="md-key">~~단어~~ </code></td>
                             <td><del style="color: var(--text-muted);">취소선</del></td>
                         </tr>
                         <tr>
-                            <td><span class="md-tb-badge" style="font-family: monospace; font-size: 11px;">&lt;c&gt;</span></td>
-                            <td><code>`단어` </code></td>
+                            <td><i class="fa-solid fa-keyboard" style="font-size: 11px; color: var(--text-muted);" title="키보드 전용 단축키"></i></td>
+                            <td><code class="md-key">`단어` </code></td>
                             <td><code style="background-color: rgba(120, 169, 255, 0.1); color: var(--accent); padding: 2px 4px; border-radius: 4px; font-size: 12px;">인라인 코드</code></td>
                         </tr>
                         <tr>
                             <td><i class="fa-solid fa-list-check" style="font-size: 12px; color: var(--text-muted);"></i></td>
-                            <td><code>[ ] </code></td>
+                            <td><code class="md-key">[ ] </code>, <code class="md-key">- [ ] </code></td>
                             <td>체크리스트</td>
                         </tr>
                         <tr>
                             <td><i class="fa-solid fa-list-ol" style="font-size: 12px; color: var(--text-muted);"></i></td>
-                            <td><code>1. </code></td>
-                            <td>번호 매기기 목록</td>
+                            <td><code class="md-key">1. </code></td>
+                            <td>번호 목록</td>
                         </tr>
                         <tr>
                             <td><i class="fa-solid fa-list-ul" style="font-size: 12px; color: var(--text-muted);"></i></td>
-                            <td><code>- </code>, <code>* </code>, <code>+ </code></td>
-                            <td>글머리 기호 목록 (•)</td>
+                            <td><code class="md-key">- </code>, <code class="md-key">* </code>, <code class="md-key">+ </code></td>
+                            <td>글머리 기호</td>
+                        </tr>
+                        <tr>
+                            <td><i class="fa-solid fa-table" style="font-size: 12px; color: var(--text-muted);"></i></td>
+                            <td><code class="md-key">|제목|내용| </code>, <code class="md-key">|3x3| </code></td>
+                            <td>표</td>
                         </tr>
                         <tr>
                             <td><i class="fa-solid fa-quote-left" style="font-size: 12px; color: var(--text-muted);"></i></td>
-                            <td><code>&gt; </code></td>
-                            <td>인용구 (내부 리스트 지원)</td>
+                            <td><code class="md-key">&gt; </code></td>
+                            <td>인용구</td>
                         </tr>
                         <tr>
-                            <td><span style="font-weight: 700; font-size: 11.5px; color: var(--text-muted); font-family: monospace;">&lt;/&gt;</span></td>
-                            <td><code>``` </code></td>
-                            <td>코드 블록 (언어 지정 가능)</td>
+                            <td><span style="font-weight: 700; font-size: 11px; color: var(--text-muted); font-family: monospace;">&lt;/&gt;</span></td>
+                            <td><code class="md-key">``` </code></td>
+                            <td>코드 블록</td>
                         </tr>
                         <tr>
                             <td><i class="fa-solid fa-minus" style="font-size: 12px; color: var(--text-muted);"></i></td>
-                            <td><code>--- </code>, <code>___ </code></td>
-                            <td>가로 구분선</td>
+                            <td><code class="md-key">--- </code>, <code class="md-key">___ </code></td>
+                            <td>구분선</td>
+                        </tr>
+                        <tr>
+                            <td><i class="fa-solid fa-link" style="font-size: 12px; color: var(--text-muted);"></i></td>
+                            <td><code class="md-key">[이름](링크) </code></td>
+                            <td><span style="color: var(--accent); text-decoration: underline;">링크</span></td>
                         </tr>
                     </tbody>
                 </table>
-                <div style="font-size: 12.5px; color: #f59e0b; font-weight: 500; text-align: left; margin-top: 14px; line-height: 1.5; padding-left: 2px;">
-                    💡 키보드 입력 후 <b>스페이스바(Space)</b>를 누르면 즉시 변환됩니다.
+                <div class="md-help-tip">
+                    <i class="fa-solid fa-lightbulb" style="color: #f59e0b; margin-right: 6px;"></i>키보드 입력 후 <b>스페이스바(Space)</b>를 누르면 서식이 즉시 적용됩니다.
                 </div>
             </div>
             <div class="fm-modal-footer" style="padding: 12px 18px; justify-content: flex-end; display: flex;">
@@ -482,19 +492,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=4.3.6"></script>
-    <script src="js/db.js?v=4.3.6"></script>
-    <script src="js/ui.js?v=4.3.6"></script>
-    <script src="js/editor.js?v=4.3.6"></script>
-    <script src="js/file_manager.js?v=4.3.6"></script>
-    <script src="js/io.js?v=4.3.6"></script>
-    <script src="js/auth.js?v=4.3.6"></script>
+    <script src="js/globals.js?v=4.3.7"></script>
+    <script src="js/db.js?v=4.3.7"></script>
+    <script src="js/ui.js?v=4.3.7"></script>
+    <script src="js/editor.js?v=4.3.7"></script>
+    <script src="js/file_manager.js?v=4.3.7"></script>
+    <script src="js/io.js?v=4.3.7"></script>
+    <script src="js/auth.js?v=4.3.7"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.3.6");
+            console.log("✨ 현재 버전: v4.3.7");
             console.log("=========================================");
         });
     </script>

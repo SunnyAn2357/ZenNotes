@@ -4160,19 +4160,20 @@ body.is-pdf-exporting .ql-editor>p:last-child {
 }
 
 /* ============================================================================
-   🎯 [V3.3.3] 마크다운 문법 안내 모달 스타일 (Markdown Cheat Sheet Modal)
+   🎯 [V3.3.3] & [V4.3.7] 마크다운 문법 안내 모달 스타일 (Markdown Cheat Sheet Modal)
 ============================================================================ */
 #markdown-help-modal {
     z-index: 10006;
 }
 
 #markdown-help-modal .fm-modal {
-    max-width: 420px;
+    max-width: 480px;
     width: calc(100% - 28px);
     margin: 14px auto;
     border: 1px solid var(--border);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
-    border-radius: 14px;
+    border-radius: 16px;
+    background: var(--surface);
 }
 
 .md-help-table {
@@ -4185,30 +4186,70 @@ body.is-pdf-exporting .ql-editor>p:last-child {
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
     text-align: left;
+    white-space: nowrap;
 }
 
 .md-help-table td {
-    padding: 7px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     color: var(--text-main);
     vertical-align: middle;
     text-align: left;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.md-help-table tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+body.light-theme .md-help-table td {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+body.light-theme .md-help-table tr:hover td {
+    background: rgba(0, 0, 0, 0.02);
 }
 
 .md-help-table tr:last-child td {
     border-bottom: none;
 }
 
-.md-help-table code {
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--accent);
-    padding: 2px 6px;
+.md-help-table code.md-key {
+    background: rgba(255, 255, 255, 0.07);
+    color: #60a5fa;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2px 5px;
     border-radius: 4px;
-    font-size: 12.5px;
+    font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    display: inline-block;
+}
+
+body.light-theme .md-help-table code.md-key {
+    background: #f1f5f9;
+    color: #1d4ed8;
+    border: 1px solid #cbd5e1;
+}
+
+.md-help-tip {
+    font-size: 12.5px;
+    border-radius: 8px;
+    padding: 9px 12px;
+    margin-top: 14px;
+    line-height: 1.5;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+body.light-theme .md-help-tip {
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    color: #b45309;
 }
 
 .md-tb-badge {

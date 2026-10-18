@@ -680,6 +680,44 @@ quill.on('text-change', function (delta, oldDelta, source) {
         const text = line.domNode.textContent.substring(0, offset);
         const lineStart = quill.getIndex(line);
 
+        // 🎯 [V4.3.7] 키보드로 표(Table) 즉시 생성: |제목|내용| 또는 |3x3| 입력 후 스페이스 시 발동!
+        const tableMatch = text.match(/^\|(.+)\|\s$/);
+        if (tableMatch) {
+            const inner = tableMatch[1].trim();
+            let rows = 2;
+            let cols = 2;
+            let headers = [];
+            const dimMatch = inner.match(/^(\d+)[xX](\d+)$/);
+            if (dimMatch) {
+                rows = Math.min(10, Math.max(1, parseInt(dimMatch[1], 10)));
+                cols = Math.min(10, Math.max(1, parseInt(dimMatch[2], 10)));
+            } else {
+                headers = inner.split('|').map(c => c.trim()).filter(c => c.length > 0);
+                cols = Math.max(2, headers.length);
+                rows = 2;
+            }
+            const tableModule = quill.getModule('table');
+            if (tableModule) {
+                quill.deleteText(lineStart, offset, Quill.sources.USER);
+                tableModule.insertTable(rows, cols);
+                if (headers.length > 0 && !dimMatch) {
+                    setTimeout(() => {
+                        const sel = quill.getSelection();
+                        const anchor = sel ? sel.index : lineStart;
+                        const [curLine] = quill.getLine(anchor);
+                        const tableNode = curLine?.domNode?.closest('table') || quill.root.querySelector('table:last-of-type');
+                        if (tableNode) {
+                            const firstRowCells = tableNode.querySelectorAll('tr:first-child td');
+                            firstRowCells.forEach((td, idx) => {
+                                if (headers[idx]) td.textContent = headers[idx];
+                            });
+                        }
+                    }, 20);
+                }
+                return;
+            }
+        }
+
         // --- [A. 블록 포맷 감지: H1-H6, 인용구, 리스트(*, -, +), 구분선(---, ___, ***), 코드블록] ---
         // 🎯 [V4.3.3] 체크리스트 글머리기호 버그 해결: [ ], [x], - [ ], - [x], * [ ], * [x] 모두 인식
         // 🎯 [V4.3.5] 인용구 내부 리스트 단축키 지원 (> -, > *, > 1., > [ ], > - [ ] 등)
