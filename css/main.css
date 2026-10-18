@@ -4281,8 +4281,13 @@ body.light-theme .scroll-to-top-btn:hover {
 }
 
 /* ==========================================================================
-   🎯 [V4.3.8] 특수문자/이모티콘 툴바 및 모달 스타일
+   🎯 [V4.4.0] 특수문자/이모티콘 툴바 및 모달 스타일
    ========================================================================== */
+#special-char-modal.is-open,
+.fm-modal-overlay.is-open {
+    display: flex !important;
+}
+
 .ql-toolbar.ql-snow button.ql-special-char:hover i {
     color: var(--accent) !important;
 }

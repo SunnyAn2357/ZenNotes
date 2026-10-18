@@ -371,24 +371,39 @@ const quill = new Quill('#editor', {
                 'undo': function () { this.quill.history.undo(); },
                 'redo': function () { this.quill.history.redo(); },
                 'table': function () {
-                    const tableModule = this.quill.getModule('table');
-                    if (tableModule) tableModule.insertTable(3, 3);
+                    if (typeof createDefaultTable === 'function') createDefaultTable();
+                    else {
+                        const tableModule = this.quill.getModule('table');
+                        if (tableModule) tableModule.insertTable(3, 3);
+                    }
                 },
                 'table-insert-row': function () {
-                    const tableModule = this.quill.getModule('table');
-                    if (tableModule) tableModule.insertRowBelow();
+                    if (typeof tableInsertRowBelowSafe === 'function') tableInsertRowBelowSafe();
+                    else {
+                        const tableModule = this.quill.getModule('table');
+                        if (tableModule) tableModule.insertRowBelow();
+                    }
                 },
                 'table-delete-row': function () {
-                    const tableModule = this.quill.getModule('table');
-                    if (tableModule) tableModule.deleteRow();
+                    if (typeof tableDeleteRowSafe === 'function') tableDeleteRowSafe();
+                    else {
+                        const tableModule = this.quill.getModule('table');
+                        if (tableModule) tableModule.deleteRow();
+                    }
                 },
                 'table-insert-column': function () {
-                    const tableModule = this.quill.getModule('table');
-                    if (tableModule) tableModule.insertColumnRight();
+                    if (typeof tableInsertColumnRightSafe === 'function') tableInsertColumnRightSafe();
+                    else {
+                        const tableModule = this.quill.getModule('table');
+                        if (tableModule) tableModule.insertColumnRight();
+                    }
                 },
                 'table-delete-column': function () {
-                    const tableModule = this.quill.getModule('table');
-                    if (tableModule) tableModule.deleteColumn();
+                    if (typeof tableDeleteColumnSafe === 'function') tableDeleteColumnSafe();
+                    else {
+                        const tableModule = this.quill.getModule('table');
+                        if (tableModule) tableModule.deleteColumn();
+                    }
                 },
                 'video': customVideoHandler,
 
@@ -643,11 +658,15 @@ if (mdHelpBtn) {
     mdHelpBtn.setAttribute('aria-label', '마크다운 문법 안내');
 }
 
-// 🎯 [V4.3.8] 툴바 특수문자/이모티콘 버튼 툴팁 등록
+// 🎯 [V4.4.0] 툴바 특수문자/이모티콘 버튼 툴팁 및 다이렉트 클릭 핸들러 등록
 const specCharBtn = document.querySelector('.ql-special-char');
 if (specCharBtn) {
     specCharBtn.setAttribute('title', '특수문자 / 이모티콘 (Ctrl+F10)');
     specCharBtn.setAttribute('aria-label', '특수문자 및 이모티콘');
+    specCharBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openSpecialCharModal();
+    });
 }
 
 // 🎯 [통합 완료] 이미지 붙여넣기 완벽 제어 엔진
@@ -1135,7 +1154,7 @@ document.addEventListener("keydown", (e) => {
         }
 
         const specModal = document.getElementById("special-char-modal");
-        if (specModal && specModal.classList.contains("is-open")) {
+        if (specModal && (specModal.style.display === "flex" || specModal.classList.contains("is-open"))) {
             closeSpecialCharModal();
             return;
         }
@@ -1292,8 +1311,8 @@ window.addEventListener("popstate", (e) => {
     }
 
     const specModal = document.getElementById("special-char-modal");
-    if (specModal && specModal.classList.contains("is-open")) {
-        closeSpecialCharModal();
+    if (specModal && (specModal.style.display === "flex" || specModal.classList.contains("is-open"))) {
+        closeSpecialCharModal(true);
         return;
     }
 
@@ -1887,19 +1906,19 @@ window.addEventListener("DOMContentLoaded", () => {
                     tableModule.insertRowAbove();
                     break;
                 case "insert-row-below":
-                    tableModule.insertRowBelow();
+                    tableInsertRowBelowSafe();
                     break;
                 case "insert-col-left":
                     tableModule.insertColumnLeft();
                     break;
                 case "insert-col-right":
-                    tableModule.insertColumnRight();
+                    tableInsertColumnRightSafe();
                     break;
                 case "delete-row":
-                    tableModule.deleteRow();
+                    tableDeleteRowSafe();
                     break;
                 case "delete-col":
-                    tableModule.deleteColumn();
+                    tableDeleteColumnSafe();
                     break;
                 case "delete-table":
                     if (confirm("현재 표를 전체 삭제하시겠습니까?")) {
@@ -2041,14 +2060,25 @@ function openSpecialCharModal() {
     savedSpecialCharRange = quill.getSelection();
     const modal = document.getElementById('special-char-modal');
     if (!modal) return;
+    modal.style.display = 'flex';
     modal.classList.add('is-open');
+    if (window.innerWidth <= 768) {
+        history.pushState({ modal: 'special-char' }, '');
+    }
     switchSpecTab(currentSpecTab || 1);
     renderSpecialCharRecent();
 }
 
-function closeSpecialCharModal() {
+function closeSpecialCharModal(fromPopstate = false) {
     const modal = document.getElementById('special-char-modal');
-    if (modal) modal.classList.remove('is-open');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('is-open');
+        if (!fromPopstate && window.innerWidth <= 768 && window.history.state && window.history.state.modal === 'special-char') {
+            if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+            history.back();
+        }
+    }
     if (quill) {
         quill.focus();
         if (savedSpecialCharRange) {
@@ -2063,10 +2093,8 @@ window.switchSpecTab = switchSpecTab;
 window.insertSpecialChar = insertSpecialChar;
 
 // ============================================================================
-// 🎯 [V4.3.8] 아래한글(HWP) 스타일 표 단축키 및 줄/칸 추가/삭제 모달
+// 🎯 [V4.4.0] 표(Table) 고도화 제어 엔진 (행/열 생성·삭제 무결성 및 커서 이탈 방어)
 // ============================================================================
-let savedTableRange = null;
-
 function isCursorInTable() {
     if (!quill) return false;
     const tableModule = quill.getModule('table');
@@ -2085,27 +2113,147 @@ function isCursorInTable() {
     return false;
 }
 
+function getValidTableContext() {
+    if (!quill) return null;
+    const tableModule = quill.getModule('table');
+    if (!tableModule) return null;
+
+    let range = quill.getSelection();
+    if (!range) {
+        const sel = window.getSelection();
+        if (sel && sel.anchorNode) {
+            const td = sel.anchorNode.nodeType === 1 ? sel.anchorNode.closest('td') : sel.anchorNode.parentElement?.closest('td');
+            if (td) {
+                const blot = Quill.find(td);
+                if (blot) {
+                    const idx = blot.offset(quill.scroll);
+                    range = { index: idx, length: 0 };
+                    quill.setSelection(idx, 0, Quill.sources.SILENT);
+                }
+            }
+        }
+    }
+    if (!range) {
+        quill.focus();
+        range = quill.getSelection();
+    }
+    if (!range) return null;
+
+    try {
+        const [table, row, cell] = tableModule.getTable(range);
+        if (table && row && cell) {
+            return { tableModule, table, row, cell, range };
+        }
+    } catch (e) {}
+    return null;
+}
+
+function tableInsertRowBelowSafe() {
+    const ctx = getValidTableContext();
+    if (!ctx) return;
+    const { tableModule, row, cell } = ctx;
+    const cellIndex = row.children.indexOf(cell);
+
+    tableModule.insertRowBelow();
+
+    setTimeout(() => {
+        try {
+            const nextRow = row.next;
+            if (nextRow && nextRow.children) {
+                const targetCell = nextRow.children.at(Math.max(0, cellIndex)) || nextRow.children.head;
+                if (targetCell) {
+                    const newIdx = targetCell.offset(quill.scroll);
+                    quill.setSelection(newIdx, 0, Quill.sources.USER);
+                    quill.focus();
+                }
+            }
+        } catch (e) {}
+    }, 10);
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+function tableDeleteRowSafe() {
+    const ctx = getValidTableContext();
+    if (!ctx) return;
+    const { tableModule, table, row, cell } = ctx;
+    const rows = table.rows();
+    if (rows.length <= 1) return; // 1행만 남은 경우 표 파괴 방지
+
+    const cellIndex = row.children.indexOf(cell);
+    const targetRow = row.prev || row.next;
+    let targetOffset = -1;
+    if (targetRow && targetRow.children) {
+        const targetCell = targetRow.children.at(Math.max(0, cellIndex)) || targetRow.children.head;
+        if (targetCell) {
+            targetOffset = targetCell.offset(quill.scroll);
+        }
+    }
+
+    tableModule.deleteRow();
+
+    if (targetOffset >= 0) {
+        quill.setSelection(targetOffset, 0, Quill.sources.USER);
+        quill.focus();
+    }
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+function tableInsertColumnRightSafe() {
+    const ctx = getValidTableContext();
+    if (!ctx) return;
+    const { tableModule } = ctx;
+    tableModule.insertColumnRight();
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+function tableDeleteColumnSafe() {
+    const ctx = getValidTableContext();
+    if (!ctx) return;
+    const { tableModule, row } = ctx;
+    if (row.children.length <= 1) return; // 1열만 남았을 때 방어
+
+    tableModule.deleteColumn();
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
 function createDefaultTable() {
     const tableModule = quill.getModule('table');
     if (!tableModule) return;
+    let range = quill.getSelection();
+    if (!range) {
+        quill.focus();
+        range = quill.getSelection();
+        if (!range) {
+            const len = quill.getLength();
+            const fallbackIdx = Math.max(0, len - 1);
+            quill.setSelection(fallbackIdx, 0);
+        }
+    }
     tableModule.insertTable(3, 3);
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
+
+window.isCursorInTable = isCursorInTable;
+window.getValidTableContext = getValidTableContext;
+window.tableInsertRowBelowSafe = tableInsertRowBelowSafe;
+window.tableDeleteRowSafe = tableDeleteRowSafe;
+window.tableInsertColumnRightSafe = tableInsertColumnRightSafe;
+window.tableDeleteColumnSafe = tableDeleteColumnSafe;
 window.createDefaultTable = createDefaultTable;
 
 // ============================================================================
-// 🎯 [V4.3.9] 전역 단축키 핸들러
+// 🎯 [V4.4.0] 전역 단축키 핸들러
 // - 표 생성: Ctrl + Alt + T
-// - 표 행/열 편집 (표 안에서 즉시 발동, 토스트 0, 팝업 없음):
-//   Alt + ArrowDown (↓) -> 행 추가
-//   Alt + ArrowUp   (↑) -> 행 삭제
-//   Alt + ArrowRight(→) -> 열 추가
-//   Alt + ArrowLeft (←) -> 열 삭제
+// - 표 행/열 편집 (표 안에서 즉시 발동, 토스트 0, 팝업 없음, 커서 완벽 보존):
+//   Alt + ArrowDown (↓) -> 아래에 행 추가 (새 행으로 커서 이동)
+//   Alt + ArrowUp   (↑) -> 현재 행 삭제 (인접 행으로 커서 안전 피신)
+//   Alt + ArrowRight(→) -> 오른쪽에 열 추가
+//   Alt + ArrowLeft (←) -> 현재 열 삭제
 // - 특수문자/이모티콘: Ctrl + F10
 // ============================================================================
 window.addEventListener('keydown', function (e) {
     const specModal = document.getElementById('special-char-modal');
-    const isSpecOpen = specModal && specModal.classList.contains('is-open');
+    const isSpecOpen = specModal && (specModal.style.display === 'flex' || specModal.classList.contains('is-open'));
 
     // [1] 특수문자 모달이 열려 있을 때
     if (isSpecOpen) {
@@ -2137,27 +2285,18 @@ window.addEventListener('keydown', function (e) {
 
     // [4] 표 전용 행/열 즉시 편집: Alt + 방향키 (표 안에서만 발동, 토스트 없음)
     if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const isDown  = e.key === 'ArrowDown'  || e.key === 'Down'  || e.keyCode === 40;
+        const isUp    = e.key === 'ArrowUp'    || e.key === 'Up'    || e.keyCode === 38;
+        const isRight = e.key === 'ArrowRight' || e.key === 'Right' || e.keyCode === 39;
+        const isLeft  = e.key === 'ArrowLeft'  || e.key === 'Left'  || e.keyCode === 37;
+
+        if (isDown || isUp || isRight || isLeft) {
             if (isCursorInTable()) {
                 e.preventDefault();
-                const tableModule = quill.getModule('table');
-                if (tableModule) {
-                    switch (e.key) {
-                        case 'ArrowDown':
-                            tableModule.insertRowBelow();
-                            break;
-                        case 'ArrowUp':
-                            tableModule.deleteRow();
-                            break;
-                        case 'ArrowRight':
-                            tableModule.insertColumnRight();
-                            break;
-                        case 'ArrowLeft':
-                            tableModule.deleteColumn();
-                            break;
-                    }
-                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
-                }
+                if (isDown) tableInsertRowBelowSafe();
+                else if (isUp) tableDeleteRowSafe();
+                else if (isRight) tableInsertColumnRightSafe();
+                else if (isLeft) tableDeleteColumnSafe();
                 return;
             }
         }
