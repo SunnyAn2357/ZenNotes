@@ -1638,20 +1638,43 @@ body.light-theme .ql-editor li[data-list="checked"] {
     margin: 4px 0;
 }
 
-/* 문단(P) 및 제목(H1, H2, H3) 하단 여백 일괄 설정(문단간격) */
+/* 문단(P) 및 제목(H1 ~ H6) 하단 여백 일괄 설정(문단간격) */
 .ql-editor p,
 .ql-editor h1,
 .ql-editor h2,
-.ql-editor h3 {
+.ql-editor h3,
+.ql-editor h4,
+.ql-editor h5,
+.ql-editor h6 {
     margin-bottom: 8px !important;
     /* 🎯 이 숫자를 바꾸면 모든 간격이 한꺼번에 바뀝니다 */
+}
+
+/* 🎯 [V4.3.6] H4 ~ H6 소제목 세부 스타일링 (GFM / CommonMark 완전 호환) */
+.ql-editor h4 {
+    font-size: 1.05em !important;
+    font-weight: 600 !important;
+    color: var(--text-main) !important;
+}
+.ql-editor h5 {
+    font-size: 0.95em !important;
+    font-weight: 600 !important;
+    color: var(--text-main) !important;
+}
+.ql-editor h6 {
+    font-size: 0.88em !important;
+    font-weight: 600 !important;
+    color: var(--text-muted) !important;
 }
 
 /* 문서의 맨 마지막 줄은 불필요한 하단 여백 제거 */
 .ql-editor p:last-child,
 .ql-editor h1:last-child,
 .ql-editor h2:last-child,
-.ql-editor h3:last-child {
+.ql-editor h3:last-child,
+.ql-editor h4:last-child,
+.ql-editor h5:last-child,
+.ql-editor h6:last-child {
     margin-bottom: 0 !important;
 }
 
@@ -3745,7 +3768,7 @@ body.light-theme {
     }
 
     /* 🎯 페이지 분할 방어 (Page-Break Defense) */
-    h1, h2, h3 {
+    h1, h2, h3, h4, h5, h6 {
         page-break-after: avoid !important;
         break-after: avoid !important;
     }
@@ -3754,6 +3777,9 @@ body.light-theme {
     .ql-editor h1,
     .ql-editor h2,
     .ql-editor h3,
+    .ql-editor h4,
+    .ql-editor h5,
+    .ql-editor h6,
     .ql-editor li {
         margin-bottom: 8px !important;
     }
@@ -3768,6 +3794,9 @@ body.light-theme {
     .ql-editor h1,
     .ql-editor h2,
     .ql-editor h3,
+    .ql-editor h4,
+    .ql-editor h5,
+    .ql-editor h6,
     .ql-editor blockquote,
     .ql-editor img,
     .ql-editor .ql-code-block-container {

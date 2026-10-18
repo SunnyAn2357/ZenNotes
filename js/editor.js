@@ -680,10 +680,11 @@ quill.on('text-change', function (delta, oldDelta, source) {
         const text = line.domNode.textContent.substring(0, offset);
         const lineStart = quill.getIndex(line);
 
-        // --- [A. 블록 포맷 감지: H1-H3, 인용구, 리스트, 구분선, 코드블록] ---
+        // --- [A. 블록 포맷 감지: H1-H6, 인용구, 리스트(*, -, +), 구분선(---, ___, ***), 코드블록] ---
         // 🎯 [V4.3.3] 체크리스트 글머리기호 버그 해결: [ ], [x], - [ ], - [x], * [ ], * [x] 모두 인식
         // 🎯 [V4.3.5] 인용구 내부 리스트 단축키 지원 (> -, > *, > 1., > [ ], > - [ ] 등)
-        const blockMatch = text.match(/^(#{1,3}|>\s*(?:\*|-)\s+\[\s\]|>\s*(?:\*|-)\s+\[x\]|>\s*\[\s\]|>\s*\[x\]|>\s*1\.|>\s*\*|>\s*-|>|(?:\*|-)\s+\[\s\]|(?:\*|-)\s+\[x\]|\*|-|1\.|\-{3}|`{3}[a-zA-Z0-9_\-+]*|\[\s\]|\[x\])\s$/i);
+        // 🎯 [V4.3.6] 마크다운 표준(CommonMark & GFM) 100% 완전무결: H1~H6, + 글머리, ___, *** 구분선
+        const blockMatch = text.match(/^(#{1,6}|>\s*(?:\*|-|\+)\s+\[\s\]|>\s*(?:\*|-|\+)\s+\[x\]|>\s*\[\s\]|>\s*\[x\]|>\s*1\.|>\s*(?:\*|-|\+)|>|(?:\*|-|\+)\s+\[\s\]|(?:\*|-|\+)\s+\[x\]|\*|-|\+|1\.|\-{3}|_{3}|\*{3}|`{3}[a-zA-Z0-9_\-+]*|\[\s\]|\[x\])\s$/i);
         if (blockMatch) {
             const prefix = blockMatch[1];
             const deleteLength = prefix.length + 1;
@@ -694,14 +695,14 @@ quill.on('text-change', function (delta, oldDelta, source) {
 
             quill.deleteText(formatIndex, deleteLength, Quill.sources.USER);
 
-            if (prefix === '#') quill.formatLine(formatIndex, 1, 'header', 1, Quill.sources.SILENT);
-            else if (prefix === '##') quill.formatLine(formatIndex, 1, 'header', 2, Quill.sources.SILENT);
-            else if (prefix === '###') quill.formatLine(formatIndex, 1, 'header', 3, Quill.sources.SILENT);
-            else if (/^>\s*(?:\*|-)\s+\[\s\]$/i.test(prefix) || /^>\s*\[\s\]$/i.test(prefix)) {
+            if (/^#{1,6}$/.test(prefix)) {
+                quill.formatLine(formatIndex, 1, 'header', prefix.length, Quill.sources.SILENT);
+            }
+            else if (/^>\s*(?:\*|-|\+)\s+\[\s\]$/i.test(prefix) || /^>\s*\[\s\]$/i.test(prefix)) {
                 quill.formatLine(formatIndex, 1, 'list', 'unchecked', Quill.sources.USER);
                 quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
             }
-            else if (/^>\s*(?:\*|-)\s+\[x\]$/i.test(prefix) || /^>\s*\[x\]$/i.test(prefix)) {
+            else if (/^>\s*(?:\*|-|\+)\s+\[x\]$/i.test(prefix) || /^>\s*\[x\]$/i.test(prefix)) {
                 quill.formatLine(formatIndex, 1, 'list', 'checked', Quill.sources.USER);
                 quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
             }
@@ -709,20 +710,20 @@ quill.on('text-change', function (delta, oldDelta, source) {
                 quill.formatLine(formatIndex, 1, 'list', 'ordered', Quill.sources.USER);
                 quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
             }
-            else if (/^>\s*(\*|-)$/i.test(prefix)) {
+            else if (/^>\s*(\*|-|\+)$/i.test(prefix)) {
                 quill.formatLine(formatIndex, 1, 'list', 'bullet', Quill.sources.USER);
                 quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
             }
             else if (prefix === '>') quill.formatLine(formatIndex, 1, 'blockquote', true, Quill.sources.SILENT);
-            else if (/^(\*|-)\s+\[\s\]$/i.test(prefix) || prefix === '[ ]') {
+            else if (/^(\*|-|\+)\s+\[\s\]$/i.test(prefix) || prefix === '[ ]') {
                 quill.formatLine(formatIndex, 1, 'list', 'unchecked', Quill.sources.USER);
                 if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
             }
-            else if (/^(\*|-)\s+\[x\]$/i.test(prefix) || /^\[x\]$/i.test(prefix)) {
+            else if (/^(\*|-|\+)\s+\[x\]$/i.test(prefix) || /^\[x\]$/i.test(prefix)) {
                 quill.formatLine(formatIndex, 1, 'list', 'checked', Quill.sources.USER);
                 if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.USER);
             }
-            else if (prefix === '*' || prefix === '-') {
+            else if (prefix === '*' || prefix === '-' || prefix === '+') {
                 quill.formatLine(formatIndex, 1, 'list', 'bullet', Quill.sources.SILENT);
                 if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.SILENT);
             }
@@ -730,7 +731,7 @@ quill.on('text-change', function (delta, oldDelta, source) {
                 quill.formatLine(formatIndex, 1, 'list', 'ordered', Quill.sources.SILENT);
                 if (isInsideQuote) quill.formatLine(formatIndex, 1, 'quote-item', true, Quill.sources.SILENT);
             }
-            else if (prefix === '---') {
+            else if (prefix === '---' || prefix === '___' || prefix === '***') {
                 const Delta = Quill.import('delta');
                 const delta = new Delta();
                 if (formatIndex > 0) delta.retain(formatIndex);

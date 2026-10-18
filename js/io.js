@@ -713,13 +713,19 @@ function convertQuillToMarkdown() {
     const el = children[i];
     const tag = el.tagName.toLowerCase();
 
-    // 1. 제목 (H1, H2, H3)
+    // 1. 제목 (H1 ~ H6)
     if (tag === "h1") {
       lines.push(`# ${convertInline(el).trim()}`);
     } else if (tag === "h2") {
       lines.push(`## ${convertInline(el).trim()}`);
     } else if (tag === "h3") {
       lines.push(`### ${convertInline(el).trim()}`);
+    } else if (tag === "h4") {
+      lines.push(`#### ${convertInline(el).trim()}`);
+    } else if (tag === "h5") {
+      lines.push(`##### ${convertInline(el).trim()}`);
+    } else if (tag === "h6") {
+      lines.push(`###### ${convertInline(el).trim()}`);
     }
     // 2. 인용구
     else if (tag === "blockquote") {
@@ -1000,8 +1006,8 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // C. 제목 (# H1, ## H2, ### H3)
-    const headerMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    // C. 제목 (# H1 ~ ###### H6) - 🎯 [V4.3.6] H1-H6 완전 지원
+    const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headerMatch) {
       const level = headerMatch[1].length;
       htmlParts.push(`<h${level}>${parseInline(headerMatch[2])}</h${level}>`);
@@ -1009,14 +1015,14 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // D. 인용구 (> text) - 🎯 [V4.2.0] 인용구 내부 글머리 기호, 번호, 체크리스트 지원
+    // D. 인용구 (> text) - 🎯 [V4.2.0] 인용구 내부 글머리 기호, 번호, 체크리스트 지원 & [V4.3.6] + 지원
     if (/^>\s?(.*)$/.test(line)) {
       while (i < lines.length && /^>\s?(.*)$/.test(lines[i])) {
         const qm = lines[i].match(/^>\s?(.*)$/);
         const innerLine = qm[1] || "";
-        const checkMatch = innerLine.match(/^\s*(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/);
+        const checkMatch = innerLine.match(/^\s*(?:(\*|-|\+)\s+)?\[([ xX])\]\s*(.*)$/);
         const orderedMatch = innerLine.match(/^\s*(\d+)\.\s+(.*)$/);
-        const bulletMatch = innerLine.match(/^\s*(\*|-)\s+(.*)$/);
+        const bulletMatch = innerLine.match(/^\s*(\*|-|\+)\s+(.*)$/);
 
         if (checkMatch) {
           const isChecked = checkMatch[2].toLowerCase() === "x";
@@ -1033,10 +1039,10 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // E. 체크리스트 (- [ ], - [x], * [ ], [ ] 등) - 🎯 [V3.4.4] 들여쓰기 지원 & [V4.3.3] 패턴 강화
-    if (/^\s*(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/.test(line)) {
-      while (i < lines.length && /^\s*(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/.test(lines[i])) {
-        const cm = lines[i].match(/^(\s*)(?:(\*|-)\s+)?\[([ xX])\]\s*(.*)$/);
+    // E. 체크리스트 (- [ ], - [x], * [ ], + [ ], [ ] 등) - 🎯 [V3.4.4] 들여쓰기 & [V4.3.3] 강화 & [V4.3.6] + 지원
+    if (/^\s*(?:(\*|-|\+)\s+)?\[([ xX])\]\s*(.*)$/.test(line)) {
+      while (i < lines.length && /^\s*(?:(\*|-|\+)\s+)?\[([ xX])\]\s*(.*)$/.test(lines[i])) {
+        const cm = lines[i].match(/^(\s*)(?:(\*|-|\+)\s+)?\[([ xX])\]\s*(.*)$/);
         const indentLvl = getLeadingIndent(cm[1]);
         const isChecked = cm[3].toLowerCase() === "x";
         const text = parseInline(cm[4]);
@@ -1062,14 +1068,14 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // G. 글머리 기호 목록 (* text 또는 - text) - 🎯 [V3.4.4] 들여쓰기 지원
-    if (/^\s*(\*|-)\s+(.*)$/.test(line) && !/^\s*(\*|-)\s+\[([ xX])\]/.test(line)) {
+    // G. 글머리 기호 목록 (* text, - text, + text) - 🎯 [V3.4.4] 들여쓰기 지원 & [V4.3.6] + 지원
+    if (/^\s*(\*|-|\+)\s+(.*)$/.test(line) && !/^\s*(\*|-|\+)\s+\[([ xX])\]/.test(line)) {
       while (
         i < lines.length &&
-        /^\s*(\*|-)\s+(.*)$/.test(lines[i]) &&
-        !/^\s*(\*|-)\s+\[([ xX])\]/.test(lines[i])
+        /^\s*(\*|-|\+)\s+(.*)$/.test(lines[i]) &&
+        !/^\s*(\*|-|\+)\s+\[([ xX])\]/.test(lines[i])
       ) {
-        const bm = lines[i].match(/^(\s*)(\*|-)\s+(.*)$/);
+        const bm = lines[i].match(/^(\s*)(\*|-|\+)\s+(.*)$/);
         const indentLvl = getLeadingIndent(bm[1]);
         const text = parseInline(bm[3]);
         const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
@@ -1079,8 +1085,8 @@ function convertMarkdownToHTML(mdText) {
       continue;
     }
 
-    // H. 가로 구분선 (--- 또는 ***)
-    if (/^(\-{3,}|\*{3,})$/.test(line.trim())) {
+    // H. 가로 구분선 (--- 또는 *** 또는 ___) - 🎯 [V4.3.6] ___ 지원
+    if (/^(\-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
       htmlParts.push("<hr>");
       i++;
       continue;
