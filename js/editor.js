@@ -2221,9 +2221,19 @@ function tableInsertRowBelowSafe() {
 function tableDeleteRowSafe() {
     const ctx = getValidTableContext();
     if (!ctx) return;
-    const { table, row, cell } = ctx;
+    const { tableModule, table, row, cell } = ctx;
     const rows = table.rows();
-    if (rows.length <= 1) return; // 1행만 남은 경우 표 파괴 방지
+
+    // 🎯 [V4.4.4] 마지막 1행 1열 상태에서 행 삭제 시 표 전체 삭제
+    const isOneByOne = (rows.length === 1 && row.children.length === 1);
+    if (isOneByOne) {
+        tableModule.deleteTable();
+        lastActiveTableCellTd = null;
+        quill.focus();
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
+        return;
+    }
+    if (rows.length <= 1) return; // 다열 표에서 1행만 남은 경우 방어
 
     const rowIndex = rows.indexOf(row);
     const colIndex = Math.max(0, row.children.indexOf(cell));
@@ -2280,10 +2290,20 @@ function tableInsertColumnRightSafe() {
 function tableDeleteColumnSafe() {
     const ctx = getValidTableContext();
     if (!ctx) return;
-    const { table, row, cell } = ctx;
-    if (row.children.length <= 1) return; // 1열만 남았을 때 방어
-
+    const { tableModule, table, row, cell } = ctx;
     const rows = table.rows();
+
+    // 🎯 [V4.4.4] 마지막 1행 1열 상태에서 열 삭제 시 표 전체 삭제
+    const isOneByOne = (rows.length === 1 && row.children.length === 1);
+    if (isOneByOne) {
+        tableModule.deleteTable();
+        lastActiveTableCellTd = null;
+        quill.focus();
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
+        return;
+    }
+    if (row.children.length <= 1) return; // 다행 표에서 1열만 남았을 때 방어
+
     const rowIndex = Math.max(0, rows.indexOf(row));
     const colIndex = Math.max(0, row.children.indexOf(cell));
     const beforeCols = row.children.length;
