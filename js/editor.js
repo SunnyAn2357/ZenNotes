@@ -69,12 +69,12 @@ icons['strike-line'] = '<i class="fa-solid fa-pen-slash" style="font-size: 14px;
 icons['divider'] = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['markdown-help'] = '<i class="fa-brands fa-markdown" style="font-size: 15px; color: var(--text-muted);" title="마크다운 문법 (MD)"></i>';
 
-// 2. 표 확장 및 제어 아이콘 (Zen 철학: 기본 은은한 색상 -> 마우스 올리면 파란색 강조)
-icons['table'] = '<i class="fa-solid fa-table" style="font-size: 14px; color: var(--text-muted);" title="표 삽입 (3x3)"></i>';
-icons['table-insert-row'] = '<i class="fa-solid fa-arrow-down" style="font-size: 13px; color: var(--text-muted);" title="아래에 행 추가"></i>';
-icons['table-delete-row'] = '<i class="fa-solid fa-minus" style="font-size: 13px; color: var(--text-muted);" title="현재 행 삭제"></i>';
-icons['table-insert-column'] = '<i class="fa-solid fa-arrow-right" style="font-size: 13px; color: var(--text-muted);" title="오른쪽에 열 추가"></i>';
-icons['table-delete-column'] = '<i class="fa-solid fa-xmark" style="font-size: 13px; color: var(--text-muted);" title="현재 열 삭제"></i>';
+// 2. 표 확장 및 제어 아이콘 (Zen 철학: 글로벌 오피스 표준 직관적 SVG)
+icons['table'] = '<i class="fa-solid fa-table" style="font-size: 14px; color: var(--text-muted);" title="표 삽입 (3x3) (Ctrl+Alt+T)"></i>';
+icons['table-insert-row'] = '<svg viewBox="0 0 18 18"><title>아래에 행 추가 (Alt+↓)</title><rect class="ql-stroke" x="2" y="2" width="14" height="8.5" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="2" y1="6.25" x2="16" y2="6.25" stroke-width="1"/><line class="ql-stroke" x1="9" y1="2" x2="9" y2="10.5" stroke-width="1"/><path class="ql-stroke" d="M9 12.5v4M7 14.5h4" stroke-width="1.5" stroke-linecap="round"/></svg>';
+icons['table-delete-row'] = '<svg viewBox="0 0 18 18"><title>현재 행 삭제 (Alt+↑)</title><rect class="ql-stroke" x="2" y="2" width="14" height="8.5" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="2" y1="6.25" x2="16" y2="6.25" stroke-width="1"/><line class="ql-stroke" x1="9" y1="2" x2="9" y2="10.5" stroke-width="1"/><line class="ql-stroke" x1="7" y1="14.5" x2="11" y2="14.5" stroke-width="1.5" stroke-linecap="round"/></svg>';
+icons['table-insert-column'] = '<svg viewBox="0 0 18 18"><title>오른쪽에 열 추가 (Alt+→)</title><rect class="ql-stroke" x="2" y="2" width="8.5" height="14" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="6.25" y1="2" x2="6.25" y2="16" stroke-width="1"/><line class="ql-stroke" x1="2" y1="9" x2="10.5" y2="9" stroke-width="1"/><path class="ql-stroke" d="M14.5 7v4M12.5 9h4" stroke-width="1.5" stroke-linecap="round"/></svg>';
+icons['table-delete-column'] = '<svg viewBox="0 0 18 18"><title>현재 열 삭제 (Alt+←)</title><rect class="ql-stroke" x="2" y="2" width="8.5" height="14" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="6.25" y1="2" x2="6.25" y2="16" stroke-width="1"/><line class="ql-stroke" x1="2" y1="9" x2="10.5" y2="9" stroke-width="1"/><line class="ql-stroke" x1="12.5" y1="9" x2="16.5" y2="9" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
 icons['undo'] = '<i class="fa-solid fa-rotate-left" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['redo'] = '<i class="fa-solid fa-rotate-right" style="font-size: 14px; color: var(--text-muted);"></i>';
@@ -486,6 +486,19 @@ const quill = new Quill('#editor', {
         }
     }
 
+});
+
+// 🎯 [V4.4.5] 툴바 버튼 네이티브 툴팁(title) 설정 (마우스 호버 시 단축키 및 설명 안내)
+const tableToolbarButtonTitles = {
+    'ql-table': '표 삽입 (3x3) (Ctrl+Alt+T)',
+    'ql-table-insert-row': '아래에 행 추가 (Alt+↓)',
+    'ql-table-delete-row': '현재 행 삭제 (Alt+↑)',
+    'ql-table-insert-column': '오른쪽에 열 추가 (Alt+→)',
+    'ql-table-delete-column': '현재 열 삭제 (Alt+←)'
+};
+Object.entries(tableToolbarButtonTitles).forEach(([cls, title]) => {
+    const btn = document.querySelector(`.ql-toolbar button.${cls}`);
+    if (btn) btn.setAttribute('title', title);
 });
 
 // 🎯 [V3.4.4] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
