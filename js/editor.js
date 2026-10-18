@@ -2093,8 +2093,68 @@ window.switchSpecTab = switchSpecTab;
 window.insertSpecialChar = insertSpecialChar;
 
 // ============================================================================
-// 🎯 [V4.4.0] 표(Table) 고도화 제어 엔진 (행/열 생성·삭제 무결성 및 커서 이탈 방어)
+// 🎯 [V4.4.2] 표(Table) 고도화 제어 엔진 + 실시간 단축키 신호 정밀 진단 모니터 (방법 A)
 // ============================================================================
+let lastActiveTableCellTd = null;
+const keyDiagLines = [];
+
+function appendKeyDiagLog(msg) {
+    const el = document.getElementById('key-diag-log');
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+    const line = `[${timeStr}] ${msg}`;
+    keyDiagLines.push(line);
+    if (keyDiagLines.length > 12) keyDiagLines.shift();
+    if (el) {
+        el.textContent = keyDiagLines.join('\n');
+        el.scrollTop = el.scrollHeight;
+    }
+    console.log('[KEY-DIAG]', line);
+}
+
+function clearKeyDiagLog() {
+    keyDiagLines.length = 0;
+    const el = document.getElementById('key-diag-log');
+    if (el) el.textContent = '로그 비워짐. 표 안에서 Alt + 방향키를 눌러보세요.';
+}
+
+function copyKeyDiagLog() {
+    const text = keyDiagLines.join('\n') || '기록된 로그 없음';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+    }
+}
+window.clearKeyDiagLog = clearKeyDiagLog;
+window.copyKeyDiagLog = copyKeyDiagLog;
+
+// 에디터 내 마지막 활성 표 셀(TD) 추적 (Windows Alt 키 메뉴 포커스 탈취 방어)
+function updateLastActiveTableCell() {
+    if (!quill) return;
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode) {
+        const node = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+        if (node && quill.root.contains(node)) {
+            const td = node.closest('td');
+            lastActiveTableCellTd = td || null;
+            return;
+        }
+    }
+    const range = quill.getSelection();
+    if (range) {
+        try {
+            const [line] = quill.getLine(range.index);
+            const td = line?.domNode?.closest?.('td');
+            lastActiveTableCellTd = td || null;
+        } catch (e) {}
+    }
+}
+
+document.addEventListener('selectionchange', updateLastActiveTableCell);
+if (quill && quill.root) {
+    quill.root.addEventListener('mousedown', () => setTimeout(updateLastActiveTableCell, 0));
+    quill.root.addEventListener('keyup', updateLastActiveTableCell);
+}
+
 function isCursorInTable() {
     if (!quill) return false;
     const tableModule = quill.getModule('table');
@@ -2109,6 +2169,9 @@ function isCursorInTable() {
     if (sel && sel.anchorNode) {
         const node = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
         if (node && node.closest('table')) return true;
+    }
+    if (lastActiveTableCellTd && lastActiveTableCellTd.isConnected && quill.root.contains(lastActiveTableCellTd)) {
+        return true;
     }
     return false;
 }
@@ -2133,6 +2196,14 @@ function getValidTableContext() {
             }
         }
     }
+    if (!range && lastActiveTableCellTd && lastActiveTableCellTd.isConnected) {
+        const blot = Quill.find(lastActiveTableCellTd);
+        if (blot) {
+            const idx = blot.offset(quill.scroll);
+            range = { index: idx, length: 0 };
+            quill.setSelection(idx, 0, Quill.sources.SILENT);
+        }
+    }
     if (!range) {
         quill.focus();
         range = quill.getSelection();
@@ -2142,6 +2213,7 @@ function getValidTableContext() {
     try {
         const [table, row, cell] = tableModule.getTable(range);
         if (table && row && cell) {
+            if (cell.domNode) lastActiveTableCellTd = cell.domNode;
             return { tableModule, table, row, cell, range };
         }
     } catch (e) {}
@@ -2150,11 +2222,15 @@ function getValidTableContext() {
 
 function tableInsertRowBelowSafe() {
     const ctx = getValidTableContext();
-    if (!ctx) return;
+    if (!ctx) {
+        appendKeyDiagLog('❌ 행추가 실패: getValidTableContext()가 null 반환');
+        return;
+    }
     const { table, row, cell } = ctx;
     const rows = table.rows();
     const rowIndex = rows.indexOf(row);
     const colIndex = Math.max(0, row.children.indexOf(cell));
+    const beforeCount = rows.length;
 
     table.insertRow(rowIndex + 1);
     quill.update(Quill.sources.USER);
@@ -2168,9 +2244,12 @@ function tableInsertRowBelowSafe() {
                 const targetOffset = targetCell.offset(quill.scroll);
                 quill.setSelection(targetOffset, 0, Quill.sources.USER);
                 quill.focus();
+                if (targetCell.domNode) lastActiveTableCellTd = targetCell.domNode;
             }
         }
+        appendKeyDiagLog(`✅ 행추가 완료 (${beforeCount}행 ➔ ${updatedRows.length}행, 이동행:${rowIndex + 1})`);
     } catch (e) {
+        appendKeyDiagLog(`❌ 행추가 커서오류: ${e.message}`);
         console.error("tableInsertRowBelowSafe selection error:", e);
     }
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
@@ -2178,11 +2257,18 @@ function tableInsertRowBelowSafe() {
 
 function tableDeleteRowSafe() {
     const ctx = getValidTableContext();
-    if (!ctx) return;
+    if (!ctx) {
+        appendKeyDiagLog('❌ 행삭제 실패: getValidTableContext()가 null 반환');
+        return;
+    }
     const { table, row, cell } = ctx;
     const rows = table.rows();
-    if (rows.length <= 1) return; // 1행만 남은 경우 표 파괴 방지
+    if (rows.length <= 1) {
+        appendKeyDiagLog('⚠️ 행삭제 취소: 마지막 1행은 삭제하지 않음');
+        return; // 1행만 남은 경우 표 파괴 방지
+    }
 
+    const beforeCount = rows.length;
     const rowIndex = rows.indexOf(row);
     const colIndex = Math.max(0, row.children.indexOf(cell));
     const survivingRowIndex = Math.min(rowIndex, rows.length - 2);
@@ -2199,9 +2285,12 @@ function tableDeleteRowSafe() {
                 const targetOffset = targetCell.offset(quill.scroll);
                 quill.setSelection(targetOffset, 0, Quill.sources.USER);
                 quill.focus();
+                if (targetCell.domNode) lastActiveTableCellTd = targetCell.domNode;
             }
         }
+        appendKeyDiagLog(`✅ 행삭제 완료 (${beforeCount}행 ➔ ${survivingRows.length}행, 생존행:${survivingRowIndex})`);
     } catch (e) {
+        appendKeyDiagLog(`❌ 행삭제 커서오류: ${e.message}`);
         console.error("tableDeleteRowSafe selection error:", e);
     }
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
@@ -2209,19 +2298,71 @@ function tableDeleteRowSafe() {
 
 function tableInsertColumnRightSafe() {
     const ctx = getValidTableContext();
-    if (!ctx) return;
-    const { tableModule } = ctx;
-    tableModule.insertColumnRight();
+    if (!ctx) {
+        appendKeyDiagLog('❌ 열추가 실패: getValidTableContext()가 null 반환');
+        return;
+    }
+    const { table, row, cell } = ctx;
+    const rows = table.rows();
+    const rowIndex = Math.max(0, rows.indexOf(row));
+    const colIndex = Math.max(0, row.children.indexOf(cell));
+    const beforeCols = row.children.length;
+
+    table.insertColumn(colIndex + 1);
+    quill.update(Quill.sources.USER);
+
+    try {
+        const updatedRows = table.rows();
+        const curRow = updatedRows[rowIndex] || updatedRows[0];
+        if (curRow && curRow.children) {
+            const targetCell = curRow.children.at(colIndex + 1) || curRow.children.at(colIndex) || curRow.children.head;
+            if (targetCell) {
+                const targetOffset = targetCell.offset(quill.scroll);
+                quill.setSelection(targetOffset, 0, Quill.sources.USER);
+                quill.focus();
+                if (targetCell.domNode) lastActiveTableCellTd = targetCell.domNode;
+            }
+        }
+        appendKeyDiagLog(`✅ 열추가 완료 (${beforeCols}열 ➔ ${curRow.children.length}열)`);
+    } catch (e) {}
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
 
 function tableDeleteColumnSafe() {
     const ctx = getValidTableContext();
-    if (!ctx) return;
-    const { tableModule, row } = ctx;
-    if (row.children.length <= 1) return; // 1열만 남았을 때 방어
+    if (!ctx) {
+        appendKeyDiagLog('❌ 열삭제 실패: getValidTableContext()가 null 반환');
+        return;
+    }
+    const { table, row, cell } = ctx;
+    if (row.children.length <= 1) {
+        appendKeyDiagLog('⚠️ 열삭제 취소: 마지막 1열은 삭제하지 않음');
+        return; // 1열만 남았을 때 방어
+    }
 
-    tableModule.deleteColumn();
+    const rows = table.rows();
+    const rowIndex = Math.max(0, rows.indexOf(row));
+    const colIndex = Math.max(0, row.children.indexOf(cell));
+    const beforeCols = row.children.length;
+    const survivingColIndex = Math.min(colIndex, beforeCols - 2);
+
+    table.deleteColumn(colIndex);
+    quill.update(Quill.sources.USER);
+
+    try {
+        const survivingRows = table.rows();
+        const curRow = survivingRows[rowIndex] || survivingRows[0];
+        if (curRow && curRow.children) {
+            const targetCell = curRow.children.at(survivingColIndex) || curRow.children.head;
+            if (targetCell) {
+                const targetOffset = targetCell.offset(quill.scroll);
+                quill.setSelection(targetOffset, 0, Quill.sources.USER);
+                quill.focus();
+                if (targetCell.domNode) lastActiveTableCellTd = targetCell.domNode;
+            }
+        }
+        appendKeyDiagLog(`✅ 열삭제 완료 (${beforeCols}열 ➔ ${curRow.children.length}열)`);
+    } catch (e) {}
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
 
@@ -2239,6 +2380,10 @@ function createDefaultTable() {
         }
     }
     tableModule.insertTable(3, 3);
+    setTimeout(() => {
+        quill.focus();
+        updateLastActiveTableCell();
+    }, 10);
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
 
@@ -2251,16 +2396,16 @@ window.tableDeleteColumnSafe = tableDeleteColumnSafe;
 window.createDefaultTable = createDefaultTable;
 
 // ============================================================================
-// 🎯 [V4.4.0] 전역 단축키 핸들러
-// - 표 생성: Ctrl + Alt + T
-// - 표 행/열 편집 (표 안에서 즉시 발동, 토스트 0, 팝업 없음, 커서 완벽 보존):
-//   Alt + ArrowDown (↓) -> 아래에 행 추가 (새 행으로 커서 이동)
-//   Alt + ArrowUp   (↑) -> 현재 행 삭제 (인접 행으로 커서 안전 피신)
-//   Alt + ArrowRight(→) -> 오른쪽에 열 추가
-//   Alt + ArrowLeft (←) -> 현재 열 삭제
-// - 특수문자/이모티콘: Ctrl + F10
+// 🎯 [V4.4.2] 전역 단축키 핸들러 + 실시간 키 진단 로거
 // ============================================================================
 window.addEventListener('keydown', function (e) {
+    // 진단 모니터 기록: Alt 관련 키 또는 방향키/기능키 입력 시 모두 실시간 기록
+    if (e.altKey || e.key === 'Alt' || e.key.startsWith('Arrow') || e.code.startsWith('Arrow') || e.key === 'PageUp' || e.key === 'PageDown') {
+        const qSel = quill ? quill.getSelection() : null;
+        const inTbl = isCursorInTable();
+        appendKeyDiagLog(`KEYDOWN | key:"${e.key}" code:"${e.code}" kc:${e.keyCode} | alt:${e.altKey} ctrl:${e.ctrlKey} shift:${e.shiftKey} | 표내부:${inTbl} (sel:${qSel ? qSel.index : 'null'})`);
+    }
+
     const specModal = document.getElementById('special-char-modal');
     const isSpecOpen = specModal && (specModal.style.display === 'flex' || specModal.classList.contains('is-open'));
 
@@ -2286,7 +2431,7 @@ window.addEventListener('keydown', function (e) {
     }
 
     // [3] 기본 표(3×3) 생성: Ctrl + Alt + T (토스트 없음)
-    if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 't' || e.key === 'T')) {
+    if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 't' || e.key === 'T' || e.code === 'KeyT')) {
         e.preventDefault();
         createDefaultTable();
         return;
@@ -2294,8 +2439,8 @@ window.addEventListener('keydown', function (e) {
 
     // [4] 표 전용 행/열 즉시 편집: Alt + 방향키 (표 안에서만 발동, 토스트 없음)
     if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-        const isDown  = e.key === 'ArrowDown'  || e.key === 'Down'  || e.code === 'ArrowDown'  || e.code === 'Numpad2' || e.keyCode === 40;
-        const isUp    = e.key === 'ArrowUp'    || e.key === 'Up'    || e.code === 'ArrowUp'    || e.code === 'Numpad8' || e.keyCode === 38;
+        const isDown  = e.key === 'ArrowDown'  || e.key === 'Down'  || e.code === 'ArrowDown'  || e.code === 'Numpad2' || e.key === 'PageDown' || e.keyCode === 40;
+        const isUp    = e.key === 'ArrowUp'    || e.key === 'Up'    || e.code === 'ArrowUp'    || e.code === 'Numpad8' || e.key === 'PageUp'   || e.keyCode === 38;
         const isRight = e.key === 'ArrowRight' || e.key === 'Right' || e.code === 'ArrowRight' || e.code === 'Numpad6' || e.keyCode === 39;
         const isLeft  = e.key === 'ArrowLeft'  || e.key === 'Left'  || e.code === 'ArrowLeft'  || e.code === 'Numpad4' || e.keyCode === 37;
 
