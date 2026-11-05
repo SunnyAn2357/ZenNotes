@@ -782,6 +782,12 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     justify-content: center;
 }
 
+/* 🎯 [V4.4.6] 사이드바 접힘 시 삼선 메뉴 숨김 및 펼치기 버튼을 최상단으로 단독 배치 */
+.col-left.collapsed #left-note-menu-btn,
+.col-left.collapsed #left-note-menu {
+    display: none !important;
+}
+
 .col-left.collapsed .left-note-menu {
     left: 10px;
     top: 44px;
@@ -793,13 +799,39 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     display: none !important;
 }
 
+.col-left:not(.collapsed) .new-note-btn {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    padding: 10px 4px !important;
+    gap: 8px !important;
+}
+
+.col-left.collapsed .nav-header {
+    padding: 24px 0 16px 0 !important;
+    align-items: center !important;
+    gap: 16px !important;
+}
+
+.col-left.collapsed .nav-header-top {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+
 .col-left.collapsed .new-note-btn {
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border-radius: 50%;
-    margin: 0 auto;
+    justify-content: center !important;
+    align-items: center !important;
+    display: flex !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    margin: 0 auto !important;
+}
+
+.col-left.collapsed .new-note-btn::after {
+    display: none !important;
 }
 
 .col-left.collapsed .file-manager-btn {
@@ -1693,7 +1725,7 @@ body.light-theme .ql-editor li[data-list="checked"] {
     height: auto;
     display: block;
     margin: 16px 0;
-    border-radius: 8px;
+    border-radius: 0 !important; /* 🎯 [V4.4.7] 모서리 둥글림 제거 (원본 사각 유지) */
     -webkit-touch-callout: default !important;
     user-select: none !important;
     pointer-events: auto !important;
@@ -3675,7 +3707,7 @@ body.light-theme {
 ============================================================================ */
 @page {
     size: A4 portrait;
-    margin: 15mm 12mm 15mm 12mm;
+    margin: 18mm 10mm 10mm 10mm;
 }
 
 @media print {
@@ -3714,14 +3746,14 @@ body.light-theme {
         background: #ffffff !important;
         display: block !important;
         overflow: visible !important;
-        padding: 0 !important;
+        padding: 4px 2px 0 2px !important;
         margin: 0 !important;
     }
 
     /* 제목 및 인쇄 메타 헤더 */
     #memo-title-input {
-        color: #000000 !important;
-        font-size: 24pt !important;
+        color: #111111 !important;
+        font-size: 18pt !important;
         font-weight: 700 !important;
         width: 100% !important;
         margin-bottom: 4px !important;
@@ -3734,8 +3766,8 @@ body.light-theme {
         display: flex !important;
         justify-content: space-between !important;
         align-items: center !important;
-        font-size: 9.5pt !important;
-        color: #555555 !important;
+        font-size: 9pt !important;
+        color: #64748b !important;
         margin-bottom: 8px !important;
         padding-bottom: 2px !important;
     }
@@ -3743,18 +3775,12 @@ body.light-theme {
     hr.print-hr {
         display: block !important;
         border: none !important;
-        border-top: 2px solid #333333 !important;
-        margin: 0 0 20px 0 !important;
+        border-top: 1px solid #d1d5db !important;
+        margin: 0 0 12px 0 !important;
     }
 
     .print-doc-footer {
-        display: block !important;
-        border-top: 1px solid #d0d0d0 !important;
-        margin-top: 32px !important;
-        padding-top: 8px !important;
-        font-size: 8.5pt !important;
-        color: #777777 !important;
-        text-align: right !important;
+        display: none !important;
     }
 
     /* 🎯 3. 에디터 본문(WYSIWYG) 뼈대 복사 및 폰트 설정 */
@@ -3959,7 +3985,12 @@ body.light-theme {
 
     .ql-editor img {
         max-width: 100% !important;
+        max-height: 238mm !important;
+        width: auto !important;
         height: auto !important;
+        display: block !important;
+        margin: 4px auto !important;
+        object-fit: contain !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
     }
@@ -3974,11 +4005,6 @@ body.is-pdf-exporting .quill-wrapper {
     min-height: auto !important;
     height: max-content !important;
     /* 내용물 길이만큼만 딱 맞춰서 자름 */
-}
-
-/* 문서 맨 끝에 숨어있는 Quill의 기본 빈 줄바꿈 차단 */
-body.is-pdf-exporting .ql-editor>p:last-child {
-    display: none !important;
 }
 
 /* ============================================================================
@@ -4123,6 +4149,10 @@ body.is-pdf-exporting .ql-editor>p:last-child {
     color: #ffffff !important;
 }
 
+#pdf-modal-confirm-btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
 #pdf-modal-confirm-btn:hover {
     filter: brightness(1.1);
 }
@@ -4417,4 +4447,504 @@ body.light-theme .spec-tab-btn.active {
     color: var(--accent-contrast);
     border-color: var(--accent);
     transform: scale(0.93);
+}
+
+/* 🎯 [V4.4.7 / V4.5.0] 밀양시 BI 심볼 버튼 & 마우스 호버 움찔 효과 (배경/테두리 투명화) */
+.miryang-bi-btn,
+body.light-theme .miryang-bi-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    height: 36px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+
+.miryang-bi-btn:hover,
+body.light-theme .miryang-bi-btn:hover {
+    background: transparent !important;
+}
+
+.miryang-bi-icon {
+    height: 24px;
+    max-width: 65px;
+    object-fit: contain;
+    display: block;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.miryang-bi-btn:hover .miryang-bi-icon {
+    animation: miryang-wiggle 0.45s ease-in-out;
+    transform: scale(1.1);
+}
+
+@keyframes miryang-wiggle {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.15) rotate(-6deg); }
+    50% { transform: scale(1.18) rotate(5deg); }
+    75% { transform: scale(1.12) rotate(-3deg); }
+    100% { transform: scale(1.1) rotate(0deg); }
+}
+
+/* 🎯 [V4.5.0] Zen PDF 썸네일 그리드 선택 모달 */
+.pdf-thumb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 16px;
+    padding: 4px;
+}
+
+.pdf-thumb-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    user-select: none;
+}
+
+.pdf-thumb-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.pdf-thumb-card.is-selected {
+    border: 2px solid var(--accent);
+    background: rgba(56, 189, 248, 0.08);
+}
+
+.pdf-thumb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.pdf-thumb-check {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.pdf-thumb-badge {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--surface-hover);
+    color: var(--text-muted);
+}
+
+.pdf-thumb-card.is-selected .pdf-thumb-badge {
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+
+.pdf-thumb-canvas-wrap {
+    width: 100%;
+    aspect-ratio: 1 / 1.414;
+    background: #ffffff;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.pdf-thumb-canvas-wrap canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.pdf-thumb-loading {
+    font-size: 11px;
+    color: #888888;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ==========================================================================
+   🎯 [V4.6.1] 좌측 메뉴 하단 환경설정(톱니바퀴) & Zen 환경설정 모달 스타일 (완전 불투명 솔리드)
+   ========================================================================== */
+#settings-modal.fm-modal-overlay {
+    background: rgba(0, 0, 0, 0.45) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    z-index: 10500 !important;
+}
+
+.left-menu-footer-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 6px 10px 6px 12px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.left-menu-footer-row:hover {
+    background: transparent !important;
+}
+
+.left-menu-footer-row #theme-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.left-menu-footer-row #theme-toggle-btn:hover {
+    background: var(--surface-hover);
+    color: var(--accent);
+}
+
+.left-menu-settings-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: background 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.left-menu-settings-btn:hover {
+    background: var(--surface-hover);
+    color: var(--accent);
+}
+
+.left-menu-settings-btn .left-menu-action-icon {
+    font-size: 13px !important;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
+}
+
+.left-menu-settings-btn:hover .left-menu-action-icon {
+    transform: rotate(45deg);
+    color: var(--accent);
+}
+
+/* Zen 환경설정 모달 카드 - 100% 완전 불투명 솔리드 배경 */
+.zen-settings-card {
+    background: #ffffff !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
+    width: 92vw;
+    max-width: 400px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: zenSettingsPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body:not(.light-theme) .zen-settings-card {
+    background: #1e1e20 !important;
+    border-color: #38393b !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6) !important;
+}
+
+@keyframes zenSettingsPop {
+    0% {
+        opacity: 0;
+        transform: scale(0.96) translateY(-4px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.zen-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: #f8fafc;
+}
+
+body:not(.light-theme) .zen-settings-header {
+    background: #18181a;
+}
+
+.zen-settings-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.zen-settings-icon {
+    color: var(--accent);
+    font-size: 15px;
+}
+
+.zen-settings-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.zen-settings-close-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+}
+
+.zen-settings-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: #ffffff;
+}
+
+body:not(.light-theme) .zen-settings-body {
+    background: #1e1e20;
+}
+
+.zen-settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 8px;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+
+.zen-settings-item:hover {
+    background: var(--surface-hover);
+}
+
+.zen-settings-item-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.zen-settings-item-label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 2px;
+}
+
+.zen-settings-item-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.zen-settings-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.06);
+    margin: 8px 0;
+}
+
+body:not(.light-theme) .zen-settings-divider {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Zen 토글 스위치 */
+.zen-switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.zen-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.zen-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cbd5e1;
+    transition: background-color 0.22s ease;
+    border-radius: 22px;
+}
+
+body:not(.light-theme) .zen-slider {
+    background-color: #3f3f46;
+}
+
+.zen-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #ffffff;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.zen-switch input:checked + .zen-slider {
+    background-color: var(--accent);
+}
+
+.zen-switch input:checked + .zen-slider:before {
+    transform: translateX(16px);
+}
+
+/* Zen 세그먼트 버튼 (Pill) - 소프트 파스텔 톤 & 플로팅 캡슐 */
+.zen-segmented {
+    display: inline-flex;
+    background: #f1f3f6;
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+    gap: 2px;
+}
+
+body:not(.light-theme) .zen-segmented {
+    background: #232326;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.zen-segmented-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    white-space: nowrap;
+}
+
+body:not(.light-theme) .zen-segmented-btn {
+    color: #94a3b8;
+}
+
+.zen-segmented-btn:hover {
+    color: var(--text-main);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+body:not(.light-theme) .zen-segmented-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.zen-segmented-btn.active {
+    background: #ffffff !important;
+    color: var(--accent) !important;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+body:not(.light-theme) .zen-segmented-btn.active {
+    background: #2f2f35 !important;
+    color: #38bdf8 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+#setting-export-segmented .zen-segmented-btn {
+    flex: 1;
+    text-align: center;
+    padding: 6px 4px;
+}
+
+/* Zen 환경설정 푸터 */
+.zen-settings-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: #f8fafc;
+}
+
+body:not(.light-theme) .zen-settings-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #18181a;
+}
+
+.zen-settings-app-badge {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.zen-settings-done-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 7px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.zen-settings-done-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #0f172a;
+}
+
+body:not(.light-theme) .zen-settings-done-btn {
+    background: #242428;
+    border: 1px solid #3f3f46;
+    color: #e4e4e7;
+    box-shadow: none;
+}
+
+body:not(.light-theme) .zen-settings-done-btn:hover {
+    background: #2d2d32;
+    border-color: #52525b;
+    color: #ffffff;
 }

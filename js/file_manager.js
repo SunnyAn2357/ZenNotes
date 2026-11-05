@@ -314,20 +314,42 @@ function loadFileManager(folderId = null) {
       // 🎯 폴더도 날짜를 표시하여 레이아웃 붕괴 방지 및 시각적 구분선 역할 수행
       const dateHtml = formatDateTime(m.updatedAt);
 
+      // 🎯 [V4.5.3] 노트 핀 고정(📌) 배지 및 검색 시 소속 폴더 경로 배지
+      const pinBadgeHtml = (m.type !== "folder" && m.pinnedAt)
+        ? `<i class="fa-solid fa-thumbtack fm-pin-badge" title="상단 고정됨" style="color: var(--accent); font-size: 11px; margin-left: 6px; transform: rotate(45deg); flex-shrink: 0;"></i>`
+        : "";
+
+      let searchFolderBadgeHtml = "";
+      if (query) {
+        let pathNames = [];
+        let currP = m.parentId;
+        while (currP) {
+          const pf = folderMap.get(currP);
+          if (!pf) break;
+          const pTitle = (pf.isSystem === "backup" || pf.syncId === "sys_backup") ? "임시 저장" : pf.title;
+          pathNames.unshift(pTitle);
+          currP = pf.parentId;
+        }
+        const folderLabel = pathNames.length > 0 ? pathNames.join(" > ") : "Home";
+        searchFolderBadgeHtml = `<span class="fm-search-path-badge" style="font-size: 11px; color: var(--text-muted); background: var(--surface-hover); padding: 2px 6px; border-radius: 4px; margin-left: 6px; flex-shrink: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${folderLabel}</span>`;
+      }
+
       // 🎯 3대장도 뼈대 통일을 위해 삼점 버튼을 부여함
       const isTrashMode = isCurrentInTrash || m.isDeleted; // 👈 센서 적용
       const sysType = m.isSystem || ""; // 시스템 폴더 종류 전달
       let moreBtnHtml = `
                         <div class="memo-actions-wrap">
-                            <i class="fa-solid fa-ellipsis-vertical fm-item-more" onclick="openFmItemMenu(event, ${m.id}, '${m.type}', ${isTrashMode}, '${sysType}')"></i>
+                            <i class="fa-solid fa-ellipsis-vertical fm-item-more" onclick="openFmItemMenu(event, ${m.id}, '${m.type}', ${isTrashMode}, '${sysType}', ${!!m.pinnedAt})"></i>
                         </div>`;
 
       li.innerHTML = `
                         <div class="fm-item-info">
                             ${checkboxHtml}
                             <i class="${iconClass} fm-item-icon" style="${iconColorStyle}"></i>
-                            <span class="fm-item-title">${m.title}</span>
+                            <span class="fm-item-title">${(m.isSystem === "backup" || m.syncId === "sys_backup") ? "임시 저장" : m.title}</span>
+                            ${pinBadgeHtml}
                             ${countBadgeHtml}
+                            ${searchFolderBadgeHtml}
                         </div>
                         <div class="fm-item-date">${dateHtml}</div>
                         ${moreBtnHtml}
@@ -519,7 +541,7 @@ function renderFmBreadcrumbs() {
     span.innerHTML =
       p.id === null
         ? `<i class="fa-solid fa-house" style="margin-right:6px;"></i>${p.title}`
-        : p.title;
+        : (p.title === "쓸어 담기" ? "임시 저장" : p.title);
 
     span.onclick = () => {
       if (isLast) return; // 🎯 클릭한 곳이 현재 위치면 헛도는 것 방지
@@ -582,18 +604,21 @@ function renderFmQuickActions() {
   const isTrashRoot = currentFmFolderId === globalTrashFolderId;
   let html = "";
 
-  // 1. 휴지통 외부일 때: '+ 새 폴더' 및 (하위 폴더 내부일 때) '+ 새 노트' 원클릭 버튼 제공
+  // 1. 휴지통 외부일 때: '+ 새 노트' 및 '+ 새 폴더' 원클릭 버튼 제공
   if (!isTrashRoot && !isCurrentInTrash) {
-    if (currentFmFolderId !== null) {
-      html += `
-        <button type="button" class="fm-quick-btn" onclick="createNewMemoInFolder(${currentFmFolderId})" title="현재 폴더에 새 노트 작성">
-          <i class="fa-solid fa-pen-to-square"></i> <span class="fm-quick-label">새 노트</span>
-        </button>
-      `;
-    }
+    const targetFolderForNewNote = currentFmFolderId !== null ? currentFmFolderId : globalDesktopFolderId;
     html += `
+      <button type="button" class="fm-quick-btn" onclick="createNewMemoInFolder(${targetFolderForNewNote})" title="${currentFmFolderId !== null ? "현재 폴더에 새 노트 작성" : "바탕 화면에 새 노트 작성"}">
+        <i class="fa-solid fa-pen-to-square"></i> <span class="fm-quick-label">새 노트</span>
+      </button>
       <button type="button" class="fm-quick-btn" onclick="createNewFolder()" title="현재 위치에 새 폴더 만들기">
         <i class="fa-solid fa-folder-plus"></i> <span class="fm-quick-label">새 폴더</span>
+      </button>
+    `;
+  } else if (isCurrentInTrash && !isTrashRoot) {
+    html += `
+      <button type="button" class="fm-quick-btn" onclick="restoreCurrentFolder()" title="이 폴더 복원하기">
+        <i class="fa-solid fa-rotate-left"></i> <span class="fm-quick-label">폴더 복원</span>
       </button>
     `;
   }
@@ -674,6 +699,7 @@ function toggleFmGlobalMenu(e) {
                 `;
   } else if (isCurrentInTrash) {
     html = `
+                    <div class="fm-dropdown-item" onclick="restoreCurrentFolder()"><i class="fa-solid fa-rotate-left" style="color: var(--accent);"></i> 폴더 복원하기</div>
                     <div class="fm-dropdown-item" onclick="openMoveModal(currentFmFolderId)"><i class="fa-solid fa-arrows-up-down-left-right"></i> 폴더 이동하기</div>
                     <div class="fm-dropdown-item" onclick="emptyCurrentFolder()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> 폴더 비우기</div>
                     <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
@@ -681,6 +707,7 @@ function toggleFmGlobalMenu(e) {
   } else if (currentFmFolderId === null) {
     // 🏠 파일관리창 진짜 Home(0층)
     html = `
+                    <div class="fm-dropdown-item" onclick="createNewMemoInFolder(globalDesktopFolderId)"><i class="fa-solid fa-pen-to-square"></i> 새 노트</div>
                     <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>
                     <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
                 `;
@@ -693,7 +720,7 @@ function toggleFmGlobalMenu(e) {
 
     // 🎯 오직 '바탕 화면' 루트에 있을 때만 노출!
     if (isDesktopRoot) {
-      html += `<div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 쓸어 담기로</div>`;
+      html += `<div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 임시 저장으로</div>`;
     }
     // 그 외 4대장이 아닌 일반 하위 폴더일 때
     else if (!isSystemTop) {
@@ -701,7 +728,7 @@ function toggleFmGlobalMenu(e) {
 
       // 🎯 오직 조상 폴더가 '바탕 화면'일 때만 "이 폴더를 쓸어 담기" 노출!
       if (isUnderDesktop) {
-        html += `<div class="fm-dropdown-item" onclick="backupThisFolder()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 쓸어 담기로</div>`;
+        html += `<div class="fm-dropdown-item" onclick="backupThisFolder()"><i class="fa-solid fa-box-archive" style="color: #8ba888;"></i> 임시 저장으로</div>`;
       }
     }
 
@@ -726,8 +753,8 @@ function createNewMemoInFolder(folderId) {
   document.getElementById("fm-global-menu").classList.remove("is-active");
 }
 
-// 🎯 파라미터에 sysType 추가 및 3대장 메뉴 분기
-function openFmItemMenu(e, id, type, isTrashMode, sysType) {
+// 🎯 파라미터에 sysType 및 isPinned 추가 및 4대장 메뉴 분기
+function openFmItemMenu(e, id, type, isTrashMode, sysType, isPinned = false) {
   e.stopPropagation();
   document.getElementById("fm-global-menu").classList.remove("is-active");
 
@@ -737,10 +764,10 @@ function openFmItemMenu(e, id, type, isTrashMode, sysType) {
   // 🎯 기획하신 4대장 전용 메뉴 세팅!
   if (sysType === "desktop") {
     html = `
-                    <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 쓸어 담기로</div>
+                    <div class="fm-dropdown-item" onclick="backupDesktop()"><i class="fa-solid fa-box-archive"></i> 임시 저장으로</div>
                 `;
   } else if (sysType === "backup") {
-    html = `<div class="fm-dropdown-item" onclick="alert('\\n바탕 화면의 모든 항목을 정리하기 전, \\n한꺼번에 쓸어 담는 임시 창고입니다. \\n\\n바탕 화면의 삼점을 눌러서 \\n쓸어 담기로 이동해 보세요.')"><i class="fa-solid fa-circle-info"></i> 쓸어 담기 정보</div>`;
+    html = `<div class="fm-dropdown-item" onclick="showBackupInfoToast()"><i class="fa-solid fa-circle-info"></i> 임시 저장 정보</div>`;
   } else if (sysType === "security") {
     html = `
                     <div class="fm-dropdown-item" onclick="handleSecurityMenuChange()"><i class="fa-solid fa-key"></i> 비번 변경</div>
@@ -750,11 +777,16 @@ function openFmItemMenu(e, id, type, isTrashMode, sysType) {
     html = `<div class="fm-dropdown-item" onclick="emptyTrash()"><i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> 비우기</div>`;
   } else if (isTrashMode) {
     html = `
+                    <div class="fm-dropdown-item" onclick="fmRestore(${id})"><i class="fa-solid fa-rotate-left" style="color: var(--accent);"></i> 복구하기</div>
                     <div class="fm-dropdown-item" onclick="openMoveModal(${id})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 이동하기</div>
                     <div class="fm-dropdown-item" onclick="fmHardDelete(${id})"><i class="fa-solid fa-xmark" style="color: var(--danger);"></i> 영구 삭제</div>
                 `;
   } else {
-    html = `
+    html = "";
+    if (type !== "folder") {
+      html += `<div class="fm-dropdown-item" onclick="fmTogglePin(${id})"><i class="fa-solid fa-thumbtack" style="color: ${isPinned ? "var(--text-muted)" : "var(--accent)"};"></i> ${isPinned ? "핀 고정 해제" : "핀 고정"}</div>`;
+    }
+    html += `
                     <div class="fm-dropdown-item" onclick="fmRename(${id})"><i class="fa-solid fa-pen"></i> 이름 바꾸기</div>
                     <div class="fm-dropdown-item" onclick="openMoveModal(${id})"><i class="fa-solid fa-arrows-up-down-left-right"></i> 이동하기</div>
                 `;
@@ -767,6 +799,75 @@ function openFmItemMenu(e, id, type, isTrashMode, sysType) {
   menu.style.top = `${e.clientY + 10}px`;
   menu.style.left = `${e.clientX - 120}px`;
   menu.classList.add("is-active");
+}
+
+// 🎯 [V4.5.3] 임시 저장 안내 토스트 (투박한 브라우저 기본 alert 대체)
+function showBackupInfoToast() {
+  const itemMenu = document.getElementById("fm-item-menu");
+  if (itemMenu) itemMenu.classList.remove("is-active");
+  showToast("📦 바탕 화면의 항목들을 한꺼번에 보관하는 임시 저장소입니다.\n(바탕 화면 메뉴의 '임시 저장으로'를 눌러보세요)");
+}
+
+// 🎯 [V4.5.3] FM에서 노트 핀 고정 / 고정 해제 토글
+function fmTogglePin(id) {
+  const itemMenu = document.getElementById("fm-item-menu");
+  if (itemMenu) itemMenu.classList.remove("is-active");
+
+  let isNowPinned = false;
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  store.get(id).onsuccess = (e) => {
+    const m = e.target.result;
+    if (!m || m.type === "folder") return;
+    if (m.pinnedAt) {
+      delete m.pinnedAt;
+      isNowPinned = false;
+    } else {
+      m.pinnedAt = Date.now();
+      isNowPinned = true;
+    }
+    m.updatedAt = Date.now();
+    store.put(m);
+  };
+  tx.oncomplete = () => {
+    loadFileManager(currentFmFolderId);
+    loadMemoList(true);
+    updateUnsyncedCount();
+    showToast(isNowPinned ? "📌 노트가 상단에 고정되었습니다." : "핀 고정이 해제되었습니다.");
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+  };
+}
+
+// 🎯 [V4.5.3] FM에서 삭제 작업 후 현재 에디터에 열려 있던 노트가 삭제(또는 상위 폴더 삭제)되었다면 즉시 바탕화면 1번 노트로 전환
+function ensureActiveMemoNotDeleted() {
+  if (!currentMemoId || !db) return;
+  const tx = db.transaction(["memos"], "readonly");
+  tx.objectStore("memos").getAll().onsuccess = (e) => {
+    const allData = e.target.result || [];
+    const cur = allData.find((m) => m.id === Number(currentMemoId));
+    if (!cur || cur.isDeleted || cur.isPermanentlyDeleted) {
+      if (typeof openTopDesktopMemo === "function") openTopDesktopMemo();
+      return;
+    }
+    const folderMap = new Map();
+    allData.forEach((m) => {
+      if (m.type === "folder") folderMap.set(m.id, m);
+    });
+    let p = cur.parentId;
+    while (p) {
+      if (p === globalTrashFolderId) {
+        if (typeof openTopDesktopMemo === "function") openTopDesktopMemo();
+        return;
+      }
+      const pf = folderMap.get(p);
+      if (!pf) break;
+      if (pf.isDeleted || pf.isPermanentlyDeleted || pf.isSystem === "trash") {
+        if (typeof openTopDesktopMemo === "function") openTopDesktopMemo();
+        return;
+      }
+      p = pf.parentId;
+    }
+  };
 }
 
 // 1. 새 폴더 생성 (🎯 [V4.2.4] syncId 및 parentSyncId 족보 완벽 부여)
@@ -878,6 +979,7 @@ function fmDelete(id) {
     store.put(m);
   };
   tx.oncomplete = () => {
+    ensureActiveMemoNotDeleted();
     loadFileManager(currentFmFolderId);
     loadMemoList(true);
     updateUnsyncedCount();
@@ -1042,7 +1144,7 @@ async function submitSecurityPassword() {
     } else {
       showToast("비밀번호가 일치하지 않습니다.");
       input.value = "";
-      input.focus();
+      setTimeout(() => { input.focus(); }, 60);
     }
   }
   // ----------------------------------------------------
@@ -1053,9 +1155,9 @@ async function submitSecurityPassword() {
       tempSecPassword = pw; // 1차 입력값 기억
       input.dataset.step = "2";
       input.value = "";
-      desc.innerHTML = "<b>1번 더 입력하세요.</b>"; // UI 문구 변경
+      desc.innerHTML = "확인을 위해 <b>1번 더 입력하세요.</b>"; // UI 문구 변경
       btn.innerText = "설정 완료";
-      input.focus();
+      setTimeout(() => { input.focus(); }, 60);
     } else if (step === "2") {
       if (pw === tempSecPassword) {
         const hash = await hashPassword(pw);
@@ -1085,6 +1187,7 @@ async function submitSecurityPassword() {
       } else {
         showToast("비밀번호가 일치하지 않습니다. 처음부터 다시 입력해주세요.");
         openSecurityModal("setup"); // 1단계로 강제 초기화
+        setTimeout(() => { input.focus(); }, 120);
       }
     }
   }
@@ -1099,19 +1202,19 @@ async function submitSecurityPassword() {
         input.dataset.step = "2";
         input.value = "";
         desc.innerHTML = "<b>새 비밀번호</b>를 입력하세요.";
-        input.focus();
+        setTimeout(() => { input.focus(); }, 60);
       } else {
         showToast("현재 비밀번호가 틀렸습니다.");
         input.value = "";
-        input.focus();
+        setTimeout(() => { input.focus(); }, 60);
       }
     } else if (step === "2") {
       tempSecPassword = pw; // 새 비번 1차 입력값 기억
       input.dataset.step = "3";
       input.value = "";
-      desc.innerHTML = "<b>1번 더 입력하세요.</b>"; // UI 문구 변경
+      desc.innerHTML = "확인을 위해 <b>1번 더 입력하세요.</b>"; // UI 문구 변경
       btn.innerText = "변경 완료";
-      input.focus();
+      setTimeout(() => { input.focus(); }, 60);
     } else if (step === "3") {
       if (pw === tempSecPassword) {
         // 새 비번 1차 입력값과 일치하면 최종 저장
@@ -1129,7 +1232,7 @@ async function submitSecurityPassword() {
         input.value = "";
         desc.innerHTML = "<b>새 비밀번호</b>를 입력하세요.";
         btn.innerText = "다음";
-        input.focus();
+        setTimeout(() => { input.focus(); }, 60);
       }
     }
   }
@@ -1475,6 +1578,7 @@ function fmBatchDelete() {
   tx.oncomplete = () => {
     const count = fmSelectedItems.size;
     cancelFmMultiSelect();
+    ensureActiveMemoNotDeleted();
     loadMemoList(true);
     updateUnsyncedCount();
 
@@ -1609,7 +1713,7 @@ function renderDestFolders(scrollToFolderId = undefined) {
       },
       {
         id: globalBackupFolderId,
-        title: "쓸어 담기",
+        title: "임시 저장",
         icon: "fa-box-archive",
         color: "#8ba888",
       },
@@ -2083,6 +2187,7 @@ function handleFmHamburger() {
 function createNewMemo(folderId = null) {
   forceSaveImmediate();
   targetNewMemoFolderId = folderId; // 🎯 새 노트가 저장될 특정 폴더 위치 기억
+  isEditingSecureMemo = false; // 🎯 새 노트 작성 시 보안 노트 편집 상태 해제
 
   const previousMemoId = currentMemoId;
   if (previousMemoId) purgeMemoIfEmpty(previousMemoId);
@@ -2105,6 +2210,17 @@ function createNewMemo(folderId = null) {
   setTimeout(() => quill.history.clear(), 10);
   setTimeout(() => {
     isLoading = false;
+    // 🎯 [V4.6.0] 새 노트 작성 시작 커서 설정 반영 (제목 vs 본문)
+    const cursorTarget = localStorage.getItem('zen_setting_cursor_target') || 'title';
+    if (cursorTarget === 'body') {
+      quill.focus();
+      quill.setSelection(0, 0);
+    } else {
+      const titleInput = document.getElementById("memo-title-input");
+      if (titleInput && window.innerWidth > 768) {
+        titleInput.focus();
+      }
+    }
   }, 10);
 }
 
@@ -2151,11 +2267,34 @@ function loadMemoList(queryDB = true) {
         return false;
       }
 
+      // 🎯 [V4.5.0] 조상 폴더 중 휴지통이 있는지 확인하는 헬퍼
+      function isUnderTrash(parentId) {
+        if (!parentId) return false;
+        if (parentId === globalTrashFolderId) return true;
+        let curr = parentId;
+        while (curr) {
+          if (curr === globalTrashFolderId) return true;
+          const parentFolder = folderMap.get(curr);
+          if (!parentFolder) break;
+          if (parentFolder.isDeleted || parentFolder.isSystem === "trash") return true;
+          curr = parentFolder.parentId;
+        }
+        return false;
+      }
+
       allData.forEach((m) => {
-        // 🎯 바탕화면 소속(직접+간접) 파일만 싹 다 평탄화(Flatten)해서 가져옴
+        // 🎯 삭제된 항목 또는 폴더는 제외
         if (m.type === "folder" || m.isDeleted || m.isPermanentlyDeleted)
           return;
-        if (!isUnderDesktop(m.parentId)) return;
+
+        // 🎯 휴지통 소속 파일은 고정 여부와 상관없이 메인 목록 출입 금지
+        if (isUnderTrash(m.parentId)) return;
+
+        const isDesktop = isUnderDesktop(m.parentId);
+        const isPinned = !!m.pinnedAt;
+
+        // 🎯 [V4.5.0] 바탕화면 소속이거나, 타 폴더(Home, 임시 저장 등) 소속이라도 핀 고정된 파일이면 왼쪽 창에 노출!
+        if (!isDesktop && !isPinned) return;
 
         // 🚀 [핵심 수정 2] 간혹 제목이 비어있는 파일이 에러를 일으켜 화면 전체가 백지가 되는 현상 방어
         const safeTitle = (m.title || "제목 없는 노트").toLowerCase();
@@ -2753,7 +2892,7 @@ function fmBatchRestore() {
 
 // 🎯 [신규] 바탕 화면 일괄 백업 함수
 function backupDesktop() {
-  if (!confirm("바탕 화면의 모든 항목을 쓸어 담기로 이동하시겠습니까?"))
+  if (!confirm("바탕 화면의 모든 항목을 임시 저장으로 이동하시겠습니까?"))
     return;
 
   const tx = db.transaction(["memos"], "readwrite");
@@ -2794,7 +2933,7 @@ function backupDesktop() {
   };
 
   tx.oncomplete = () => {
-    showToast("바탕 화면이 백업되었습니다.");
+    showToast("바탕 화면의 항목들이 임시 저장으로 이동되었습니다.");
     loadFileManager(currentFmFolderId); // 현재 바탕화면이면 깨끗해진 화면 렌더링
     loadMemoList(true); // 왼쪽 메인 창도 깨끗하게 동기화
     if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
@@ -2804,7 +2943,7 @@ function backupDesktop() {
 // 🎯 [신규] 특정 폴더 하나만 통째로 '쓸어 담기'로 보내는 기능
 function backupThisFolder() {
   if (!currentFmFolderId) return;
-  if (!confirm("이 폴더를 쓸어 담기로 이동하시겠습니까?"))
+  if (!confirm("이 폴더를 임시 저장으로 이동하시겠습니까?"))
     return;
 
   const tx = db.transaction(["memos"], "readwrite");
@@ -2821,7 +2960,7 @@ function backupThisFolder() {
   };
 
   tx.oncomplete = () => {
-    showToast("폴더가 쓸어 담기로 안전하게 이동되었습니다.");
+    showToast("폴더가 임시 저장으로 안전하게 이동되었습니다.");
     document.getElementById("fm-global-menu").classList.remove("is-active");
     updateUnsyncedCount();
     history.back(); // 🎯 이동 후 즉시 상위 폴더(바탕 화면)로 자동 복귀!

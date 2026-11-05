@@ -77,31 +77,8 @@ function checkAuthState() {
   const isExplicitLogout = localStorage.getItem("zen_explicit_logout") === "true";
 
   if (authBtn) {
-    if (isOnline) {
-      authBtn.classList.add("is-logged-in");
-      authBtn.classList.remove("is-logged-out");
-      authBtn.setAttribute("title", savedHint ? `클라우드 연결됨 (${savedHint})` : "클라우드 연결됨 (클릭 시 로그아웃)");
-      if (authBtnIcon) {
-        authBtnIcon.className = "fa-solid fa-cloud";
-        authBtnIcon.style.color = "var(--accent)";
-      }
-    } else {
-      authBtn.classList.remove("is-logged-in");
-      authBtn.classList.add("is-logged-out");
-      if (fbUser && !navigator.onLine) {
-        authBtn.setAttribute("title", "오프라인 (인터넷 연결 시 자동 동기화)");
-      } else if (isExplicitLogout) {
-        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 로그인 및 계정 선택)");
-      } else if (savedHint) {
-        authBtn.setAttribute("title", `오프라인 (클릭 시 ${savedHint} 계정으로 연결)`);
-      } else {
-        authBtn.setAttribute("title", "오프라인 (클릭 시 구글 로그인)");
-      }
-      if (authBtnIcon) {
-        authBtnIcon.className = "fa-solid fa-cloud";
-        authBtnIcon.style.color = "var(--text-muted)";
-      }
-    }
+    // 🎯 [V4.4.7] 밀양시 BI 버튼: 툴팁을 "로그인(추후 지원)"으로 고정
+    authBtn.setAttribute("title", "로그인(추후 지원)");
   }
 
   window.ZEN_IS_ONLINE = isOnline;
@@ -118,8 +95,41 @@ window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
 
-// 🎯 구름 버튼 토글 (로그인 상태면 로그아웃 확인, 로그아웃 상태면 구글 로그인)
-document.getElementById("btn-auth").addEventListener("click", async () => {
+// 🎯 [V4.7.5] 밀양시 BI 버튼: 1회 클릭 시 "로그인(추후 지원)", 2초 내 5연타(5-tap) 시 시크릿 구글 로그인/로그아웃 트리거
+let secretTapCount = 0;
+let secretTapTimer = null;
+
+const authBtnEl = document.getElementById("btn-auth");
+if (authBtnEl) {
+  authBtnEl.addEventListener("click", (e) => {
+    if (e) e.stopPropagation();
+
+    secretTapCount++;
+
+    if (secretTapTimer) {
+      clearTimeout(secretTapTimer);
+    }
+
+    if (secretTapCount >= 5) {
+      secretTapCount = 0;
+      if (navigator.vibrate) {
+        try { navigator.vibrate(50); } catch (_) {}
+      }
+      showToast("🔑 시크릿 클라우드 연결 모드를 실행합니다.");
+      handleCloudAuthLegacy();
+      return;
+    }
+
+    secretTapTimer = setTimeout(() => {
+      secretTapCount = 0;
+    }, 2000);
+
+    showToast("로그인(추후 지원)");
+  });
+}
+
+// [V4.3.0 클라우드 인증 보존 함수 - 추후 지원 시 재연동]
+async function handleCloudAuthLegacy() {
   if (!fbAuth) {
     showToast("클라우드 서비스를 불러오지 못했습니다.\n인터넷 연결 후 새로고침해 주세요.");
     return;
@@ -128,7 +138,8 @@ document.getElementById("btn-auth").addEventListener("click", async () => {
 
   // 1. 로그인 상태 → 명시적 로그아웃 (정책 ①)
   if (fbUser) {
-    const confirmLogout = confirm("클라우드 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.");
+    const userLabel = fbUser.email ? `현재 [${fbUser.email}] 계정으로 연동 중입니다.\n\n` : "";
+    const confirmLogout = confirm(`${userLabel}클라우드 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.`);
     if (!confirmLogout) return;
 
     localStorage.setItem("zen_explicit_logout", "true");
@@ -183,7 +194,7 @@ document.getElementById("btn-auth").addEventListener("click", async () => {
     }
     console.error("❌ [Firebase Auth] 로그인 실패:", e);
   }
-});
+}
 
 // 🌐 네트워크 복구/단절 및 화면 복귀 시 상태 갱신·동기화
 window.addEventListener("online", () => {

@@ -1,3 +1,6 @@
+// 🎯 [V4.6.3] 스마트 백스페이스 추적 전역 상태 변수
+let lastAutoConvertedList = null;
+
 hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
 
 const Link = Quill.import('formats/link');
@@ -125,6 +128,87 @@ const quill = new Quill('#editor', {
         history: { delay: 1000, maxStack: 100, userOnly: true },
         keyboard: {
             bindings: {
+                // 🎯 [V4.6.3] Quill 2.0 내장 자동 목록 변환('list autofill') 오버라이드
+                // - 환경설정에서 '자동 글머리·목록 변환' OFF 시: 스페이스 입력 시 목록으로 변환되지 않고 공백 유지!
+                // - 변환 ON 시: 스마트 백스페이스 복원용 lastAutoConvertedList 상태 정확히 기록!
+                'list autofill': {
+                    key: ' ',
+                    shiftKey: null,
+                    collapsed: true,
+                    format: { 'code-block': false, blockquote: false, table: false },
+                    prefix: /^\s*?(\d+\.|-|\*|\[ ?\]|\[x\])$/,
+                    handler: function (range, context) {
+                        if (localStorage.getItem('zen_setting_auto_list') === 'false') {
+                            lastAutoConvertedList = null;
+                            return true; // Quill 내장 변환 차단! 일반 공백 입력 허용 (- 텍스트 유지)
+                        }
+
+                        if (this.quill.scroll.query('list') == null) return true;
+                        const length = context.prefix.length;
+                        const [line, offset] = this.quill.getLine(range.index);
+                        if (offset > length) return true;
+
+                        let value;
+                        const trimmed = context.prefix.trim();
+                        switch (trimmed) {
+                            case '[]':
+                            case '[ ]':
+                                value = 'unchecked';
+                                break;
+                            case '[x]':
+                                value = 'checked';
+                                break;
+                            case '-':
+                            case '*':
+                                value = 'bullet';
+                                break;
+                            default:
+                                value = 'ordered';
+                        }
+
+                        lastAutoConvertedList = {
+                            lineIndex: range.index - length,
+                            prefix: trimmed,
+                            isInsideQuote: false,
+                            timestamp: Date.now()
+                        };
+
+                        this.quill.deleteText(range.index - length, length, Quill.sources.USER);
+                        this.quill.formatLine(range.index - length, 1, 'list', value, Quill.sources.USER);
+                        this.quill.setSelection(range.index - length, Quill.sources.SILENT);
+                        return false;
+                    }
+                },
+                // 🎯 [V4.6.0] 스마트 백스페이스 (자동 글머리기호/목록 변환 직후 Backspace 입력 시 원래 기호로 즉시 복원)
+                'smart-list-undo': {
+                    key: 'Backspace',
+                    handler: function (range, context) {
+                        if (localStorage.getItem('zen_setting_smart_undo') === 'false') return true;
+                        if (!lastAutoConvertedList) return true;
+
+                        const now = Date.now();
+                        if (now - lastAutoConvertedList.timestamp < 6000) {
+                            const [line, offset] = this.quill.getLine(range.index);
+                            if (line && line.formats().list) {
+                                const lineIndex = this.quill.getIndex(line);
+                                const prefixToRestore = lastAutoConvertedList.prefix + ' ';
+                                const isInsideQuote = lastAutoConvertedList.isInsideQuote;
+                                lastAutoConvertedList = null;
+
+                                this.quill.formatLine(lineIndex, 1, 'list', false, Quill.sources.USER);
+                                if (isInsideQuote) {
+                                    this.quill.formatLine(lineIndex, 1, 'quote-item', false, Quill.sources.USER);
+                                    this.quill.formatLine(lineIndex, 1, 'blockquote', true, Quill.sources.USER);
+                                }
+                                this.quill.insertText(lineIndex, prefixToRestore, Quill.sources.USER);
+                                this.quill.setSelection(lineIndex + prefixToRestore.length, Quill.sources.USER);
+                                return false; // 기본 Backspace 동작 방지
+                            }
+                        }
+                        lastAutoConvertedList = null;
+                        return true;
+                    }
+                },
                 // 🎯 [표 개선] Ctrl+Enter (Cmd+Enter): 표 중간 어디서든 표 바로 아래로 탈출!
                 'table-cell-ctrl-enter': {
                     key: 'Enter',
@@ -191,7 +275,7 @@ const quill = new Quill('#editor', {
                         const nextList = (listFormat === 'checked') ? 'unchecked' : listFormat;
                         
                         this.quill.insertText(range.index, '\n', Quill.sources.USER);
-                        this.quill.setSelection(range.index + 1, Quill.sources.SILENT);
+                        this.quill.setSelection(range.index + 2, Quill.sources.SILENT); // 🎯 [V4.4.7] 이미지(1칸)+엔터(1칸) 다음 새 줄로 이동
                         this.quill.formatLine(range.index + 1, 1, {
                             'list': nextList,
                             'quote-item': true
@@ -488,18 +572,107 @@ const quill = new Quill('#editor', {
 
 });
 
-// 🎯 [V4.4.5] 툴바 버튼 네이티브 툴팁(title) 설정 (마우스 호버 시 단축키 및 설명 안내)
-const tableToolbarButtonTitles = {
-    'ql-table': '표 삽입 (3x3) (Ctrl+Alt+T)',
-    'ql-table-insert-row': '아래에 행 추가 (Alt+↓)',
-    'ql-table-delete-row': '현재 행 삭제 (Alt+↑)',
-    'ql-table-insert-column': '오른쪽에 열 추가 (Alt+→)',
-    'ql-table-delete-column': '현재 열 삭제 (Alt+←)'
-};
-Object.entries(tableToolbarButtonTitles).forEach(([cls, title]) => {
-    const btn = document.querySelector(`.ql-toolbar button.${cls}`);
-    if (btn) btn.setAttribute('title', title);
-});
+// 🎯 [V4.6.3] 스마트 백스페이스 (자동 글머리기호/목록 변환 직후 Backspace 입력 시 원래 기호로 100% 즉시 복원)
+// Quill 내부 바인딩보다 먼저 실행되도록 DOM keydown 캡처(capture) 단계에서 최우선 가로챔
+quill.root.addEventListener('keydown', function (e) {
+    if (e.key === 'Backspace' && !e.isComposing) {
+        if (localStorage.getItem('zen_setting_smart_undo') === 'false') return;
+        if (!lastAutoConvertedList) return;
+
+        const now = Date.now();
+        if (now - lastAutoConvertedList.timestamp < 10000) {
+            const sel = quill.getSelection();
+            if (sel) {
+                const [line] = quill.getLine(sel.index);
+                if (line && line.formats().list) {
+                    const lineText = line.domNode ? line.domNode.textContent : '';
+                    if (!lineText || lineText.trim() === '' || sel.index <= lastAutoConvertedList.lineIndex + 1) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+
+                        const lineIndex = quill.getIndex(line);
+                        const prefixToRestore = lastAutoConvertedList.prefix + ' ';
+                        const isInsideQuote = lastAutoConvertedList.isInsideQuote;
+                        lastAutoConvertedList = null;
+
+                        quill.formatLine(lineIndex, 1, 'list', false, Quill.sources.USER);
+                        if (isInsideQuote) {
+                            quill.formatLine(lineIndex, 1, 'quote-item', false, Quill.sources.USER);
+                            quill.formatLine(lineIndex, 1, 'blockquote', true, Quill.sources.USER);
+                        }
+                        quill.insertText(lineIndex, prefixToRestore, Quill.sources.USER);
+                        quill.setSelection(lineIndex + prefixToRestore.length, Quill.sources.USER);
+                        return;
+                    }
+                }
+            }
+        }
+        lastAutoConvertedList = null;
+    }
+}, true);
+
+// 🎯 [V4.7.0] 툴바 전체 버튼 및 피커 네이티브 툴팁(title) 전수 장착 (단축키 & 문법 안내)
+function initToolbarTooltips() {
+    const toolbarTitles = {
+        // 실행 취소 / 다시 실행
+        '.ql-toolbar button.ql-undo': '실행 취소 (Ctrl+Z)',
+        '.ql-toolbar button.ql-redo': '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)',
+
+        // 제목 및 서식
+        '.ql-toolbar .ql-header': '제목 크기 (H1: #, H2: ##, H3: ###)',
+        '.ql-toolbar button.ql-bold': '굵게 (Ctrl+B / **텍스트**)',
+        '.ql-toolbar button.ql-italic': '기울임 (Ctrl+I / *텍스트*)',
+        '.ql-toolbar button.ql-underline': '밑줄 (Ctrl+U / __텍스트__)',
+        '.ql-toolbar button.ql-strike': '취소선 (~~텍스트~~)',
+        '.ql-toolbar button.ql-strike-line': '취소선 블록',
+        '.ql-toolbar .ql-color': '글자 색상',
+        '.ql-toolbar .ql-background': '형광펜 / 배경색',
+
+        // 목록 / 체크리스트
+        '.ql-toolbar button.ql-list[value="check"]': '체크리스트 ([ ] / [x])',
+        '.ql-toolbar button.ql-list[value="ordered"]': '번호 매기기 (1. )',
+        '.ql-toolbar button.ql-list[value="bullet"]': '글머리 기호 (- / * / +)',
+
+        // 정렬
+        '.ql-toolbar .ql-align': '텍스트 정렬',
+
+        // 표 (Table)
+        '.ql-toolbar button.ql-table': '표 삽입 (3x3) (Ctrl+Alt+T / |3x3|)',
+        '.ql-toolbar button.ql-table-insert-row': '아래에 행 추가 (Alt+↓)',
+        '.ql-toolbar button.ql-table-delete-row': '현재 행 삭제 (Alt+↑)',
+        '.ql-toolbar button.ql-table-insert-column': '오른쪽에 열 추가 (Alt+→)',
+        '.ql-toolbar button.ql-table-delete-column': '현재 열 삭제 (Alt+←)',
+
+        // 특수 요소
+        '.ql-toolbar button.ql-special-char': '특수문자 입력',
+        '.ql-toolbar button.ql-blockquote': '인용구 (> 텍스트)',
+        '.ql-toolbar button.ql-code-block': '코드 블록 (```언어)',
+        '.ql-toolbar button.ql-divider': '구분선 (--- / ___ / ***)',
+
+        // 미디어 / 링크
+        '.ql-toolbar button.ql-link': '하이퍼링크 삽입 (Ctrl+K)',
+        '.ql-toolbar button.ql-image': '이미지 삽입 (Ctrl+V 붙여넣기 지원)',
+        '.ql-toolbar button.ql-video': '동영상 링크 삽입',
+
+        // 유틸리티
+        '.ql-toolbar button.ql-clean': '서식 제거',
+        '.ql-toolbar button.ql-markdown-help': '마크다운 문법 안내'
+    };
+
+    Object.entries(toolbarTitles).forEach(([selector, title]) => {
+        const el = document.querySelector(selector);
+        if (el) {
+            el.setAttribute('title', title);
+            const label = el.querySelector('.ql-picker-label');
+            if (label) label.setAttribute('title', title);
+        }
+    });
+}
+
+initToolbarTooltips();
+setTimeout(initToolbarTooltips, 100);
+setTimeout(initToolbarTooltips, 500);
 
 // 🎯 [V3.4.4] 하이퍼링크 텍스트 선택 영역 시각화 오버레이 관리자
 let linkHighlightContainer = null;
@@ -768,6 +941,14 @@ quill.on('text-change', function (delta, oldDelta, source) {
         const blockMatch = text.match(/^(#{1,6}|>\s*(?:\*|-|\+)\s+\[\s\]|>\s*(?:\*|-|\+)\s+\[x\]|>\s*\[\s\]|>\s*\[x\]|>\s*1\.|>\s*(?:\*|-|\+)|>|(?:\*|-|\+)\s+\[\s\]|(?:\*|-|\+)\s+\[x\]|\*|-|\+|1\.|\-{3}|_{3}|\*{3}|`{3}[a-zA-Z0-9_\-+]*|\[\s\]|\[x\])\s$/i);
         if (blockMatch) {
             const prefix = blockMatch[1];
+
+            // 🎯 [V4.6.0] 옵션 B: 자동 목록 변환 설정(ON/OFF) 검사 (리스트 계열 단축키 차단)
+            const isListPrefix = /^(\*|-|\+|1\.|\[\s\]|\[x\]|(?:\*|-|\+)\s+\[\s\]|(?:\*|-|\+)\s+\[x\]|>\s*(?:\*|-|\+)|>\s*1\.|>\s*(?:\*|-|\+)\s+\[\s\]|>\s*(?:\*|-|\+)\s+\[x\]|>\s*\[\s\]|>\s*\[x\])$/i.test(prefix);
+            if (isListPrefix && localStorage.getItem('zen_setting_auto_list') === 'false') {
+                lastAutoConvertedList = null;
+                return; // 사용자가 자동 목록 변환을 껐으므로 일반 텍스트(- 등)로 유지!
+            }
+
             const deleteLength = prefix.length + 1;
             const formatIndex = range.index - deleteLength;
 
@@ -775,6 +956,18 @@ quill.on('text-change', function (delta, oldDelta, source) {
             const isInsideQuote = !!(lineFormats.blockquote || lineFormats['quote-item'] || (line.domNode && (line.domNode.tagName === 'BLOCKQUOTE' || line.domNode.classList.contains('ql-quote-item') || line.domNode.classList.contains('ql-quote-item-true'))));
 
             quill.deleteText(formatIndex, deleteLength, Quill.sources.USER);
+
+            // 🎯 [V4.6.0] 스마트 백스페이스 추적 정보 등록
+            if (isListPrefix) {
+                lastAutoConvertedList = {
+                    lineIndex: formatIndex,
+                    prefix: prefix,
+                    isInsideQuote: isInsideQuote,
+                    timestamp: Date.now()
+                };
+            } else {
+                lastAutoConvertedList = null;
+            }
 
             if (/^#{1,6}$/.test(prefix)) {
                 quill.formatLine(formatIndex, 1, 'header', prefix.length, Quill.sources.SILENT);
@@ -935,7 +1128,7 @@ const handleImageFiles = (files) => {
                 quill.insertText(range.index + 1, '\n', Quill.sources.USER);
 
                 // 3. 🎯 수정됨: 커서를 이미지(1칸) + 엔터(1칸) = 총 1칸 뒤인 '새로운 줄'로 이동
-                quill.setSelection(range.index + 1, Quill.sources.SILENT);
+                quill.setSelection(range.index + 2, Quill.sources.SILENT); // 🎯 [V4.4.7] 이미지(1칸)+엔터(1칸) 다음 새 줄로 이동
 
                 triggerAutoSave(); // 자동 저장 강제 실행
             };
@@ -963,17 +1156,24 @@ const handleImageFiles = (files) => {
 // 🎯 [이벤트 로직] 에디터 및 단축키 제어 (순서 무관)
 // ============================================================================
 
-// 1. 빈 공간 클릭 시 에디터 포커스 (파일 관리창 열려있을 땐 방어)
+// 1. 빈 공간 클릭 시 에디터 포커스 (모든 모달/오버레이 및 파일 관리창 열려있을 땐 철통 방어)
 document.querySelector('.col-center').addEventListener('click', e => {
-    // 🎯 [수정] 파일 관리창(.file-manager-pane), 툴팁(.ql-tooltip), 모바일 오버레이, 에디터/헤더/툴바 클릭 시 포커스 탈취 차단!
-    if (!e.target.closest('.editor-header') && 
-        !e.target.closest('.ql-toolbar') && 
-        !e.target.closest('.ql-editor') && 
-        !e.target.closest('.ql-tooltip') && 
-        !e.target.closest('#zen-mobile-overlay') && 
-        !e.target.closest('.file-manager-pane')) {
-        quill.focus();
+    // 🎯 [완벽 방어] 모달(.fm-modal-overlay, .fm-modal, .special-char-overlay), 파일관리창, 툴팁, 헤더, 툴바, 에디터 내부 클릭 시 포커스 탈취 절대 차단!
+    if (e.target.closest('.fm-modal-overlay') || 
+        e.target.closest('.fm-modal') || 
+        e.target.closest('.special-char-overlay') || 
+        e.target.closest('#fm-security-modal') || 
+        e.target.closest('#fm-move-modal') || 
+        e.target.closest('#reset-confirm-modal') || 
+        e.target.closest('.editor-header') || 
+        e.target.closest('.ql-toolbar') || 
+        e.target.closest('.ql-editor') || 
+        e.target.closest('.ql-tooltip') || 
+        e.target.closest('#zen-mobile-overlay') || 
+        e.target.closest('.file-manager-pane')) {
+        return;
     }
+    quill.focus();
 });
 
 // 3. 제목 입력칸에서 Tab 키 누르면 에디터로 자연스럽게 이동
@@ -1152,7 +1352,14 @@ if (tbEl) {
            ========================================== */
 document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-        // [0순위] 에디터 툴팁, 모바일 색상표/서식 팝업, 마크다운 안내 모달, PDF 모달 및 일반 노트 메뉴 닫기
+        // [0순위] 환경설정 모달 닫기
+        const settingsModal = document.getElementById("settings-modal");
+        if (settingsModal && settingsModal.style.display === "flex") {
+            closeSettingsModal();
+            return;
+        }
+
+        // [0.5순위] 에디터 툴팁, 모바일 색상표/서식 팝업, 마크다운 안내 모달, PDF 모달 및 일반 노트 메뉴 닫기
         const zenOverlayEl = document.getElementById("zen-mobile-overlay");
         if (zenOverlayEl && zenOverlayEl.style.display !== "none" && zenOverlayEl.style.display !== "") {
             if (typeof window.closeZenPopup === "function") window.closeZenPopup();
@@ -1320,6 +1527,14 @@ window.addEventListener("popstate", (e) => {
     const mdModal = document.getElementById("markdown-help-modal");
     if (mdModal && mdModal.style.display === "flex") {
         closeMarkdownHelpModal(true);
+        return;
+    }
+
+    // 🎯 [V4.6.0] 환경설정 모달 닫기
+    const settingsModal = document.getElementById("settings-modal");
+    if (settingsModal && settingsModal.style.display === "flex") {
+        if (typeof closeSettingsModal === "function") closeSettingsModal(true);
+        else settingsModal.style.display = "none";
         return;
     }
 
@@ -1985,7 +2200,7 @@ let currentSpecTab = 1;
 const MAX_RECENT_CHARS = 8;
 let recentSpecialChars = [];
 try {
-    const stored = localStorage.getItem('zennotes_recent_special_chars');
+    const stored = localStorage.getItem('mynotes_recent_special_chars') || localStorage.getItem('zennotes_recent_special_chars');
     if (stored) recentSpecialChars = JSON.parse(stored);
 } catch (e) {
     recentSpecialChars = [];
@@ -2062,7 +2277,7 @@ function insertSpecialChar(ch) {
         recentSpecialChars = recentSpecialChars.slice(0, MAX_RECENT_CHARS);
     }
     try {
-        localStorage.setItem('zennotes_recent_special_chars', JSON.stringify(recentSpecialChars));
+        localStorage.setItem('mynotes_recent_special_chars', JSON.stringify(recentSpecialChars));
     } catch (e) {}
     renderSpecialCharRecent();
 
@@ -2431,4 +2646,4 @@ window.addEventListener('keydown', function (e) {
             }
         }
     }
-}, true);
+}, true);

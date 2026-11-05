@@ -1,13 +1,15 @@
 // 캐시 이름 (앱을 업데이트할 때마다 v2, v3... 로 숫자를 올려주세요!)
-const CACHE_NAME = 'zennotes-cache-v4.4.5';
+const CACHE_NAME = 'zennotes-cache-v4.7.6';
 
 // 반드시 캐싱해야 할 내 서버의 기본 파일들
 const STATIC_ASSETS = [
     './',
     './index.html',
     './manifest.json',
+    './favicon.png',
     './img192.png',
-    './img512.png'
+    './img512.png',
+    './miryang_bi.png'
 ];
 
 // 1. 설치(Install) 이벤트: 워커가 설치될 때 기본 파일들을 미리 저장합니다.

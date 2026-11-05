@@ -1,9 +1,228 @@
+// ============================================================================
+// 📁 [V4.7.1] Export 기본 저장 폴더 및 File System Access API 엔진
+// ============================================================================
+
+let cachedExportDirHandle = null;
+
+// IndexedDB에서 디렉토리 핸들 가져오기
+async function getStoredExportDirHandle() {
+  if (cachedExportDirHandle) return cachedExportDirHandle;
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('zen_fs_db', 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('handles')) {
+          db.createObjectStore('handles');
+        }
+      };
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        const tx = db.transaction('handles', 'readonly');
+        const getReq = tx.objectStore('handles').get('export_dir');
+        getReq.onsuccess = () => {
+          cachedExportDirHandle = getReq.result || null;
+          resolve(cachedExportDirHandle);
+        };
+        getReq.onerror = () => resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+// IndexedDB에 디렉토리 핸들 저장하기
+async function storeExportDirHandle(handle) {
+  cachedExportDirHandle = handle;
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('zen_fs_db', 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('handles')) {
+          db.createObjectStore('handles');
+        }
+      };
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        const tx = db.transaction('handles', 'readwrite');
+        if (handle) {
+          tx.objectStore('handles').put(handle, 'export_dir');
+        } else {
+          tx.objectStore('handles').delete('export_dir');
+        }
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      };
+      req.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+// 🎯 [V4.7.1] 기본(다운로드) / 바탕화면 모드 변경
+function setExportLocationMode(mode) {
+  localStorage.setItem('zen_export_mode', mode);
+  updateExportLocationUI(mode);
+  if (typeof showToast === 'function') {
+    if (mode === 'desktop') {
+      showToast('Export 기본 저장 위치가 [바탕화면]으로 설정되었습니다.');
+    } else {
+      showToast('Export 기본 저장 위치가 [다운로드] 기본값으로 설정되었습니다.');
+    }
+  }
+}
+
+// 🎯 [V4.7.1] 사용자 지정 폴더 선택
+async function chooseCustomExportDirectory() {
+  if (!window.showDirectoryPicker) {
+    if (typeof showToast === 'function') {
+      showToast('현재 브라우저에서는 폴더 선택 기능을 지원하지 않습니다.');
+    }
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({
+      mode: 'readwrite',
+      startIn: 'documents'
+    });
+    if (handle && handle.name) {
+      await storeExportDirHandle(handle);
+      localStorage.setItem('zen_export_mode', 'custom');
+      localStorage.setItem('zen_export_dir_name', handle.name);
+      updateExportLocationUI('custom', handle.name);
+      if (typeof showToast === 'function') {
+        showToast(`Export 기본 저장 위치가 [${handle.name}] 폴더로 설정되었습니다.`);
+      }
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.warn('폴더 선택 취소 또는 오류:', err);
+    }
+  }
+}
+
+// 🎯 [V4.7.1] 초기화 (다운로드 기본값 복귀)
+async function resetExportDirectory() {
+  await storeExportDirHandle(null);
+  localStorage.removeItem('zen_export_mode');
+  localStorage.removeItem('zen_export_dir_name');
+  updateExportLocationUI('download');
+  if (typeof showToast === 'function') {
+    showToast('Export 저장 위치가 기본값(다운로드)으로 초기화되었습니다.');
+  }
+}
+
+// 🎯 [V4.7.1] 환경설정 UI 상태 동기화 헬퍼
+function updateExportLocationUI(mode, customName) {
+  const currentMode = mode || localStorage.getItem('zen_export_mode') || 'download';
+  const customDirName = customName || localStorage.getItem('zen_export_dir_name') || '';
+
+  // 1. 세그먼트 버튼 활성 상태 갱신
+  const container = document.getElementById('setting-export-segmented');
+  if (container) {
+    const btns = container.querySelectorAll('.zen-segmented-btn');
+    btns.forEach(btn => {
+      const val = btn.getAttribute('data-value');
+      if (val === currentMode) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  // 2. 현재 상태 라벨 텍스트 갱신
+  const labelEl = document.getElementById('setting-export-dir-current');
+  if (labelEl) {
+    if (currentMode === 'desktop') {
+      labelEl.textContent = '현재: 바탕화면';
+      labelEl.style.color = 'var(--accent)';
+    } else if (currentMode === 'custom' && customDirName) {
+      labelEl.textContent = `현재: ${customDirName}`;
+      labelEl.style.color = 'var(--accent)';
+    } else {
+      labelEl.textContent = '현재: 기본(다운로드)';
+      labelEl.style.color = 'var(--text-muted)';
+    }
+  }
+}
+
+// 🎯 [핵심] 공통 파일 저장 함수 (showSaveFilePicker 연동)
+async function saveExportBlob(blob, defaultFilename, mimeType, description, extension) {
+  const mode = localStorage.getItem('zen_export_mode') || 'download';
+
+  // 1. File System Access API 지원 시 -> 원하는 폴더 지정 대화상자 호출
+  if (window.showSaveFilePicker) {
+    try {
+      const pickerOptions = {
+        suggestedName: defaultFilename,
+        types: [{
+          description: description || '문서 파일',
+          accept: { [mimeType]: [extension] }
+        }]
+      };
+
+      // 🎯 [V4.7.1] 모드에 따른 기본 시작 경로 분기
+      if (mode === 'desktop') {
+        pickerOptions.startIn = 'desktop'; // 바탕화면에서 즉시 오픈!
+      } else if (mode === 'custom') {
+        const startDirHandle = await getStoredExportDirHandle();
+        if (startDirHandle) {
+          pickerOptions.startIn = startDirHandle; // 지정된 사용자 폴더에서 오픈!
+        } else {
+          pickerOptions.startIn = 'documents';
+        }
+      } else {
+        pickerOptions.startIn = 'downloads'; // 기본 다운로드 폴더에서 오픈!
+      }
+
+      const fileHandle = await window.showSaveFilePicker(pickerOptions);
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+
+      if (typeof showToast === 'function') {
+        showToast(`[${fileHandle.name}] 파일 저장이 완료되었습니다.`);
+      }
+      return true;
+    } catch (err) {
+      // 사용자가 저장을 취소한 경우 (Esc 또는 취소 버튼)
+      if (err.name === 'AbortError') {
+        if (typeof showToast === 'function') {
+          showToast('저장이 취소되었습니다.');
+        }
+        return false;
+      }
+      console.warn('showSaveFilePicker 실패, 기본 다운로드로 전환:', err);
+    }
+  }
+
+  // 2. 미지원 환경 또는 에러 시 fallback: 기존 saveAs (다운로드 폴더 저장)
+  if (typeof saveAs === 'function') {
+    saveAs(blob, defaultFilename);
+    if (typeof showToast === 'function') {
+      showToast(`${defaultFilename} 파일이 저장되었습니다.\n(다운로드 폴더 확인)`);
+    }
+  }
+  return true;
+}
+
+window.setExportLocationMode = setExportLocationMode;
+window.chooseCustomExportDirectory = chooseCustomExportDirectory;
+window.resetExportDirectory = resetExportDirectory;
+window.updateExportLocationUI = updateExportLocationUI;
+window.saveExportBlob = saveExportBlob;
+
 // 🎯 1. [PDF 전용] 라이트 테마 CSS (인쇄용 화이트 바탕 & 페이지 절단 방어 & 고정밀 팔레트)
 const exportThemeCSS_Light = `
 <style>
-    .zen-export-wrapper { background: #ffffff; color: #111111; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
+    .zen-export-wrapper { background: #ffffff; color: #111111; font-family: 'Pretendard', 'Nanum Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
     .zen-export-wrapper p, .zen-export-wrapper h1, .zen-export-wrapper h2, .zen-export-wrapper h3, .zen-export-wrapper li { margin-bottom: 8px; }
-    .zen-export-wrapper ul, .zen-export-wrapper ol { margin-bottom: 20px; }
+    .zen-export-wrapper ul, .zen-export-wrapper ol { margin-bottom: 16px; padding-left: 1.5em; }
     
     /* 🎯 페이지 분할 방어 (Page-Break Defense) */
     .zen-export-wrapper h1, .zen-export-wrapper h2, .zen-export-wrapper h3 { page-break-after: avoid !important; break-after: avoid !important; }
@@ -12,39 +231,53 @@ const exportThemeCSS_Light = `
     .zen-export-wrapper .ql-code-block-container { page-break-inside: avoid !important; break-inside: avoid !important; }
     .zen-export-wrapper blockquote { page-break-inside: avoid !important; break-inside: avoid !important; }
     .zen-export-wrapper li { page-break-inside: avoid !important; break-inside: avoid !important; }
-    .zen-export-wrapper img { max-width: 100%; height: auto; page-break-inside: avoid !important; break-inside: avoid !important; }
 
-    .zen-export-wrapper table { border-collapse: collapse; width: 100%; margin: 20px 0; border: 1px solid #cccccc; }
-    .zen-export-wrapper td, .zen-export-wrapper th { border: 1px solid #cccccc; padding: 8px 12px; color: #000000; }
-    .zen-export-wrapper th { background-color: #f5f5f5 !important; font-weight: 600 !important; }
+    /* 🎯 [V4.5.5] 제목 위의 상단 여백(약 19mm)과 이미지 하단 여백(약 20mm)이 대칭을 이루며 [제목+이미지] 전체가 종이 정중앙에 오도록 max-height: 238mm 설정 */
+    .zen-export-wrapper img { max-width: 100% !important; max-height: 238mm !important; width: auto !important; height: auto !important; display: block !important; margin: 4px auto !important; object-fit: contain !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+    .zen-export-wrapper p:has(> img:only-child) { margin: 2px 0 !important; }
+
+    /* 🎯 [V4.5.3] 체크리스트(checked/unchecked) 및 인용구 리스트 PDF 렌더링 지원 */
+    .zen-export-wrapper li[data-list="checked"],
+    .zen-export-wrapper li[data-list="unchecked"] { list-style-type: none !important; position: relative; }
+    .zen-export-wrapper li[data-list="checked"] > .ql-ui,
+    .zen-export-wrapper li[data-list="unchecked"] > .ql-ui { display: none !important; }
+    .zen-export-wrapper li[data-list="unchecked"]::before { content: '☐' !important; color: #555555 !important; font-weight: 600 !important; margin-left: -1.5em !important; margin-right: 0.5em !important; display: inline-block !important; width: 1em !important; text-align: right !important; }
+    .zen-export-wrapper li[data-list="checked"]::before { content: '☑' !important; color: #2563eb !important; font-weight: 600 !important; margin-left: -1.5em !important; margin-right: 0.5em !important; display: inline-block !important; width: 1em !important; text-align: right !important; }
+    .zen-export-wrapper li[data-list="checked"] { color: #888888 !important; text-decoration: line-through !important; }
+
+    .zen-export-wrapper table { border-collapse: collapse; width: 100%; margin: 16px 0; border: 1px solid #d1d5db; }
+    .zen-export-wrapper td, .zen-export-wrapper th { border: 1px solid #d1d5db; padding: 8px 12px; color: #111111; }
+    .zen-export-wrapper th { background-color: #f3f4f6 !important; font-weight: 600 !important; }
     .zen-export-wrapper blockquote,
-    .zen-export-wrapper .ql-editor blockquote {
-        border-left: 4px solid #78a9ff !important;
-        background-color: #f9f9f9 !important;
-        margin: 16px 0 !important;
-        padding: 12px 16px !important;
-        color: #333333 !important;
+    .zen-export-wrapper .ql-editor blockquote,
+    .zen-export-wrapper .ql-editor li.ql-quote-item,
+    .zen-export-wrapper .ql-editor li.ql-quote-item-true {
+        border-left: 3px solid #60a5fa !important;
+        background-color: #f8fafc !important;
+        margin: 12px 0 !important;
+        padding: 10px 16px !important;
+        color: #334155 !important;
         font-style: normal !important;
-        border-radius: 0 8px 8px 0 !important;
+        border-radius: 0 6px 6px 0 !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
     }
     .zen-export-wrapper code,
     .zen-export-wrapper .ql-editor code {
-        background-color: rgba(120, 169, 255, 0.1) !important;
-        color: #0056b3 !important;
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
         padding: 2px 6px !important;
         border-radius: 4px !important;
         font-family: 'D2Coding', 'Consolas', monospace !important;
     }
     
     /* 🎯 PDF 다크 침범 방어 & 라벨 세팅 */
-    .zen-export-wrapper .ql-code-block-container { position: relative !important; background-color: #f5f5f5 !important; border: 1px solid #e0e0e0 !important; border-radius: 8px !important; padding: 44px 16px 16px 16px !important; margin: 1rem 0 !important; }
-    .zen-export-wrapper .ql-code-block-container select.ql-ui { display: block !important; position: absolute !important; top: 12px !important; left: 16px !important; background: transparent !important; color: #666666 !important; border: none !important; font-size: 12px !important; font-weight: 600 !important; text-transform: uppercase; appearance: none !important; -webkit-appearance: none !important; pointer-events: none !important; }
-    .zen-export-wrapper .ql-code-block-container::before { content: '' !important; position: absolute !important; top: 38px !important; left: 0 !important; right: 0 !important; height: 1px !important; background-color: #e0e0e0 !important; display: block !important; }
+    .zen-export-wrapper .ql-code-block-container { position: relative !important; background-color: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 8px !important; padding: 40px 16px 14px 16px !important; margin: 12px 0 !important; }
+    .zen-export-wrapper .ql-code-block-container select.ql-ui { display: block !important; position: absolute !important; top: 10px !important; left: 16px !important; background: transparent !important; color: #64748b !important; border: none !important; font-size: 11.5px !important; font-weight: 600 !important; text-transform: uppercase; appearance: none !important; -webkit-appearance: none !important; pointer-events: none !important; }
+    .zen-export-wrapper .ql-code-block-container::before { content: '' !important; position: absolute !important; top: 34px !important; left: 0 !important; right: 0 !important; height: 1px !important; background-color: #e2e8f0 !important; display: block !important; }
     
     /* 🎯 폰트 및 구문 강조 팔레트 (인쇄용 명암비 적용) */
-    .zen-export-wrapper .ql-code-block { background-color: transparent !important; color: #333333 !important; font-family: 'D2Coding', 'Consolas', monospace !important; font-size: 13px !important; line-height: 1.6 !important; white-space: pre-wrap !important; }
+    .zen-export-wrapper .ql-code-block { background-color: transparent !important; color: #1e293b !important; font-family: 'D2Coding', 'Consolas', monospace !important; font-size: 13px !important; line-height: 1.6 !important; white-space: pre-wrap !important; }
     .zen-export-wrapper .hljs-comment, .zen-export-wrapper .hljs-quote { color: #6a737d !important; font-style: italic !important; }
     .zen-export-wrapper .hljs-keyword, .zen-export-wrapper .hljs-selector-tag, .zen-export-wrapper .hljs-type { color: #d73a49 !important; font-weight: 600 !important; }
     .zen-export-wrapper .hljs-title, .zen-export-wrapper .hljs-title.function_, .zen-export-wrapper .hljs-function { color: #005cc5 !important; }
@@ -54,9 +287,8 @@ const exportThemeCSS_Light = `
     .zen-export-wrapper .hljs-number, .zen-export-wrapper .hljs-literal, .zen-export-wrapper .hljs-variable { color: #005cc5 !important; }
     .zen-export-wrapper .hljs-built_in, .zen-export-wrapper .hljs-class { color: #e36209 !important; }
     
-    .zen-export-wrapper .ql-strike-line-true { color: #999999; text-decoration: line-through; }
+    .zen-export-wrapper .ql-strike-line-true { color: #94a3b8; text-decoration: line-through; }
     .zen-export-wrapper a { color: #2563eb; text-decoration: underline; }
-    .zen-export-wrapper img { max-width: 100%; height: auto; }
 </style>
 `;
 
@@ -137,24 +369,25 @@ const exportThemeCSS_Dual = `
 
     /* 문서 헤더 및 메타데이터 */
     .zen-doc-header {
-        margin-bottom: 24px;
+        margin-bottom: 22px;
     }
     .zen-doc-title {
-        font-size: 28px;
+        font-size: 24px;
         font-weight: 700;
         color: var(--zen-text);
-        margin: 0 0 10px 0;
-        letter-spacing: -0.5px;
-        line-height: 1.3;
+        margin: 0 0 8px 0;
+        letter-spacing: -0.4px;
+        line-height: 1.35;
     }
     .zen-doc-meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
+        justify-content: space-between;
+        gap: 10px;
         align-items: center;
-        font-size: 12px;
+        font-size: 12.5px;
         color: var(--zen-meta-text);
-        margin-bottom: 14px;
+        margin-bottom: 12px;
     }
     .zen-meta-item {
         display: inline-flex;
@@ -162,27 +395,38 @@ const exportThemeCSS_Dual = `
     }
     .zen-doc-divider {
         border: none;
-        border-bottom: 2px solid var(--zen-border);
+        border-bottom: 1px solid var(--zen-border);
         margin: 0;
     }
 
     /* 에디터 본문 타이포그래피 */
     .ql-editor { padding: 0; }
     .ql-editor p, .ql-editor h1, .ql-editor h2, .ql-editor h3, .ql-editor li { margin-bottom: 8px; }
-    .ql-editor ul, .ql-editor ol { margin-bottom: 20px; }
+    .ql-editor ul, .ql-editor ol { margin-bottom: 16px; padding-left: 1.5em; }
     .ql-editor hr { border: none !important; border-bottom: 1px solid var(--zen-border) !important; margin: 20px 0 !important; }
 
+    /* 🎯 [V4.5.3] 체크리스트(checked/unchecked) HTML 렌더링 지원 */
+    .ql-editor li[data-list="checked"],
+    .ql-editor li[data-list="unchecked"] { list-style-type: none !important; position: relative; }
+    .ql-editor li[data-list="checked"] > .ql-ui,
+    .ql-editor li[data-list="unchecked"] > .ql-ui { display: none !important; }
+    .ql-editor li[data-list="unchecked"]::before { content: '☐' !important; color: var(--zen-meta-text) !important; font-weight: 600 !important; margin-left: -1.5em !important; margin-right: 0.5em !important; display: inline-block !important; width: 1em !important; text-align: right !important; }
+    .ql-editor li[data-list="checked"]::before { content: '☑' !important; color: var(--zen-accent) !important; font-weight: 600 !important; margin-left: -1.5em !important; margin-right: 0.5em !important; display: inline-block !important; width: 1em !important; text-align: right !important; }
+    .ql-editor li[data-list="checked"] { color: var(--zen-meta-text) !important; text-decoration: line-through !important; }
+
     /* 표 (Table) */
-    .ql-editor table { border-collapse: collapse; width: 100%; margin: 20px 0; border: 1px solid var(--zen-border); }
+    .ql-editor table { border-collapse: collapse; width: 100%; margin: 16px 0; border: 1px solid var(--zen-border); }
     .ql-editor td, .ql-editor th { border: 1px solid var(--zen-border); padding: 8px 12px; color: var(--zen-text); }
     .ql-editor th { background-color: var(--zen-th-bg); font-weight: 600; }
 
-    /* 인용구 (Blockquote) */
-    .ql-editor blockquote { border-left: 4px solid var(--zen-accent); background-color: var(--zen-quote-bg); margin: 16px 0; padding: 12px 16px; color: var(--zen-quote-text); border-radius: 0 8px 8px 0; font-style: normal; }
+    /* 인용구 (Blockquote) 및 인용구 리스트 */
+    .ql-editor blockquote,
+    .ql-editor li.ql-quote-item,
+    .ql-editor li.ql-quote-item-true { border-left: 3px solid var(--zen-accent); background-color: var(--zen-quote-bg); margin: 12px 0; padding: 10px 16px; color: var(--zen-quote-text); border-radius: 0 6px 6px 0; font-style: normal; }
 
     /* 링크 및 서식 */
     .ql-editor a { color: var(--zen-accent); text-decoration: underline; }
-    .ql-editor img { max-width: 100%; height: auto; border-radius: 4px; }
+    .ql-editor img { max-width: 100%; height: auto; border-radius: 4px; display: block; margin: 6px 0; }
     .ql-editor .ql-strike-line-true { text-decoration: line-through; opacity: 0.6; }
 
     /* 코드 블록 공통 구조 */
@@ -191,19 +435,19 @@ const exportThemeCSS_Dual = `
         background-color: var(--zen-code-bg) !important;
         border: 1px solid var(--zen-border) !important;
         border-radius: 8px !important;
-        padding: 44px 16px 16px 16px !important;
-        margin: 1rem 0 !important;
+        padding: 40px 16px 14px 16px !important;
+        margin: 12px 0 !important;
         display: block !important;
     }
     .ql-editor .ql-code-block-container select.ql-ui {
         display: block !important;
         position: absolute !important;
-        top: 12px !important;
+        top: 10px !important;
         left: 16px !important;
         background: transparent !important;
         color: var(--zen-meta-text) !important;
         border: none !important;
-        font-size: 12px !important;
+        font-size: 11.5px !important;
         font-weight: 600 !important;
         text-transform: uppercase;
         appearance: none !important;
@@ -213,7 +457,7 @@ const exportThemeCSS_Dual = `
     .ql-editor .ql-code-block-container::before {
         content: '' !important;
         position: absolute !important;
-        top: 38px !important;
+        top: 34px !important;
         left: 0 !important;
         right: 0 !important;
         height: 1px !important;
@@ -251,31 +495,22 @@ const exportThemeCSS_Dual = `
     body.light-theme .hljs-name, body.light-theme .hljs-tag, body.light-theme .hljs-section { color: #22863a !important; }
     body.light-theme .hljs-attr, body.light-theme .hljs-attribute, body.light-theme .hljs-params { color: #e36209 !important; }
 
-    /* 문서 하단 푸터 */
-    .zen-doc-footer {
-        margin-top: 48px;
-        padding-top: 14px;
-        border-top: 1px solid var(--zen-border);
-        font-size: 11px;
-        color: var(--zen-meta-text);
-        text-align: right;
-    }
-
-    /* 🖨️ 인쇄 시 화이트 강제 & 불필요 버튼 숨김 */
-    @page { size: A4; margin: 15mm 12mm; }
+    /* 🖨️ 인쇄 시 화이트 강제 & [제목+이미지] 상하 여백 균형 배치 */
+    @page { size: A4; margin: 18mm 10mm 10mm 10mm; }
     @media print {
         .zen-theme-switch-btn { display: none !important; }
-        body.zen-export-body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; }
+        body.zen-export-body { background: #ffffff !important; color: #000000 !important; padding: 4px 2px 0 2px !important; }
         .ql-editor p, .ql-editor h1, .ql-editor h2, .ql-editor h3, .ql-editor li, .ql-editor blockquote, .ql-editor tr, .ql-editor img, .ql-editor .ql-code-block-container { page-break-inside: avoid !important; break-inside: avoid !important; }
+        .ql-editor img { max-width: 100% !important; max-height: 238mm !important; width: auto !important; height: auto !important; display: block !important; margin: 4px auto !important; object-fit: contain !important; }
         .ql-editor p, .ql-editor li { orphans: 3; widows: 3; }
         .ql-editor h1, .ql-editor h2, .ql-editor h3 { page-break-after: avoid !important; break-after: avoid !important; }
         .zen-doc-title { color: #000000 !important; }
-        .zen-doc-divider { border-bottom-color: #000000 !important; }
-        .ql-editor table, .ql-editor th, .ql-editor td { border-color: #cccccc !important; color: #000000 !important; }
-        .ql-editor th { background-color: #f5f5f5 !important; }
-        .ql-editor blockquote { background-color: #f9f9f9 !important; color: #333333 !important; border-left: 4px solid #78a9ff !important; font-style: normal !important; border-radius: 0 8px 8px 0 !important; }
-        .ql-editor .ql-code-block-container { background-color: #f5f5f5 !important; border-color: #e0e0e0 !important; }
-        .ql-editor .ql-code-block { color: #24292e !important; }
+        .zen-doc-divider { border-bottom-color: #d1d5db !important; }
+        .ql-editor table, .ql-editor th, .ql-editor td { border-color: #d1d5db !important; color: #000000 !important; }
+        .ql-editor th { background-color: #f3f4f6 !important; }
+        .ql-editor blockquote { background-color: #f8fafc !important; color: #334155 !important; border-left: 3px solid #60a5fa !important; font-style: normal !important; border-radius: 0 6px 6px 0 !important; }
+        .ql-editor .ql-code-block-container { background-color: #f8fafc !important; border-color: #e2e8f0 !important; }
+        .ql-editor .ql-code-block { color: #1e293b !important; }
     }
 </style>
 `;
@@ -311,12 +546,13 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-// 🎯 [V3.4.5] 문서 내보내기용 일시 포맷터 (YYYY-MM-DD HH:mm:ss)
+// 🎯 [V4.5.3] 문서 내보내기용 일시 포맷터 (ZenNotes 표준 규격: YYYY.MM.DD.(요일) HH:mm)
 function formatExportDate(timestamp) {
   if (!timestamp) return "";
   const d = new Date(timestamp);
   const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}.(${days[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // 🎯 [V3.4.5] 본문 텍스트 내 해시태그(#태그) 자동 추출
@@ -416,71 +652,58 @@ async function getCurrentMemoDetails() {
 }
 
 
-// 🎯 [V3.4.5] HTML 파일 내보내기 (Pretendard 웹폰트 + 다크/라이트 듀얼 테마 전환 + 메타 헤더)
+// 🎯 [V4.5.3] HTML 파일 내보내기 (내부 폴더 경로 제거 & 단정한 Zen 스타일 헤더)
 async function exportHTML() {
   closeAllPanelsMobile();
   const meta = await getCurrentMemoDetails();
   const t = getTitle();
   const c = getHtmlWithSelectState();
-  const createdAtStr = formatExportDate(meta.createdAt);
-  const updatedAtStr = formatExportDate(meta.updatedAt);
+  const updatedAtStr = formatExportDate(meta.updatedAt || meta.createdAt);
   const plainText = quill.getText();
   const tags = extractHashTags(plainText);
   const tagPills = tags.length > 0
-    ? `<span class="zen-meta-item">🏷️ ${tags.map((tag) => '#' + escapeHtml(tag)).join(' ')}</span>`
-    : '';
+    ? `<span class="zen-meta-item">${tags.map((tag) => '#' + escapeHtml(tag)).join(' ')}</span>`
+    : '<span></span>';
 
-  setTimeout(() => {
+  setTimeout(async () => {
     const htmlContent = `<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapeHtml(t)} - ZenNotes</title>
+    <title>${escapeHtml(t)}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/joungkyun/font-d2coding/d2coding.css">
     ${exportThemeCSS_Dual}
 </head>
 <body class="zen-export-body">
     <button class="zen-theme-switch-btn" id="theme-btn" onclick="toggleExportTheme()" title="다크 / 라이트 모드 전환">
-        <span id="theme-icon">☀️</span> <span id="theme-label">라이트 모드</span>
+        <span id="theme-label">라이트 모드</span>
     </button>
     <div class="zen-doc-container">
         <header class="zen-doc-header">
             <h1 class="zen-doc-title">${escapeHtml(t)}</h1>
             <div class="zen-doc-meta">
-                <span class="zen-meta-item">📁 ${escapeHtml(meta.folderPath)}</span>
-                <span class="zen-meta-item">🕒 작성: ${createdAtStr}</span>
-                <span class="zen-meta-item">✏️ 수정: ${updatedAtStr}</span>
                 ${tagPills}
+                <span class="zen-meta-item">${updatedAtStr}</span>
             </div>
             <hr class="zen-doc-divider">
         </header>
         <main id="zen-editor-content" class="ql-editor">${c}</main>
-        <footer class="zen-doc-footer">
-            <span>ZenNotes · ${updatedAtStr}</span>
-        </footer>
     </div>
     <script>
         function toggleExportTheme() {
             const isLight = document.body.classList.toggle('light-theme');
-            const icon = document.getElementById('theme-icon');
             const label = document.getElementById('theme-label');
-            if (isLight) {
-                icon.textContent = '🌙';
-                label.textContent = '다크 모드';
-            } else {
-                icon.textContent = '☀️';
-                label.textContent = '라이트 모드';
-            }
+            if (label) label.textContent = isLight ? '다크 모드' : '라이트 모드';
             try { localStorage.setItem('zen_export_theme', isLight ? 'light' : 'dark'); } catch(e){}
         }
         (function() {
             try {
                 if (localStorage.getItem('zen_export_theme') === 'light') {
                     document.body.classList.add('light-theme');
-                    document.getElementById('theme-icon').textContent = '🌙';
-                    document.getElementById('theme-label').textContent = '다크 모드';
+                    const label = document.getElementById('theme-label');
+                    if (label) label.textContent = '다크 모드';
                 }
             } catch(e){}
         })();
@@ -488,15 +711,12 @@ async function exportHTML() {
 </body>
 </html>`;
 
-    saveAs(
-      new Blob([htmlContent], { type: "text/html;charset=utf-8" }),
-      `${t}.html`
-    );
-    showToast("HTML 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
-  }, 300);
+    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+    await saveExportBlob(blob, `${t}.html`, "text/html", "HTML 웹 페이지 (*.html)", ".html");
+  }, 100);
 }
 
-// 🎯 [V3.4.5] PDF 파일 내보내기 (고해상도 + 페이지 절단 방어 + 문서 메타 헤더)
+// 🎯 [V4.5.3] & [V4.7.0] PDF 파일 내보내기 (저장 폴더 지정 연동)
 async function exportPDF() {
   document.body.classList.add('is-pdf-exporting');
   closeAllPanelsMobile();
@@ -505,36 +725,50 @@ async function exportPDF() {
   const meta = await getCurrentMemoDetails();
   const t = getTitle();
   const c = getHtmlWithSelectState();
-  const createdAtStr = formatExportDate(meta.createdAt);
-  const updatedAtStr = formatExportDate(meta.updatedAt);
+  const updatedAtStr = formatExportDate(meta.updatedAt || meta.createdAt);
   const plainText = quill.getText();
   const tags = extractHashTags(plainText);
-  const tagStr = tags.length > 0 ? ` · 🏷️ ${tags.map((tg) => '#' + escapeHtml(tg)).join(' ')}` : '';
+  const tagStr = tags.length > 0 ? tags.map((tg) => '#' + escapeHtml(tg)).join(' ') : '';
 
   setTimeout(() => {
     const printContainer = document.createElement("div");
     printContainer.innerHTML = `
         ${exportThemeCSS_Light}
-        <div class="zen-export-wrapper" style="padding: 24px; background-color: #ffffff;">
+        <div class="zen-export-wrapper" style="padding: 4px 2px 0 2px; background-color: #ffffff;">
             <div style="max-width: 800px; margin: 0 auto;">
-                <div style="font-size: 26px; font-weight: 700; color: #111111; margin-bottom: 4px; letter-spacing: -0.5px;">${escapeHtml(t)}</div>
-                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #666666; margin-bottom: 8px;">
-                    <span>📁 ${escapeHtml(meta.folderPath)}${tagStr}</span>
-                    <span>작성: ${createdAtStr} · 수정: ${updatedAtStr}</span>
+                <div style="font-size: 22px; font-weight: 700; color: #111111; margin-bottom: 4px; letter-spacing: -0.4px; line-height: 1.35;">${escapeHtml(t)}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b; margin-bottom: 8px;">
+                    <span>${tagStr}</span>
+                    <span>${updatedAtStr}</span>
                 </div>
-                <hr style="border: none; border-bottom: 2px solid #333333; margin: 0 0 20px 0;">
+                <hr style="border: none; border-bottom: 1px solid #d1d5db; margin: 0 0 12px 0;">
                 <div class="ql-snow">
                     <div class="ql-editor" style="padding: 0; color: #111111; overflow: visible; height: auto;">${c}</div>
-                </div>
-                <div style="margin-top: 32px; padding-top: 8px; border-top: 1px solid #e0e0e0; font-size: 10px; color: #888888; text-align: right;">
-                    ZenNotes Document · ${createdAtStr}
                 </div>
             </div>
         </div>`;
 
+    // 🎯 [V4.5.3] 문서 끝에 붙은 불필요한 빈 문단(<p><br></p>)을 정리하여 빈 페이지 넘김 원천 차단
+    const clonedEditor = printContainer.querySelector(".ql-editor");
+    if (clonedEditor) {
+      while (clonedEditor.children.length > 1) {
+        const lastEl = clonedEditor.lastElementChild;
+        if (
+          lastEl &&
+          lastEl.tagName === "P" &&
+          !lastEl.querySelector("img, iframe, table") &&
+          lastEl.textContent.trim() === ""
+        ) {
+          lastEl.remove();
+        } else {
+          break;
+        }
+      }
+    }
+
     html2pdf()
       .set({
-        margin: [12, 10, 12, 10],
+        margin: [18, 10, 10, 10],
         filename: `${t}.pdf`,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false },
@@ -542,9 +776,9 @@ async function exportPDF() {
         pagebreak: { mode: ['css', 'legacy'], avoid: ['p', 'h1', 'h2', 'h3', 'li', 'blockquote', 'tr', 'img', '.ql-code-block-container'] }
       })
       .from(printContainer)
-      .save()
-      .then(() => {
-        showToast("PDF 파일 저장이 완료되었습니다.");
+      .outputPdf('blob')
+      .then(async (pdfBlob) => {
+        await saveExportBlob(pdfBlob, `${t}.pdf`, "application/pdf", "PDF 문서 (*.pdf)", ".pdf");
       })
       .catch((err) => {
         console.error("PDF 생성 오류:", err);
@@ -556,30 +790,28 @@ async function exportPDF() {
   }, 300);
 }
 
-// 🎯 [V3.4.5] TXT 파일 내보내기 (UTF-8 BOM + 제목/폴더/작성일 메타 헤더 배너)
+// 🎯 [V4.5.3] & [V4.7.0] TXT 파일 내보내기 (저장 폴더 지정 연동)
 async function exportTXT() {
   closeAllPanelsMobile();
   const meta = await getCurrentMemoDetails();
   const t = getTitle();
   const plainText = quill.getText();
   const tags = extractHashTags(plainText);
-  const tagsLine = tags.length > 0 ? `[태그] ${tags.map((tag) => '#' + tag).join(' ')}\n` : '';
+  const updatedAtStr = formatExportDate(meta.updatedAt || meta.createdAt);
+  const tagsSuffix = tags.length > 0 ? `  ${tags.map((tag) => '#' + tag).join(' ')}` : '';
 
-  const divider = "============================================================";
-  const header = `${divider}\n[제목] ${t}\n[폴더] ${meta.folderPath}\n[작성일시] ${formatExportDate(meta.createdAt)}\n[수정일시] ${formatExportDate(meta.updatedAt)}\n${tagsLine}${divider}\n\n`;
+  const divider = "────────────────────────────────────────────────────────────";
+  const header = `${t}\n${updatedAtStr}${tagsSuffix}\n${divider}\n\n`;
 
   const fullText = "\uFEFF" + header + plainText.trim() + "\n";
 
-  setTimeout(() => {
-    saveAs(
-      new Blob([fullText], { type: "text/plain;charset=utf-8" }),
-      `${t}.txt`
-    );
-    showToast("TXT 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
-  }, 300);
+  setTimeout(async () => {
+    const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+    await saveExportBlob(blob, `${t}.txt`, "text/plain", "텍스트 문서 (*.txt)", ".txt");
+  }, 100);
 }
 
-// 🎯 [V3.4.5] JSON 파일 내보내기 (표준 Schema 2.0 + 전체 메타데이터 보존 + 2칸 가독성 포맷팅)
+// 🎯 [V4.5.3] & [V4.7.0] JSON 파일 내보내기 (저장 폴더 지정 연동)
 async function exportJSON() {
   closeAllPanelsMobile();
   const meta = await getCurrentMemoDetails();
@@ -592,7 +824,6 @@ async function exportJSON() {
     id: meta.id,
     syncId: meta.syncId,
     title: meta.title,
-    folderPath: meta.folderPath,
     tags: tags,
     isPinned: meta.isPinned,
     createdAt: meta.createdAt,
@@ -604,13 +835,10 @@ async function exportJSON() {
 
   const jsonString = JSON.stringify(jsonPayload, null, 2);
 
-  setTimeout(() => {
-    saveAs(
-      new Blob([jsonString], { type: "application/json;charset=utf-8" }),
-      `${meta.title}.json`
-    );
-    showToast("JSON 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
-  }, 300);
+  setTimeout(async () => {
+    const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+    await saveExportBlob(blob, `${meta.title}.json`, "application/json", "JSON 데이터 (*.json)", ".json");
+  }, 100);
 }
 
 // 🎯 [V3.3.3] HTML/Quill 에디터 내용을 깔끔한 마크다운(.md) 문법으로 변환
@@ -830,8 +1058,7 @@ function convertQuillToMarkdown() {
   return lines.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-// 🎯 [V3.3.3] 마크다운(.md) 파일 내보내기
-// 🎯 [V3.4.5] 마크다운(.md) 파일 내보내기 (YAML Frontmatter + 태그/폴더 메타 표준)
+// 🎯 [V4.5.3] & [V4.7.0] 마크다운(.md) 파일 내보내기 (저장 폴더 지정 연동)
 async function exportMD() {
   closeAllPanelsMobile();
   const meta = await getCurrentMemoDetails();
@@ -840,7 +1067,7 @@ async function exportMD() {
   const tags = extractHashTags(plainText);
   const mdContent = convertQuillToMarkdown();
 
-  let frontmatter = `---\ntitle: "${t.replace(/"/g, '\\"')}"\ncreated: "${formatExportDate(meta.createdAt)}"\nupdated: "${formatExportDate(meta.updatedAt)}"\nfolder: "${meta.folderPath.replace(/"/g, '\\"')}"\n`;
+  let frontmatter = `---\ntitle: "${t.replace(/"/g, '\\"')}"\nupdated: "${formatExportDate(meta.updatedAt || meta.createdAt)}"\n`;
   if (tags.length > 0) {
     frontmatter += `tags:\n${tags.map((tag) => `  - "${tag.replace(/"/g, '\\"')}"`).join('\n')}\n`;
   }
@@ -848,13 +1075,10 @@ async function exportMD() {
 
   const finalMd = frontmatter + mdContent;
 
-  setTimeout(() => {
-    saveAs(
-      new Blob([finalMd], { type: "text/markdown;charset=utf-8" }),
-      `${t}.md`
-    );
-    showToast("MD 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
-  }, 300);
+  setTimeout(async () => {
+    const blob = new Blob([finalMd], { type: "text/markdown;charset=utf-8" });
+    await saveExportBlob(blob, `${t}.md`, "text/markdown", "마크다운 문서 (*.md)", ".md");
+  }, 100);
 }
 
 // 🎯 [V3.3.3] 마크다운(.md) 텍스트를 위지윅(Quill) HTML로 변환하는 파서
@@ -1106,23 +1330,23 @@ function convertMarkdownToHTML(mdText) {
   return htmlParts.join("");
 }
 
-// 🎯 인쇄하기도 화면이 멈추지 않도록 시간차 적용
-// 🎯 [V3.4.5] 인쇄하기 (종이 인쇄 메타 헤더/푸터 주입 및 A4 고품질 렌더링)
+// 🎯 [V4.5.3] 인쇄하기 (내부 폴더 제거 + 단정한 Zen 헤더 + 불필요 푸터 비표시)
 async function handlePrint() {
   closeAllPanelsMobile();
   try {
     const meta = await getCurrentMemoDetails();
     const plainText = quill.getText();
     const tags = extractHashTags(plainText);
-    const tagStr = tags.length > 0 ? ` · 🏷️ ${tags.map((t) => '#' + escapeHtml(t)).join(' ')}` : '';
+    const tagStr = tags.length > 0 ? tags.map((t) => '#' + escapeHtml(t)).join(' ') : '';
+    const updatedAtStr = formatExportDate(meta.updatedAt || meta.createdAt);
 
     const metaElem = document.getElementById("print-meta-sub");
     if (metaElem) {
-      metaElem.innerHTML = `<span>📁 ${escapeHtml(meta.folderPath)}${tagStr}</span><span>작성: ${formatExportDate(meta.createdAt)} · 수정: ${formatExportDate(meta.updatedAt)}</span>`;
+      metaElem.innerHTML = `<span>${tagStr}</span><span>${updatedAtStr}</span>`;
     }
     const footerElem = document.getElementById("print-doc-footer");
     if (footerElem) {
-      footerElem.textContent = `ZenNotes Document · ${formatExportDate(Date.now())}`;
+      footerElem.textContent = "";
     }
   } catch (err) {
     console.error("인쇄 메타 준비 오류:", err);
@@ -1145,46 +1369,115 @@ function backupAllData() {
           new Blob([JSON.stringify({ type: "ZenBackup", timestamp: Date.now(), data: activeMemos })], {
             type: "application/json",
           }),
-          `Zen_Backup_${Date.now()}.json`,
+          `MY_Notes_Backup_${Date.now()}.json`,
         );
         showToast("전체 백업 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
       };
   }, 300);
 }
 
-// 🎯 [V3.3.3 → V4.3.0] 모든 데이터 초기화 (IndexedDB + Firestore 클라우드 데이터 영구 삭제)
+// ============================================================================
+// 🎯 [V4.5.6] 모든 데이터 초기화 (보안 폴더 내용 정밀 검사 & Zen 경고 모달 연동)
+// ============================================================================
+async function getSecurityFolderContentStats() {
+  if (!db || !globalSecurityFolderId) return { noteCount: 0, folderCount: 0, totalCount: 0 };
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(["memos"], "readonly");
+      const store = tx.objectStore("memos");
+      store.getAll().onsuccess = (e) => {
+        const allData = e.target.result || [];
+        const fMap = new Map();
+        allData.forEach((item) => {
+          if (item.type === "folder" && !item.isPermanentlyDeleted && !item.isTrash) {
+            fMap.set(item.id, item);
+          }
+        });
+
+        const isUnderSec = (pId) => {
+          let curr = pId;
+          while (curr) {
+            if (curr === globalSecurityFolderId) return true;
+            const p = fMap.get(curr);
+            if (!p) break;
+            curr = p.parentId;
+          }
+          return false;
+        };
+
+        let noteCount = 0;
+        let folderCount = 0;
+
+        allData.forEach((item) => {
+          if (item.isPermanentlyDeleted || item.isTrash) return;
+          if (item.id === globalSecurityFolderId) return; // 보안 폴더 자체는 제외
+          if (item.parentId === globalSecurityFolderId || isUnderSec(item.parentId)) {
+            if (item.type === "folder") folderCount++;
+            else noteCount++;
+          }
+        });
+
+        resolve({ noteCount, folderCount, totalCount: noteCount + folderCount });
+      };
+      store.getAll().onerror = () => resolve({ noteCount: 0, folderCount: 0, totalCount: 0 });
+    } catch (err) {
+      resolve({ noteCount: 0, folderCount: 0, totalCount: 0 });
+    }
+  });
+}
+
+function closeResetConfirmModal() {
+  const modal = document.getElementById("reset-confirm-modal");
+  if (modal) modal.style.display = "none";
+}
+
+// 🎯 [V4.5.6] 초기화 클릭 시 실행 (보안 폴더 검사 후 전용 모달 호출)
 async function resetAllData() {
   closeAllPanelsMobile();
 
-  // 1. 1차 경고 확인
-  const firstConfirm = confirm(
-    "⚠️ [경고] 모든 데이터 초기화\n\n로컬 저장소(IndexedDB)의 모든 노트와 폴더가 영구 삭제됩니다.\n정말로 초기화를 진행하시겠습니까?"
-  );
-  if (!firstConfirm) return;
-
-  // 2. 클라우드(Firebase) 연결 상태 확인
-  const isDriveConnected = typeof window.isZenOnline === "function" && window.isZenOnline();
-
-  // 3. 2차 상세 확인
-  let confirmMsg = "";
-  if (isDriveConnected) {
-    confirmMsg =
-      "⚠️ [클라우드 연결 상태]\n\n" +
-      "로컬 데이터뿐만 아니라 클라우드(Firebase)에 동기화된 모든 데이터가 영구 삭제됩니다.\n\n" +
-      "삭제된 데이터는 절대 복구할 수 없습니다.\n정말로 모든 데이터를 영구 삭제하시겠습니까?";
-  } else {
-    confirmMsg =
-      "ℹ️ [로그아웃 상태]\n\n" +
-      "현재 기기의 로컬 데이터만 초기화됩니다.\n\n" +
-      "※ 중요: 나중에 클라우드에 다시 로그인하면, 클라우드에 보관된 데이터가 현재 기기로 자동 복구됩니다.\n\n" +
-      "※ 클라우드 데이터까지 완전히 삭제하려면, 먼저 구름 아이콘으로 로그인한 후 초기화를 진행해 주세요.\n\n" +
-      "현재 기기의 로컬 데이터를 초기화하시겠습니까?";
+  const secStats = await getSecurityFolderContentStats();
+  const modal = document.getElementById("reset-confirm-modal");
+  if (!modal) {
+    // 모달 DOM 누락 시 방어적 폴백
+    if (secStats.totalCount > 0) {
+      if (!confirm(`⚠️ [보안 폴더 경고]\n\n보안 폴더에 ${secStats.noteCount}개의 보안 노트가 보관되어 있습니다.\n초기화 시 보안 자료도 모두 영구 삭제됩니다.\n계속하시겠습니까?`)) return;
+    }
+    proceedResetAllData();
+    return;
   }
 
-  const secondConfirm = confirm(confirmMsg);
-  if (!secondConfirm) return;
+  const secBox = document.getElementById("reset-security-warning-box");
+  const secCountDesc = document.getElementById("reset-security-count-desc");
+  const cloudDesc = document.getElementById("reset-cloud-desc");
+  const isDriveConnected = typeof window.isZenOnline === "function" && window.isZenOnline();
 
-  // 4. 진행 중인 자동 저장 및 동기화 타이머 차단
+  // 1. 보안 폴더 내부 자료 존재 시 강조 경고 표시
+  if (secStats.totalCount > 0) {
+    if (secBox) secBox.style.display = "block";
+    if (secCountDesc) {
+      secCountDesc.innerHTML = `현재 암호화된 <strong>보안 노트 ${secStats.noteCount}개</strong>${secStats.folderCount > 0 ? `, <strong>보안 폴더 ${secStats.folderCount}개</strong>` : ""}가 보관되어 있습니다.`;
+    }
+  } else {
+    if (secBox) secBox.style.display = "none";
+  }
+
+  // 2. 클라우드 연동 상태에 따른 안내
+  if (cloudDesc) {
+    if (isDriveConnected) {
+      cloudDesc.innerHTML = `☁️ <strong>클라우드 연동 상태</strong>: 로컬 데이터뿐만 아니라 클라우드(Firebase)에 동기화된 모든 백업 자료도 함께 영구 삭제됩니다.`;
+    } else {
+      cloudDesc.innerHTML = `ℹ️ <strong>로컬 전용 초기화</strong>: 현재 기기의 데이터만 초기화됩니다. (나중에 동일 계정으로 클라우드 로그인 시 백업 자료가 다시 동기화될 수 있습니다.)`;
+    }
+  }
+
+  modal.style.display = "flex";
+}
+
+// 🎯 [V4.5.6] 모달에서 '모두 영구 삭제' 클릭 시 실제 초기화 수행
+async function proceedResetAllData() {
+  closeResetConfirmModal();
+
+  // 1. 진행 중인 자동 저장 및 동기화 타이머 차단
   if (typeof backgroundSyncTimer !== "undefined" && backgroundSyncTimer) {
     clearTimeout(backgroundSyncTimer);
     backgroundSyncTimer = null;
@@ -1197,7 +1490,9 @@ async function resetAllData() {
 
   showToast("데이터를 초기화하는 중입니다. 잠시만 기다려주세요...");
 
-  // 5. 🔥 [V4.3.0] Firestore 클라우드 데이터 영구 삭제 (연결된 경우)
+  const isDriveConnected = typeof window.isZenOnline === "function" && window.isZenOnline();
+
+  // 2. 🔥 [V4.3.0] Firestore 클라우드 데이터 영구 삭제 (연결된 경우)
   if (isDriveConnected && typeof deleteAllCloudData === "function") {
     try {
       await deleteAllCloudData();
@@ -1205,10 +1500,10 @@ async function resetAllData() {
       console.error("클라우드 데이터 삭제 중 에러 발생:", cloudErr);
     }
   }
-  // 동기화 커서 초기화 → 다음 로그인 시 클라우드 전체를 다시 받아 복구 가능
+  // 동기화 커서 초기화
   if (typeof clearFirestoreSyncCursors === "function") clearFirestoreSyncCursors();
 
-  // 6. IndexedDB 데이터 완전 삭제
+  // 3. IndexedDB 데이터 완전 삭제
   try {
     if (db) {
       const tx = db.transaction(["memos"], "readwrite");
@@ -1234,12 +1529,16 @@ async function resetAllData() {
     console.warn("deleteDatabase 오류:", e);
   }
 
-  // 7. localStorage 청소 (마지막 열람 노트, 동기화 시점, 보안 폴더 비밀번호 등)
+  // 4. 보안 키 메모리 파기 및 localStorage 청소
+  if (typeof currentSecKey !== "undefined") currentSecKey = null;
+  if (typeof isSecurityUnlocked !== "undefined") isSecurityUnlocked = false;
+
   localStorage.removeItem("zen_last_opened");
   localStorage.removeItem("zen_last_sync_time");
   localStorage.removeItem("zen_sec_hash");
+  localStorage.removeItem("zen_recent_notes");
 
-  // 8. 에디터 비우기 및 새로고침
+  // 5. 에디터 비우기 및 새로고침
   if (typeof quill !== "undefined" && quill) quill.setText("");
   const titleInput = document.getElementById("memo-title-input");
   if (titleInput) titleInput.value = "";
@@ -1250,48 +1549,218 @@ async function resetAllData() {
   }, 1200);
 }
 
+// 🎯 ESC 키로 초기화 경고 모달 닫기
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const rModal = document.getElementById("reset-confirm-modal");
+    if (rModal && rModal.style.display === "flex") {
+      closeResetConfirmModal();
+    }
+  }
+});
+
 // 🎯 [V3.3.2] PDF 페이지 범위 선택 커스텀 모달 프로미스 리졸버
-function showPdfPageRangeModal(totalPages) {
+// 🎯 [V4.5.0] Zen PDF 썸네일 그리드 선택 모달 (눈으로 직접 보며 선택하는 인터페이스)
+function showPdfPageRangeModal(pdf, totalPages, baseTitle) {
   return new Promise((resolve) => {
     const modal = document.getElementById("pdf-import-modal");
-    const infoSpan = document.getElementById("pdf-modal-file-info");
-    const input = document.getElementById("pdf-page-range-input");
+    const titleText = document.getElementById("pdf-modal-title-text");
+    const gridContainer = document.getElementById("pdf-thumb-grid");
+    const selectAllCheck = document.getElementById("pdf-select-all-check");
+    const countBadge = document.getElementById("pdf-selected-count-badge");
+    const rangeInput = document.getElementById("pdf-page-range-input");
+    const rangeApplyBtn = document.getElementById("pdf-range-apply-btn");
     const confirmBtn = document.getElementById("pdf-modal-confirm-btn");
+    const confirmLabel = document.getElementById("pdf-confirm-btn-label");
     const cancelBtn = document.getElementById("pdf-modal-cancel-btn");
     const closeIcon = document.getElementById("pdf-modal-close-icon");
-    const splitAllBtn = document.getElementById("pdf-split-all-btn");
 
     if (!modal) {
-      const res = prompt(
-        `30페이지 이하로 불러올 수 있습니다. (현재파일: ${totalPages}페이지)\n불러올 페이지를 입력하세요.`,
-        "1-30"
-      );
-      resolve(res ? { action: "range", range: res } : { action: "cancel" });
+      const res = prompt(`총 ${totalPages}페이지 중 불러올 페이지를 입력하세요 (예: 1, 3-5):`, `1-${Math.min(totalPages, 30)}`);
+      resolve(res ? { action: "pages", pages: [1] } : { action: "cancel" });
       return;
     }
 
-    if (infoSpan) infoSpan.textContent = `(현재파일: ${totalPages}페이지)`;
-    if (input) {
-      input.value = "";
-      input.placeholder = "입력 예: 1-30, 1~30";
+    if (titleText) {
+      titleText.textContent = `PDF 페이지 선택 (${baseTitle}.pdf - 총 ${totalPages}장)`;
     }
+
+    // 🎯 [V4.5.1] 기본 상태는 아무것도 선택되지 않은 빈 상태로 시작!
+    const selectedPages = new Set();
+
+    let isClosed = false;
+
+    // 모달 표시
     modal.style.display = "flex";
     if (window.innerWidth <= 768) {
       history.pushState({ modal: "pdf-import" }, "");
     }
 
-    setTimeout(() => {
-      if (input) input.focus();
-    }, 100);
+    // 범위 파서 헬퍼: "1, 3-5, 8" -> [1, 3, 4, 5, 8]
+    function parseRangeString(str) {
+      const pages = new Set();
+      const parts = str.split(/[,\s]+/);
+      parts.forEach((part) => {
+        part = part.trim();
+        if (!part) return;
+        const match = part.match(/^(\d+)[~\-](\d+)$/);
+        if (match) {
+          const s = parseInt(match[1], 10);
+          const e = parseInt(match[2], 10);
+          if (!isNaN(s) && !isNaN(e)) {
+            const start = Math.max(1, Math.min(s, e));
+            const end = Math.min(totalPages, Math.max(s, e));
+            for (let p = start; p <= end; p++) pages.add(p);
+          }
+        } else {
+          const num = parseInt(part, 10);
+          if (!isNaN(num) && num >= 1 && num <= totalPages) {
+            pages.add(num);
+          }
+        }
+      });
+      return pages;
+    }
+
+    // UI 동기화 함수
+    function updateUI() {
+      if (countBadge) {
+        countBadge.textContent = `(${selectedPages.size} / ${totalPages}장 선택됨)`;
+      }
+      if (selectAllCheck) {
+        selectAllCheck.checked = selectedPages.size === totalPages;
+        selectAllCheck.indeterminate = selectedPages.size > 0 && selectedPages.size < totalPages;
+      }
+      if (confirmLabel) {
+        confirmLabel.textContent = "페이지 불러오기";
+      }
+      if (confirmBtn) {
+        confirmBtn.style.opacity = selectedPages.size === 0 ? "0.5" : "1";
+        confirmBtn.style.pointerEvents = selectedPages.size === 0 ? "none" : "auto";
+      }
+
+      // 카드 하이라이트 동기화
+      if (gridContainer) {
+        const cards = gridContainer.querySelectorAll(".pdf-thumb-card");
+        cards.forEach((card) => {
+          const pageNum = parseInt(card.getAttribute("data-page"), 10);
+          const isSelected = selectedPages.has(pageNum);
+          card.classList.toggle("is-selected", isSelected);
+          const chk = card.querySelector(".pdf-thumb-check");
+          if (chk) chk.checked = isSelected;
+        });
+      }
+    }
+
+    // 썸네일 그리드 스켈레톤 카드 생성 및 비동기 렌더링
+    if (gridContainer) {
+      gridContainer.innerHTML = "";
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const card = document.createElement("div");
+        card.className = `pdf-thumb-card ${selectedPages.has(pageNum) ? "is-selected" : ""}`;
+        card.setAttribute("data-page", pageNum);
+
+        card.innerHTML = `
+          <div class="pdf-thumb-header">
+            <input type="checkbox" class="pdf-thumb-check" ${selectedPages.has(pageNum) ? "checked" : ""}>
+            <span class="pdf-thumb-badge">#${pageNum}</span>
+          </div>
+          <div class="pdf-thumb-canvas-wrap" id="pdf-thumb-wrap-${pageNum}">
+            <div class="pdf-thumb-loading"><i class="fa-solid fa-spinner fa-spin"></i> 로딩...</div>
+          </div>
+        `;
+
+        // 카드 및 체크박스 클릭 핸들러
+        card.onclick = (e) => {
+          if (e.target.tagName && e.target.tagName.toLowerCase() === "input") {
+            if (e.target.checked) selectedPages.add(pageNum);
+            else selectedPages.delete(pageNum);
+          } else {
+            if (selectedPages.has(pageNum)) selectedPages.delete(pageNum);
+            else selectedPages.add(pageNum);
+          }
+          updateUI();
+        };
+
+        gridContainer.appendChild(card);
+      }
+
+      // 비동기 순차 썸네일 렌더링 (저해상도 scale로 매우 가볍게)
+      (async function renderAllThumbs() {
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          if (isClosed) break;
+          const wrap = document.getElementById(`pdf-thumb-wrap-${pageNum}`);
+          if (!wrap) continue;
+
+          try {
+            const page = await pdf.getPage(pageNum);
+            if (isClosed) break;
+
+            const viewport = page.getViewport({ scale: 0.22 });
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            if (isClosed) break;
+
+            wrap.innerHTML = "";
+            wrap.appendChild(canvas);
+          } catch (err) {
+            console.warn(`PDF 썸네일 ${pageNum} 렌더 실패:`, err);
+            if (wrap) wrap.innerHTML = `<span style="font-size:11px;color:var(--text-muted);">미리보기 불가</span>`;
+          }
+        }
+      })();
+    }
+
+    updateUI();
+
+    // 전체 선택 이벤트
+    if (selectAllCheck) {
+      selectAllCheck.onchange = () => {
+        if (selectAllCheck.checked) {
+          for (let i = 1; i <= totalPages; i++) selectedPages.add(i);
+        } else {
+          selectedPages.clear();
+        }
+        updateUI();
+      };
+    }
+
+    // 범위 지정 적용 버튼 이벤트
+    function applyRangeInput() {
+      if (!rangeInput || !rangeInput.value.trim()) return;
+      const parsed = parseRangeString(rangeInput.value.trim());
+      if (parsed.size > 0) {
+        selectedPages.clear();
+        parsed.forEach((p) => selectedPages.add(p));
+        updateUI();
+      } else {
+        showToast("유효한 페이지 번호를 입력하세요 (예: 1, 3-5)");
+      }
+    }
+
+    if (rangeApplyBtn) rangeApplyBtn.onclick = applyRangeInput;
+    if (rangeInput) {
+      rangeInput.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          applyRangeInput();
+        }
+      };
+    }
 
     function cleanup() {
+      isClosed = true;
       modal.style.display = "none";
       if (confirmBtn) confirmBtn.onclick = null;
       if (cancelBtn) cancelBtn.onclick = null;
       if (closeIcon) closeIcon.onclick = null;
-      if (splitAllBtn) splitAllBtn.onclick = null;
+      if (selectAllCheck) selectAllCheck.onchange = null;
+      if (rangeApplyBtn) rangeApplyBtn.onclick = null;
       modal.onclick = null;
-      if (input) input.onkeydown = null;
       if (window.innerWidth <= 768 && window.history.state && window.history.state.modal === "pdf-import") {
         if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
         history.back();
@@ -1299,9 +1768,13 @@ function showPdfPageRangeModal(totalPages) {
     }
 
     function doConfirm() {
-      const val = (input && input.value.trim()) ? input.value.trim() : "1-30";
+      if (selectedPages.size === 0) {
+        showToast("최소 1개 이상의 페이지를 선택해 주세요.");
+        return;
+      }
+      const pageList = Array.from(selectedPages).sort((a, b) => a - b);
       cleanup();
-      resolve({ action: "range", range: val });
+      resolve({ action: "pages", pages: pageList });
     }
 
     function doCancel() {
@@ -1309,31 +1782,13 @@ function showPdfPageRangeModal(totalPages) {
       resolve({ action: "cancel" });
     }
 
-    function doSplitAll() {
-      cleanup();
-      resolve({ action: "split-all" });
-    }
-
     if (confirmBtn) confirmBtn.onclick = doConfirm;
     if (cancelBtn) cancelBtn.onclick = doCancel;
     if (closeIcon) closeIcon.onclick = doCancel;
-    if (splitAllBtn) splitAllBtn.onclick = doSplitAll;
 
     modal.onclick = (e) => {
       if (e.target === modal) doCancel();
     };
-
-    if (input) {
-      input.onkeydown = (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          doConfirm();
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          doCancel();
-        }
-      };
-    }
   });
 }
 
@@ -1407,9 +1862,9 @@ function extractBackupDate(parsed, file) {
     timestamp = new Date(parsed.date).getTime();
   }
 
-  // 2. 파일명에서 타임스탬프 추출 (예: Zen_Backup_1720000000000.json)
+  // 2. 파일명에서 타임스탬프 추출 (예: MY_Notes_Backup_1720000000000.json 또는 Zen_Backup_...)
   if (!timestamp && file && file.name) {
-    const match = file.name.match(/Zen_Backup_(\d{10,13})/i);
+    const match = file.name.match(/(?:Zen|MY_Notes)_Backup_(\d{10,13})/i);
     if (match) {
       let num = parseInt(match[1], 10);
       if (match[1].length === 10) num *= 1000;
@@ -1538,142 +1993,109 @@ function handleFileImport(e) {
     reader.onload = async function () {
       try {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+          "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.worker.min.mjs";
         const typedarray = new Uint8Array(this.result);
         const loadingTask = pdfjsLib.getDocument({
           data: typedarray,
-          cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/cmaps/",
+          cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/",
           cMapPacked: true,
-          standardFontDataUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/standard_fonts/"
+          standardFontDataUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/"
         });
         const pdf = await loadingTask.promise;
         const totalPages = pdf.numPages;
         const baseTitle = file.name.replace(/\.[^/.]+$/, "");
 
-        // 🎯 1. 30페이지 이하인 경우: 바로 전체 변환하여 새 노트 작성
-        if (totalPages <= 30) {
+        // 🎯 [V4.4.7] 단 1페이지인 경우: 불필요한 질문 없이 즉시 변환
+        if (totalPages === 1) {
           createNewMemo();
           isLoading = false;
 
           const titleInput = document.getElementById("memo-title-input");
           if (titleInput) titleInput.value = baseTitle;
 
-          for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-            showToast(`PDF 변환 중... (${pageNum} / ${totalPages}장)`);
-            const base64Img = await renderPdfPageToBase64(pdf, pageNum);
-            const insertIdx = Math.max(0, quill.getLength() - 1);
-            quill.insertEmbed(insertIdx, "image", base64Img, Quill.sources.USER);
-            quill.insertText(insertIdx + 1, "\n\n", Quill.sources.USER);
-          }
+          const base64Img = await renderPdfPageToBase64(pdf, 1);
+          const insertIdx = Math.max(0, quill.getLength() - 1);
+          quill.insertEmbed(insertIdx, "image", base64Img, Quill.sources.USER);
+          quill.insertText(insertIdx + 1, "\n", Quill.sources.USER); // 🎯 [V4.4.7] MD 표준 단일 개행
+
           await executeSave();
-          showToast(`✅ PDF 변환 및 저장이 완료되었습니다! (${totalPages}장)`);
+          showToast(`✅ PDF 변환 및 저장이 완료되었습니다! (1장)`);
           return;
         }
 
-        // 🎯 2. 30페이지 초과 시: 세련된 커스텀 모달 호출
-        const modalRes = await showPdfPageRangeModal(totalPages);
+        // 🎯 [V4.4.7] 2페이지 이상인 모든 PDF: 원하는 페이지만 골라 담을 수 있도록 페이지 선택 모달 표출
+        const modalRes = await showPdfPageRangeModal(pdf, totalPages, baseTitle);
 
-        if (modalRes.action === "cancel") {
+        if (modalRes.action === "cancel" || !modalRes.pages || modalRes.pages.length === 0) {
           showToast("PDF 불러오기가 취소되었습니다.");
           return;
         }
 
-        // 🚀 A. [30페이지씩 전체 열기] 모드
-        if (modalRes.action === "split-all") {
-          const chunkCount = Math.ceil(totalPages / 30);
-          showToast(`전체 ${totalPages}페이지를 ${chunkCount}개 노트로 자동 분할 생성합니다...`);
+        const selectedPages = modalRes.pages;
+        const countToLoad = selectedPages.length;
 
-          const createdMemoIds = [];
-          const now = Date.now();
+        // 🎯 [Case A] 30페이지 이하인 경우: 단일 새 노트에 깔끔하게 저장
+        if (countToLoad <= 30) {
+          createNewMemo();
+          isLoading = false;
 
-          for (let c = 1; c <= chunkCount; c++) {
-            const startP = (c - 1) * 30 + 1;
-            const endP = Math.min(c * 30, totalPages);
-            const chunkTitle = `${baseTitle} (p.${startP}-${endP})`;
-
-            let htmlContent = "";
-            for (let pageNum = startP; pageNum <= endP; pageNum++) {
-              const currentInChunk = pageNum - startP + 1;
-              const totalInChunk = endP - startP + 1;
-              showToast(`PDF 변환 중... [노트 ${c}/${chunkCount}] (${currentInChunk}/${totalInChunk}장, p.${pageNum})`);
-
-              const base64Img = await renderPdfPageToBase64(pdf, pageNum);
-              htmlContent += `<p><img src="${base64Img}"></p><p><br></p>`;
-            }
-
-            // 🎯 최신순 정렬 시 1번 노트가 맨 위에 오도록 시차 부여
-            const chunkTime = now + (chunkCount - c) * 1000;
-            const newMemoId = await saveNewMemoDirect(chunkTitle, htmlContent, "", chunkTime);
-            createdMemoIds.push(newMemoId);
+          const titleInput = document.getElementById("memo-title-input");
+          if (titleInput) {
+            titleInput.value =
+              countToLoad === 1
+                ? `${baseTitle} (p.${selectedPages[0]})`
+                : `${baseTitle} (${countToLoad}장)`;
           }
 
-          // 목록 갱신 및 첫 번째 파트 노트(p.1-30) 에디터에 즉시 열기
-          loadMemoList(true);
-          updateUnsyncedCount();
+          quill.focus();
 
-          if (createdMemoIds.length > 0 && typeof loadMemo === "function") {
-            await loadMemo(createdMemoIds[0]);
+          for (let idx = 0; idx < countToLoad; idx++) {
+            const pageNum = selectedPages[idx];
+            showToast(`PDF 변환 중... (${idx + 1} / ${countToLoad}장, p.${pageNum})`);
+
+            const base64Img = await renderPdfPageToBase64(pdf, pageNum);
+            const insertIdx = Math.max(0, quill.getLength() - 1);
+            quill.insertEmbed(insertIdx, "image", base64Img, Quill.sources.USER);
+            quill.insertText(insertIdx + 1, "\n", Quill.sources.USER); // 🎯 [V4.5.0] MD 표준 단일 개행
           }
-
-          showToast(`✅ 전체 PDF가 ${chunkCount}개의 노트로 분할 저장되었습니다!`);
+          await executeSave();
+          showToast(countToLoad === 1 ? `✅ 1개 페이지를 노트에 추가했습니다!` : `✅ 선택한 ${countToLoad}개 페이지를 노트에 추가했습니다!`);
           return;
         }
 
-        // 🚀 B. [지정 범위 불러오기] 모드 (modalRes.action === 'range')
-        const cleaned = modalRes.range.trim().replace(/~/g, "-").replace(/,/g, "-");
-        const parts = cleaned.split("-").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+        // 🎯 [Case B, V4.5.3] 30페이지 초과(또는 전체) 선택 시: 30페이지씩 자동 분할 저장 후 토스트 안내 (saveNewMemoDirect & loadMemo 정상 호출로 교정)
+        const chunkCount = Math.ceil(countToLoad / 30);
+        showToast(`30페이지씩 분할하여 ${chunkCount}개의 노트로 저장하고 있습니다...`);
 
-        let startPage = 1;
-        let endPage = Math.min(totalPages, 30);
+        const createdMemoIds = [];
+        const now = Date.now();
 
-        if (parts.length === 1) {
-          startPage = Math.max(1, Math.min(parts[0], totalPages));
-          endPage = startPage;
-        } else if (parts.length >= 2) {
-          startPage = Math.max(1, Math.min(parts[0], parts[1]));
-          endPage = Math.min(totalPages, Math.max(parts[0], parts[1]));
-        } else {
-          alert("입력 형식을 인식할 수 없어 처음 30페이지를 불러옵니다.");
-          startPage = 1;
-          endPage = Math.min(totalPages, 30);
+        for (let c = 1; c <= chunkCount; c++) {
+          const startIdx = (c - 1) * 30;
+          const endIdx = Math.min(c * 30, countToLoad);
+          const chunkPages = selectedPages.slice(startIdx, endIdx);
+          const chunkTitle = `${baseTitle} (${c}/${chunkCount})`;
+
+          let htmlContent = "";
+          for (let i = 0; i < chunkPages.length; i++) {
+            const pageNum = chunkPages[i];
+            const currentTotalIdx = startIdx + i + 1;
+            showToast(`PDF 변환 중... [노트 ${c}/${chunkCount}] (${currentTotalIdx}/${countToLoad}장, p.${pageNum})`);
+
+            const base64Img = await renderPdfPageToBase64(pdf, pageNum);
+            htmlContent += `<p><img src="${base64Img}"></p>`;
+          }
+
+          const newId = await saveNewMemoDirect(chunkTitle, htmlContent, "", now + c * 10);
+          if (newId) createdMemoIds.push(newId);
         }
 
-        if (endPage < startPage) {
-          const temp = startPage;
-          startPage = endPage;
-          endPage = temp;
+        loadMemoList(true);
+        updateUnsyncedCount();
+        if (createdMemoIds.length > 0 && typeof loadMemo === "function") {
+          loadMemo(createdMemoIds[0]);
         }
-
-        if (endPage - startPage + 1 > 30) {
-          alert(`한 번에 최대 30페이지만 불러올 수 있습니다.\n(${startPage}페이지부터 ${startPage + 29}페이지까지 30장만 불러옵니다)`);
-          endPage = startPage + 29;
-        }
-
-        createNewMemo();
-        isLoading = false;
-
-        const titleInput = document.getElementById("memo-title-input");
-        if (titleInput) {
-          titleInput.value =
-            startPage === endPage
-              ? `${baseTitle} (p.${startPage})`
-              : `${baseTitle} (p.${startPage}-${endPage})`;
-        }
-
-        quill.focus();
-
-        const countToLoad = endPage - startPage + 1;
-        for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
-          const currentIdx = pageNum - startPage + 1;
-          showToast(`PDF 변환 중... (${currentIdx} / ${countToLoad}장, p.${pageNum})`);
-
-          const base64Img = await renderPdfPageToBase64(pdf, pageNum);
-          const insertIdx = Math.max(0, quill.getLength() - 1);
-          quill.insertEmbed(insertIdx, "image", base64Img, Quill.sources.USER);
-          quill.insertText(insertIdx + 1, "\n\n", Quill.sources.USER);
-        }
-        await executeSave();
-        showToast(`✅ PDF 변환 및 저장이 완료되었습니다! (${countToLoad}장)`);
+        showToast(`✅ 30페이지씩 분할하여 ${chunkCount}개의 노트로 저장했습니다.`);
       } catch (err) {
         console.error("PDF 파싱 에러:", err);
         alert(`PDF 변환 중 오류가 발생했습니다.\n(${err.message || err})`);
@@ -1754,10 +2176,14 @@ function handleFileImport(e) {
       createNewMemo();
       isLoading = false;
       let txtBody = fileContent.replace(/^\uFEFF/, ""); // BOM 제거
-      const headerMatch = txtBody.match(/^={20,}\r?\n\[제목\]\s*(.+?)\r?\n[\s\S]*?={20,}\r?\n\r?\n?/);
-      if (headerMatch) {
-        document.getElementById("memo-title-input").value = headerMatch[1].trim();
-        txtBody = txtBody.substring(headerMatch[0].length);
+      const zenHeaderMatch = txtBody.match(/^([^\r\n]+)\r?\n\d{4}\.\d{2}\.\d{2}\.\([일월화수목금토]\)\s+\d{2}:\d{2}[^\r\n]*\r?\n─{20,}\r?\n\r?\n?/);
+      const legacyHeaderMatch = txtBody.match(/^={20,}\r?\n\[제목\]\s*(.+?)\r?\n[\s\S]*?={20,}\r?\n\r?\n?/);
+      if (zenHeaderMatch) {
+        document.getElementById("memo-title-input").value = zenHeaderMatch[1].trim();
+        txtBody = txtBody.substring(zenHeaderMatch[0].length);
+      } else if (legacyHeaderMatch) {
+        document.getElementById("memo-title-input").value = legacyHeaderMatch[1].trim();
+        txtBody = txtBody.substring(legacyHeaderMatch[0].length);
       } else {
         document.getElementById("memo-title-input").value = fileName.replace(/\.txt$/i, "");
       }
@@ -1784,7 +2210,7 @@ function handleFileImport(e) {
 // ============================================================================
 
 /**
- * 드롭된 파일이 ZenNotes에서 지원하는 형식인지 판별합니다.
+ * 드롭된 파일이 MY Notes에서 지원하는 형식인지 판별합니다.
  */
 function isImportableFile(file) {
   if (!file) return false;
@@ -1848,10 +2274,14 @@ async function parseImportableFile(file) {
   if (ext === "txt") {
     let txtBody = fileContent.replace(/^\uFEFF/, ""); // BOM 제거
     let title = fileName.replace(/\.txt$/i, "");
-    const headerMatch = txtBody.match(/^={20,}\r?\n\[제목\]\s*(.+?)\r?\n[\s\S]*?={20,}\r?\n\r?\n?/);
-    if (headerMatch) {
-      title = headerMatch[1].trim();
-      txtBody = txtBody.substring(headerMatch[0].length);
+    const zenHeaderMatch = txtBody.match(/^([^\r\n]+)\r?\n\d{4}\.\d{2}\.\d{2}\.\([일월화수목금토]\)\s+\d{2}:\d{2}[^\r\n]*\r?\n─{20,}\r?\n\r?\n?/);
+    const legacyHeaderMatch = txtBody.match(/^={20,}\r?\n\[제목\]\s*(.+?)\r?\n[\s\S]*?={20,}\r?\n\r?\n?/);
+    if (zenHeaderMatch) {
+      title = zenHeaderMatch[1].trim();
+      txtBody = txtBody.substring(zenHeaderMatch[0].length);
+    } else if (legacyHeaderMatch) {
+      title = legacyHeaderMatch[1].trim();
+      txtBody = txtBody.substring(legacyHeaderMatch[0].length);
     }
     // Quill 문단 변환
     const lines = txtBody.split(/\r?\n/);
@@ -1978,13 +2408,13 @@ async function processDroppedFiles(files) {
       try {
         if (typeof pdfjsLib !== "undefined") {
           pdfjsLib.GlobalWorkerOptions.workerSrc =
-            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+            "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.worker.min.mjs";
           const arrayBuf = await item.file.arrayBuffer();
           const loadingTask = pdfjsLib.getDocument({
             data: new Uint8Array(arrayBuf),
-            cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/cmaps/",
+            cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/",
             cMapPacked: true,
-            standardFontDataUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/standard_fonts/"
+            standardFontDataUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/"
           });
           const pdf = await loadingTask.promise;
           const pagesToRender = Math.min(pdf.numPages, 30);

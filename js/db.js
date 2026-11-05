@@ -349,8 +349,13 @@ async function initFileSystem() {
             item.isSystem = "trash";
             needsUpdate = true;
           }
-          if (item.title === "쓸어 담기" && item.isSystem !== "backup") {
+          if ((item.title === "쓸어 담기" || item.title === "임시 저장") && item.isSystem !== "backup") {
             item.isSystem = "backup";
+            needsUpdate = true;
+          }
+          // 🎯 [V4.4.6] 기존 사용자의 '쓸어 담기' 명칭을 '임시 저장'으로 자동 업데이트
+          if (item.isSystem === "backup" && item.title === "쓸어 담기") {
+            item.title = "임시 저장";
             needsUpdate = true;
           }
 
@@ -445,10 +450,10 @@ async function initFileSystem() {
         };
       }
 
-      // 6. 🎯 쓸어 담기 폴더 생성 (4대장)
+      // 6. 🎯 임시 저장 폴더 생성 (4대장, [V4.4.6])
       if (!globalBackupFolderId) {
         store.add({
-          title: "쓸어 담기",
+          title: "임시 저장",
           type: "folder",
           isSystem: "backup",
           parentId: null,

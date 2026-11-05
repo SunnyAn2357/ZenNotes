@@ -1,4 +1,4 @@
-<!-- ZenNotes3 -->
+<!-- ZenNotes -->
 
 <!DOCTYPE html>
 <html lang="ko">
@@ -6,30 +6,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" id="meta-theme-color-desktop" media="(min-width: 769px)" content="#282C26">
-    <meta name="theme-color" id="meta-theme-color-mobile" media="(max-width: 768px)" content="#131314">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ZenNotes">
+    <meta name="theme-color" id="meta-theme-color-desktop" media="(min-width: 769px)" content="#eef1f5">
+    <meta name="theme-color" id="meta-theme-color-mobile" media="(max-width: 768px)" content="#eef1f5">
 
-    <title>ZenNotes-ADS</title>
+    <title>ZenNotes</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=4.1.5">
-    <link rel="manifest" href="manifest.json?v=4.1.5">
+    <link rel="icon" type="image/png" href="favicon.png?v=4.7.6">
+    <link rel="apple-touch-icon" href="img192.png?v=4.7.6">
+    <link rel="manifest" href="manifest.json?v=4.7.6">
 
     <link rel="stylesheet" as="style" crossorigin
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- [V4.7.6] pdf.js 4.10.38 (CVE-2024-4367 패치) -->
+    <script type="module">import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.min.mjs"; window.pdfjsLib = pdfjsLib;</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.4.5">
+    <link rel="stylesheet" href="css/main.css?v=4.7.6">
 
 </head>
 
-<body>
+<body class="light-theme">
 
     <button id="mobile-left-menu-btn" class="toggle-btn mobile-only"
         style="position: fixed; top: 24px; left: 10px; z-index: 1000;" onclick="toggleLeftPaneMobile()">
@@ -53,29 +58,37 @@
                     <i id="left-collapse-icon" class="fa-solid fa-angles-left"></i>
                 </button>
 
-                <!-- 🎯 [V4.2.2] 좌측 삼선 통합 노트 메뉴 -->
+                <!-- 🎯 [V4.2.2 / V4.5.2] 좌측 삼선 통합 노트 메뉴 -->
                 <div id="left-note-menu" class="left-note-menu" onclick="event.stopPropagation()">
                     <div class="left-menu-item left-menu-expandable" id="left-menu-recent-btn" onclick="toggleRecentNotesSubmenu(event)">
                         <div class="left-menu-item-main">
                             <i class="fa-solid fa-clock-rotate-left"></i>
                             <span>최근 노트</span>
                         </div>
-                        <i id="recent-notes-chevron" class="fa-solid fa-chevron-down left-menu-chevron"></i>
+                        <i id="recent-notes-chevron" class="fa-solid fa-chevron-up left-menu-chevron"></i>
                     </div>
-                    <div id="recent-notes-submenu" class="recent-notes-submenu" style="display: none;"></div>
+                    <div id="recent-notes-submenu" class="recent-notes-submenu" style="display: flex;"></div>
 
                     <div class="left-menu-divider"></div>
 
-                    <div class="left-menu-item left-menu-folder-item" id="left-menu-folder-btn" onclick="openCurrentNoteMoveModal()">
+                    <!-- 📂 [V4.5.2] 폴더 관리 일원화 그룹 -->
+                    <div class="left-menu-item left-menu-folder-item" id="left-menu-folder-btn" onclick="openCurrentNoteMoveModal()" title="현재 열린 노트의 소속 폴더 확인 및 다른 폴더로 이동">
                         <div class="left-menu-item-main">
                             <i class="fa-solid fa-folder-tree"></i>
                             <div class="left-menu-folder-texts">
-                                <span class="left-menu-folder-title">폴더 확인 및 이동</span>
+                                <span class="left-menu-folder-title">현재 폴더 및 이동</span>
                                 <span id="left-menu-current-path" class="left-menu-folder-path">위치: 바탕 화면</span>
                             </div>
                         </div>
                         <i class="fa-solid fa-arrow-right-arrow-left left-menu-action-icon"></i>
                     </div>
+
+                    <button type="button" class="left-menu-item" onclick="closeLeftNoteMenu(); openFileManager();" title="전체 폴더/파일 탐색 및 관리 열기">
+                        <div class="left-menu-item-main">
+                            <i class="fa-solid fa-folder-open"></i>
+                            <span>전체 폴더관리</span>
+                        </div>
+                    </button>
 
                     <div class="left-menu-divider"></div>
 
@@ -95,24 +108,22 @@
 
                     <div class="left-menu-divider"></div>
 
-                    <button type="button" class="left-menu-item" id="theme-toggle-btn" onclick="closeLeftNoteMenu(); toggleAppTheme();">
-                        <div class="left-menu-item-main">
+                    <!-- 🎯 [V4.7.1] 테마 토글 및 환경설정 버튼 (상단 ⇄ 화살표와 수직 정렬 일치) -->
+                    <div class="left-menu-item left-menu-footer-row">
+                        <div class="left-menu-item-main" id="theme-toggle-btn" onclick="closeLeftNoteMenu(); toggleAppTheme();" title="화이트/다크 테마 전환" style="cursor: pointer;">
                             <i id="theme-toggle-icon" class="fa-solid fa-sun"></i>
                             <span id="theme-toggle-label">화이트 모드</span>
                         </div>
-                    </button>
+                        <button type="button" id="left-menu-settings-btn" class="left-menu-settings-btn" onclick="closeLeftNoteMenu(); openSettingsModal();" title="환경설정" aria-label="환경설정">
+                            <i class="fa-solid fa-gear left-menu-action-icon"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div style="display: flex; width: 100%;">
                 <button class="new-note-btn" onclick="createNewMemo()"
                     style="color: var(--text-main); font-weight: 600;">
                     <i class="fa-solid fa-pen-to-square"></i> <span class="btn-text">새 노트 작성</span>
-                </button>
-                <button class="file-manager-btn" onclick="openFileManager()"
-                    style="color: var(--text-muted); font-size: 15px; padding: 8px 10px; transition: color 0.2s; cursor: pointer;">
-                    <span
-                        style="font-weight: 700; font-size: 14px; letter-spacing: 0.5px; color: var(--text-muted);">FM</span>
-                    <i class="fa-solid fa-folder-open"></i>
                 </button>
             </div>
             <div class="search-bar">
@@ -134,7 +145,7 @@
 
                 <div class="fm-search-bar">
                     <i class="fa-solid fa-magnifying-glass" style="font-size: 12px; color: var(--text-muted);"></i>
-                    <input type="text" id="fm-search-input" placeholder="ZenNotes - ADS 검색..."
+                    <input type="text" id="fm-search-input" placeholder="MY Notes 검색..."
                         oninput="triggerFmSearch()">
                 </div>
 
@@ -179,29 +190,30 @@
         </div>
 
         <!-- 🎯 [V4.2.2] 메인 에디터와 FM 어디서든 호출 가능하도록 전역 배치된 보안/이동 모달 -->
-        <div id="fm-security-modal" class="fm-modal-overlay">
-            <div class="fm-modal" style="max-width: 320px;">
+        <div id="fm-security-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeSecurityModal()">
+            <div class="fm-modal" style="max-width: 320px;" onclick="event.stopPropagation()">
                 <div class="fm-modal-header" id="sec-modal-title">
                     <span><i class="fa-solid fa-lock" style="color: #f59e0b;"></i> 보안 폴더</span>
                     <i class="fa-solid fa-xmark" style="cursor:pointer;" onclick="closeSecurityModal()"></i>
                 </div>
-                <div class="fm-modal-body" style="padding: 24px 24px 10px; text-align: center;">
+                <div class="fm-modal-body" style="padding: 24px 24px 10px; text-align: center;" onclick="event.stopPropagation()">
                     <div id="sec-modal-desc"
                         style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
                         비밀번호를 입력하세요.</div>
-                    <input type="password" id="sec-password-input" class="sec-input" placeholder="••••••••"
-                        onkeypress="if(event.key==='Enter') submitSecurityPassword()">
+                    <input type="password" id="sec-password-input" class="sec-input" placeholder="••••••••" autocomplete="off"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitSecurityPassword();}"
+                        onclick="event.stopPropagation()">
                 </div>
-                <div class="fm-modal-footer">
-                    <button style="background: var(--surface-hover);" onclick="closeSecurityModal()">취소</button>
-                    <button id="sec-confirm-btn" style="background: #f59e0b; color: #000;"
-                        onclick="submitSecurityPassword()">확인</button>
+                <div class="fm-modal-footer" onclick="event.stopPropagation()">
+                    <button type="button" style="background: var(--surface-hover);" onclick="event.stopPropagation(); closeSecurityModal()">취소</button>
+                    <button type="button" id="sec-confirm-btn" style="background: #f59e0b; color: #000;"
+                        onclick="event.stopPropagation(); submitSecurityPassword()">확인</button>
                 </div>
             </div>
         </div>
 
-        <div id="fm-move-modal" class="fm-modal-overlay">
-            <div class="fm-modal">
+        <div id="fm-move-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeMoveModal()">
+            <div class="fm-modal" onclick="event.stopPropagation()">
                 <div class="fm-modal-header">
                     <span>항목 이동</span>
                     <div style="display: flex; align-items: center; gap: 12px;">
@@ -211,11 +223,11 @@
                         <i class="fa-solid fa-xmark" style="cursor:pointer;" onclick="closeMoveModal()"></i>
                     </div>
                 </div>
-                <div id="fm-dest-list" class="fm-modal-body">
+                <div id="fm-dest-list" class="fm-modal-body" onclick="event.stopPropagation()">
                 </div>
-                <div class="fm-modal-footer">
-                    <button style="background: var(--surface-hover);" onclick="closeMoveModal()">취소</button>
-                    <button id="fm-move-confirm-btn" style="background: var(--accent); color: var(--accent-contrast);">이동하기</button>
+                <div class="fm-modal-footer" onclick="event.stopPropagation()">
+                    <button type="button" style="background: var(--surface-hover);" onclick="closeMoveModal()">취소</button>
+                    <button type="button" id="fm-move-confirm-btn" style="background: var(--accent); color: var(--accent-contrast);">이동하기</button>
                 </div>
             </div>
         </div>
@@ -234,7 +246,7 @@
         <div class="quill-wrapper">
             <div id="editor"></div>
         </div>
-        <div id="print-doc-footer" class="print-doc-footer">ZenNotes</div>
+        <div id="print-doc-footer" class="print-doc-footer">MY Notes</div>
 
         <!-- 🎯 [V4.4.1] 특수문자 및 이모티콘 모달 (가운데 편집창 정중앙 배치 & 투명 백드롭) -->
         <div id="special-char-modal" class="special-char-overlay" onclick="if(event.target===this) closeSpecialCharModal()">
@@ -263,46 +275,46 @@
             <button class="toggle-btn" onclick="toggleRightPane()">
                 <i class="fa-solid fa-bars"></i>
             </button>
-            <button class="toggle-btn auth-toggle-btn" id="btn-auth" title="클라우드 동기화 및 로그인 토글">
-                <i class="fa-solid fa-cloud"></i>
+            <button class="toggle-btn auth-toggle-btn miryang-bi-btn" id="btn-auth" title="로그인(추후 지원)" style="background: transparent !important; border: none !important; box-shadow: none !important; padding: 2px !important;">
+                <img src="./miryang_bi.png" alt="밀양시 BI" class="miryang-bi-icon">
             </button>
         </div>
 
         <div class="util-section">
             <div class="util-title">Export</div>
-            <button class="util-btn" onclick="exportHTML();">
-                <i class="fa-brands fa-html5"></i> <span class="btn-text">HTML 저장</span>
+            <button class="util-btn" onclick="exportTXT();">
+                <i class="fa-regular fa-file-lines"></i> <span class="btn-text">TXT 저장</span>
             </button>
             <button class="util-btn" onclick="exportPDF();">
                 <i class="fa-regular fa-file-pdf"></i> <span class="btn-text">PDF 저장</span>
             </button>
-            <button class="util-btn" onclick="exportTXT();">
-                <i class="fa-regular fa-file-lines"></i> <span class="btn-text">TXT 저장</span>
-            </button>
-            <button class="util-btn" onclick="exportJSON();">
-                <i class="fa-solid fa-code"></i> <span class="btn-text">JSON 저장</span>
+            <button class="util-btn" onclick="exportHTML();">
+                <i class="fa-brands fa-html5"></i> <span class="btn-text">HTML 저장</span>
             </button>
             <button class="util-btn" onclick="exportMD();">
                 <i class="fa-brands fa-markdown"></i> <span class="btn-text">MD 저장</span>
+            </button>
+            <button class="util-btn" onclick="exportJSON();">
+                <i class="fa-solid fa-code"></i> <span class="btn-text">JSON 저장</span>
             </button>
         </div>
 
         <div class="util-section mt-auto">
             <div class="util-title">Data Management</div>
             <div style="display: flex; gap: 8px;">
-                <button class="util-btn" style="flex: 1;" onclick="backupAllData();">
-                    <i class="fa-solid fa-database"></i> <span class="btn-text">로컬 백업</span>
-                </button>
-                <button class="util-btn" style="flex: 1;" onclick="resetAllData();">
-                    <i class="fa-solid fa-arrows-rotate"></i> <span class="btn-text">초기화</span>
-                </button>
-            </div>
-            <div style="display: flex; gap: 8px;">
                 <button class="util-btn" style="flex: 1;" onclick="document.getElementById('import-file').click(); closeAllPanelsMobile();">
                     <i class="fa-solid fa-file-import"></i> <span class="btn-text">불러오기</span>
                 </button>
                 <button class="util-btn" style="flex: 1;" onclick="toggleTrashPane();">
                     <i class="fa-solid fa-trash"></i> <span class="btn-text">휴지통</span>
+                </button>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="util-btn" style="flex: 1;" onclick="backupAllData();">
+                    <i class="fa-solid fa-database"></i> <span class="btn-text">로컬 백업</span>
+                </button>
+                <button class="util-btn" style="flex: 1;" onclick="resetAllData();">
+                    <i class="fa-solid fa-arrows-rotate"></i> <span class="btn-text">초기화</span>
                 </button>
             </div>
             <input type="file" id="import-file" accept=".json, .txt, .html, .md, image/*, .pdf" style="display: none;"
@@ -343,32 +355,52 @@
 
     <!-- 🎯 [V3.3.2] PDF 페이지 범위 선택 커스텀 모달 -->
     <div id="pdf-import-modal" class="fm-modal-overlay">
-        <div class="fm-modal" style="max-width: 440px;">
-            <div class="fm-modal-header" style="padding: 18px 20px;">
-                <span style="font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-regular fa-file-pdf" style="color: #ef4444; font-size: 18px;"></i> 불러올 페이지를 입력하세요.
+        <div class="fm-modal pdf-zen-modal" style="max-width: 860px; width: 94vw; max-height: 90vh; display: flex; flex-direction: column;">
+            <!-- 모달 헤더 -->
+            <div class="fm-modal-header" style="padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <span style="font-size: 15.5px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-file-pdf" style="color: #ef4444; font-size: 18px;"></i>
+                    <span id="pdf-modal-title-text">불러올 PDF 페이지 선택</span>
                 </span>
-                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" id="pdf-modal-close-icon"></i>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 19px; color: var(--text-muted); transition: color 0.2s;" id="pdf-modal-close-icon" title="닫기"></i>
             </div>
-            <div class="fm-modal-body" style="padding: 22px 20px 16px; text-align: left;">
-                <div id="pdf-modal-desc" style="font-size: 15px; color: var(--text-main); margin-bottom: 14px; line-height: 1.5; font-weight: 500;">
-                    30페이지 이하로 불러올 수 있습니다. <span style="color: var(--accent); font-weight: 600;" id="pdf-modal-file-info">(현재파일: 0페이지)</span>
+
+            <!-- 컨트롤 툴바 (전체선택 & 범위지정) -->
+            <div class="pdf-modal-toolbar" style="padding: 10px 20px; background: var(--bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; flex-shrink: 0;">
+                <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--text-main); user-select: none;">
+                    <input type="checkbox" id="pdf-select-all-check" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--accent);">
+                    <span>전체 선택</span>
+                    <span id="pdf-selected-count-badge" style="color: var(--accent); font-size: 12.5px; font-weight: 600;">(0 / 0장 선택됨)</span>
+                </label>
+
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">범위 지정:</span>
+                    <input type="text" id="pdf-page-range-input" class="pdf-page-input" placeholder="예: 1, 3-5, 8" style="width: 140px; height: 32px; padding: 4px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text-main);">
+                    <button id="pdf-range-apply-btn" type="button" style="height: 32px; padding: 0 12px; font-size: 13px; font-weight: 600; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-hover); color: var(--text-main); cursor: pointer; transition: all 0.2s;">적용</button>
                 </div>
-                <input type="text" id="pdf-page-range-input" class="pdf-page-input" placeholder="입력 예: 1-30, 1~30">
             </div>
-            <div class="fm-modal-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 14px 16px;">
-                <button id="pdf-split-all-btn" type="button"
-                    style="flex: 0 0 auto !important; padding: 0 14px !important; height: 42px !important; font-size: 13.5px !important; font-weight: 600 !important; border-radius: 8px !important; background: rgba(56, 189, 248, 0.15) !important; color: var(--accent) !important; border: 1px solid rgba(56, 189, 248, 0.35) !important; cursor: pointer !important; white-space: nowrap;">
-                    30페이지씩 전체 열기
-                </button>
-                <div class="pdf-modal-action-btns" style="display: flex; gap: 8px; flex: 1; justify-content: flex-end;">
+
+            <!-- 썸네일 그리드 본문 -->
+            <div class="fm-modal-body" style="padding: 16px 20px; flex: 1; overflow-y: auto; background: var(--surface);">
+                <div id="pdf-thumb-grid" class="pdf-thumb-grid">
+                    <!-- 페이지별 썸네일 카드가 JS로 동적 렌더링됩니다 -->
+                </div>
+            </div>
+
+            <!-- 모달 푸터 -->
+            <div class="fm-modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border); flex-shrink: 0; background: var(--bg);">
+                <div style="font-size: 13px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-layer-group" style="color: var(--accent);"></i> 삽입 대상: 새 노트
+                </div>
+                <div class="pdf-modal-action-btns" style="display: flex; gap: 8px;">
                     <button id="pdf-modal-cancel-btn" type="button"
-                        style="flex: 0 0 auto !important; min-width: 70px; height: 42px !important; font-size: 14px !important; background: var(--surface-hover) !important; color: var(--text-muted) !important; border-radius: 8px !important; cursor: pointer !important;">
+                        style="height: 38px; padding: 0 16px; font-size: 13.5px; font-weight: 500; background: var(--surface-hover); color: var(--text-muted); border-radius: 6px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;">
                         취소
                     </button>
                     <button id="pdf-modal-confirm-btn" type="button"
-                        style="flex: 0 0 auto !important; min-width: 75px; height: 42px !important; font-size: 14px !important; background: var(--accent) !important; color: var(--accent-contrast) !important; border-radius: 8px !important; font-weight: 700 !important; cursor: pointer !important;">
-                        확인
+                        style="height: 38px; padding: 0 18px; font-size: 13.5px; font-weight: 700; background: var(--accent); color: var(--accent-contrast); border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-file-import"></i>
+                        <span id="pdf-confirm-btn-label" style="white-space: nowrap !important;">페이지 불러오기</span>
                     </button>
                 </div>
             </div>
@@ -498,6 +530,160 @@
         </div>
     </div>
 
+    <!-- 🎯 [V4.5.6] 모든 데이터 초기화 전 보안 폴더 검사 & Zen 경고 모달 -->
+    <div id="reset-confirm-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeResetConfirmModal()">
+        <div class="fm-modal" style="max-width: 440px; width: 92vw; border-radius: 16px;">
+            <div class="fm-modal-header" style="padding: 16px 20px;">
+                <span id="reset-modal-title" style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: #ef4444;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> 데이터 초기화 경고
+                </span>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeResetConfirmModal()"></i>
+            </div>
+            <div class="fm-modal-body" style="padding: 20px 22px; max-height: 70vh;">
+                <!-- 보안 폴더에 자료가 있을 때만 강조 표시되는 경고 배너 -->
+                <div id="reset-security-warning-box" style="display: none; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <i class="fa-solid fa-lock" style="font-size: 22px; color: #f59e0b; margin-top: 2px;"></i>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; color: #f59e0b; margin-bottom: 4px; font-size: 14.5px;">
+                                보안 폴더에 중요 자료가 보관되어 있습니다!
+                            </div>
+                            <div id="reset-security-count-desc" style="font-size: 13px; color: var(--text-main); line-height: 1.5;">
+                                보안 노트 <strong>0</strong>개가 보관되어 있습니다.
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted); line-height: 1.45; border-top: 1px dashed rgba(245, 158, 11, 0.3); padding-top: 8px;">
+                        ⚠️ 초기화를 진행하면 암호화된 <strong>보안 폴더의 모든 비밀 자료도 함께 영구 삭제</strong>되며 절대 복구할 수 없습니다.
+                    </div>
+                </div>
+
+                <!-- 기본 초기화 안내 문구 -->
+                <div style="font-size: 14px; color: var(--text-main); line-height: 1.6; margin-bottom: 14px;">
+                    로컬 저장소의 모든 노트와 폴더, 설정이 영구 삭제되며 처음 상태로 완전히 초기화됩니다.
+                </div>
+
+                <div id="reset-cloud-desc" style="font-size: 12.5px; color: var(--text-muted); background: var(--surface-hover); border-radius: 8px; padding: 10px 14px; line-height: 1.5;">
+                    로컬 전용 초기화: 현재 기기의 데이터만 초기화됩니다.
+                </div>
+            </div>
+            <div class="fm-modal-footer" style="padding: 14px 20px; display: flex; gap: 10px;">
+                <button type="button" style="background: var(--surface-hover); color: var(--text-main); border: 1px solid var(--border); font-size: 14px; font-weight: 600;" onclick="closeResetConfirmModal()">
+                    취소
+                </button>
+                <button type="button" id="btn-do-reset" style="background: #ef4444; color: #ffffff; border: none; font-size: 14px; font-weight: 600;" onclick="proceedResetAllData()">
+                    모두 영구 삭제
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🎯 [V4.7.1] 품격 있는 컴팩트 Zen 환경설정 모달 (100% 완전 불투명 솔리드) -->
+    <div id="settings-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeSettingsModal()">
+        <div class="zen-settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+            <div class="zen-settings-header">
+                <div class="zen-settings-title-wrap">
+                    <i class="fa-solid fa-gear zen-settings-icon"></i>
+                    <span id="settings-modal-title">환경설정</span>
+                </div>
+                <button type="button" class="zen-settings-close-btn" onclick="closeSettingsModal()" aria-label="닫기">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="zen-settings-body">
+                <!-- 설정 1: 마크다운 자동 목록 변환 -->
+                <div class="zen-settings-item">
+                    <div class="zen-settings-item-info">
+                        <div class="zen-settings-item-label">자동 글머리·목록 변환</div>
+                        <div class="zen-settings-item-desc">- , * , 1. , [ ] 입력 후 스페이스 시 자동 서식 생성</div>
+                    </div>
+                    <label class="zen-switch" title="자동 목록 변환 켜기/끄기">
+                        <input type="checkbox" id="setting-auto-list-toggle" onchange="handleSettingAutoListChange(this.checked)">
+                        <span class="zen-slider"></span>
+                    </label>
+                </div>
+
+                <!-- 설정 2: 스마트 백스페이스 복원 -->
+                <div class="zen-settings-item">
+                    <div class="zen-settings-item-info">
+                        <div class="zen-settings-item-label">글머리기호 즉시 취소</div>
+                        <div class="zen-settings-item-desc">자동 변환 직후 Backspace 누르면 원래 기호로 복원</div>
+                    </div>
+                    <label class="zen-switch" title="스마트 백스페이스 켜기/끄기">
+                        <input type="checkbox" id="setting-smart-undo-toggle" onchange="handleSettingSmartUndoChange(this.checked)">
+                        <span class="zen-slider"></span>
+                    </label>
+                </div>
+
+                <div class="zen-settings-divider"></div>
+
+                <!-- 설정 3: 새 노트 커서 위치 -->
+                <div class="zen-settings-item">
+                    <div class="zen-settings-item-info">
+                        <div class="zen-settings-item-label">새 노트 작성 시작 위치</div>
+                        <div class="zen-settings-item-desc">새 노트 작성 버튼을 누를 때 첫 커서 포커스</div>
+                    </div>
+                    <div class="zen-segmented" id="setting-cursor-segmented">
+                        <button type="button" class="zen-segmented-btn active" data-value="title" onclick="setSettingCursorTarget('title')">제목</button>
+                        <button type="button" class="zen-segmented-btn" data-value="body" onclick="setSettingCursorTarget('body')">본문</button>
+                    </div>
+                </div>
+
+                <!-- 설정 4: 본문 글자 크기 -->
+                <div class="zen-settings-item">
+                    <div class="zen-settings-item-info">
+                        <div class="zen-settings-item-label">본문 기본 글자 크기</div>
+                        <div class="zen-settings-item-desc">에디터 본문의 텍스트 기준 크기</div>
+                    </div>
+                    <div class="zen-segmented" id="setting-fontsize-segmented">
+                        <button type="button" class="zen-segmented-btn active" data-value="normal" onclick="setSettingEditorFontSize('normal')">표준 (16px)</button>
+                        <button type="button" class="zen-segmented-btn" data-value="large" onclick="setSettingEditorFontSize('large')">크게 (17.5px)</button>
+                    </div>
+                </div>
+
+                <!-- 설정 5: [V4.7.3] 최근 노트 표시 개수 -->
+                <div class="zen-settings-item">
+                    <div class="zen-settings-item-info">
+                        <div class="zen-settings-item-label">최근 노트 표시 개수</div>
+                        <div class="zen-settings-item-desc">좌측 메뉴에 노출되는 최근 열람 노트 수</div>
+                    </div>
+                    <div class="zen-segmented" id="setting-recent-count-segmented">
+                        <button type="button" class="zen-segmented-btn" data-value="3" onclick="setSettingRecentNotesCount(3)">3개</button>
+                        <button type="button" class="zen-segmented-btn active" data-value="5" onclick="setSettingRecentNotesCount(5)">5개</button>
+                        <button type="button" class="zen-segmented-btn" data-value="7" onclick="setSettingRecentNotesCount(7)">7개</button>
+                        <button type="button" class="zen-segmented-btn" data-value="10" onclick="setSettingRecentNotesCount(10)">10개</button>
+                    </div>
+                </div>
+
+                <div class="zen-settings-divider"></div>
+
+                <!-- 설정 6: [V4.7.1] Export 기본 저장 폴더 -->
+                <div class="zen-settings-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="zen-settings-item-label">Export 기본 저장 폴더</div>
+                        <span id="setting-export-dir-current" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">기본(다운로드)</span>
+                    </div>
+                    <div class="zen-segmented" id="setting-export-segmented" style="display: flex; width: 100%;">
+                        <button type="button" class="zen-segmented-btn active" data-value="download" onclick="setExportLocationMode('download')">기본(다운로드)</button>
+                        <button type="button" class="zen-segmented-btn" data-value="desktop" onclick="setExportLocationMode('desktop')">바탕화면</button>
+                        <button type="button" class="zen-segmented-btn" data-value="custom" onclick="chooseCustomExportDirectory()">사용자지정</button>
+                        <button type="button" class="zen-segmented-btn" data-value="reset" onclick="resetExportDirectory()">초기화</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="zen-settings-footer">
+                <div class="zen-settings-app-badge">
+                    <i class="fa-solid fa-note-sticky"></i>
+                    <span>ZenNotes v4.7.6</span>
+                </div>
+                <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- 🎯 [V3.3.2] 편집기 상단 이동 플로팅 버튼 -->
     <button id="scroll-to-top-btn" class="scroll-to-top-btn" title="맨 위로 이동" aria-label="맨 위로 이동">
@@ -524,19 +710,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=4.4.5"></script>
-    <script src="js/db.js?v=4.4.5"></script>
-    <script src="js/ui.js?v=4.4.5"></script>
-    <script src="js/editor.js?v=4.4.5"></script>
-    <script src="js/file_manager.js?v=4.4.5"></script>
-    <script src="js/io.js?v=4.4.5"></script>
-    <script src="js/auth.js?v=4.4.5"></script>
+    <script src="js/globals.js?v=4.7.6"></script>
+    <script src="js/db.js?v=4.7.6"></script>
+    <script src="js/ui.js?v=4.7.6"></script>
+    <script src="js/editor.js?v=4.7.6"></script>
+    <script src="js/file_manager.js?v=4.7.6"></script>
+    <script src="js/io.js?v=4.7.6"></script>
+    <script src="js/auth.js?v=4.7.6"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.4.5");
+            console.log("✨ 현재 버전: v4.7.6");
             console.log("=========================================");
         });
     </script>

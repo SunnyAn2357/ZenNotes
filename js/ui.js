@@ -157,10 +157,16 @@ function handleLeftHamburger() {
     const colLeft = document.getElementById('col-left');
     colLeft.classList.toggle('collapsed');
     const icon = document.getElementById('left-collapse-icon');
+    const collapseBtn = document.getElementById('left-collapse-btn');
+    const isCollapsed = colLeft.classList.contains('collapsed');
     if (icon) {
-      icon.className = colLeft.classList.contains('collapsed')
-        ? 'fa-solid fa-angles-right'
+      // 🎯 [V4.5.0] 접혔을 때 창 넓히는(펼치는) 아이콘을 '삼선(fa-bars)'으로 위장!
+      icon.className = isCollapsed
+        ? 'fa-solid fa-bars'
         : 'fa-solid fa-angles-left';
+    }
+    if (collapseBtn) {
+      collapseBtn.setAttribute('title', isCollapsed ? '사이드바 펼치기' : '사이드바 접기');
     }
   }
 }
@@ -271,9 +277,10 @@ function showToast(msg, undoData = null) {
     toast = document.createElement("div");
     toast.id = "zen-toast";
     toast.style.cssText =
-      "position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:var(--toast-bg); color:var(--toast-text); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:500; z-index:10005; opacity:0; transition:opacity 0.3s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:var(--toast-shadow); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:none;";
+      "position:fixed; bottom:50px; left:50%; transform:translateX(-50%); background:var(--toast-bg); color:var(--toast-text); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:600; z-index:99999 !important; opacity:0; transition:opacity 0.25s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 12px 32px rgba(0,0,0,0.35); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:none;";
     document.body.appendChild(toast);
   }
+  toast.style.zIndex = "99999";
 
   let html = `<span>${msg}</span>`;
 
@@ -533,35 +540,61 @@ function triggerTrashSearch() {
 // ============================================================================
 // 🚨 [최종 철통 방어막] 화면 최소화 및 백그라운드 전환 시 '은행급 오토-락' 가동
 // ============================================================================
-document.addEventListener('visibilitychange', () => {
-  // document.hidden이 true라는 것은: 
-  // PC에서 창을 최소화했거나 다른 탭으로 넘어갔을 때, 
-  // 모바일에서 홈 버튼을 누르거나 다른 앱으로 넘어갔을 때를 완벽히 잡아냅니다.
-  if (document.hidden) {
+function triggerBankAutoLock() {
+  // 이미 잠겨 있고 보안 노트를 편집 중이지 않다면 불필요한 중복 대피 방지
+  const wasUnlocked = !!currentSecKey || isSecurityUnlocked || isEditingSecureMemo;
 
-    // 1. 메모리에 떠 있는 암호화 열쇠를 즉시 분쇄하여 완벽하게 잠급니다.
-    currentSecKey = null;
-    isSecurityUnlocked = false;
+  // 1. 메모리에 떠 있는 암호화 열쇠 즉시 분쇄하여 완벽하게 잠금
+  currentSecKey = null;
+  isSecurityUnlocked = false;
 
-    // 2. 만약 유저가 '보안 노트'를 화면(에디터)에 열어두고 최소화했다면?
-    // 평문 내용이 화면 잔상으로 남지 않도록 에디터의 글을 싹 지우고 새 노트로 덮어버립니다.
-    if (isEditingSecureMemo) {
-      // 🚀 [최종 교정] 긴급 대피! 무조건 가장 안전한 바탕화면 1등 노트로 피신시킵니다.
-      if (typeof openTopDesktopMemo === 'function') {
-        openTopDesktopMemo();
-      } else {
-        createNewMemo();
-      }
+  // 2. 만약 유저가 '보안 노트'를 화면(에디터)에 열어두고 최소화/이탈했다면?
+  // 평문 내용이 화면 잔상으로 남지 않도록 에디터의 글을 즉시 대피
+  if (isEditingSecureMemo) {
+    isEditingSecureMemo = false;
+    if (typeof openTopDesktopMemo === 'function') {
+      openTopDesktopMemo();
+    } else if (typeof createNewMemo === 'function') {
+      createNewMemo();
+    }
+    if (typeof showToast === 'function') {
       showToast("보안을 위해 노트가 닫혔습니다.");
     }
+  }
 
-    // 3. 만약 유저가 파일 관리창에서 '보안 폴더 내부'를 구경 중이었다면?
-    // 강제로 안전한 바탕화면(Home) 0층으로 쫓아내서 팝업창과 잔상을 모두 지워버립니다.
-    if (document.getElementById('file-manager-pane').style.display === 'flex') {
-      if (typeof forceCleanFmUI === 'function') forceCleanFmUI();
-      resetFmToHome();
+  // 3. 만약 파일 관리창에서 '보안 폴더 내부'를 구경 중이었다면?
+  // 비동기 history.go가 아닌 동기식으로 즉시 안전한 바탕화면(Home) 0층으로 강제 퇴거 및 재렌더링
+  const fmPane = document.getElementById('file-manager-pane');
+  if (fmPane && fmPane.style.display === 'flex') {
+    if (typeof forceCleanFmUI === 'function') forceCleanFmUI();
+    fmPath = [{ id: null, title: "Home" }];
+    currentFmFolderId = null;
+    if (typeof loadFileManager === 'function') {
+      loadFileManager(null);
     }
   }
+
+  // 4. 보안 비밀번호 모달이 열려있다면 즉시 닫기
+  const secModal = document.getElementById('fm-security-modal');
+  if (secModal && secModal.style.display === 'flex') {
+    secModal.style.display = 'none';
+  }
+
+  if (wasUnlocked && typeof updateLeftMenuCurrentFolderPath === 'function') {
+    updateLeftMenuCurrentFolderPath();
+  }
+}
+
+window.triggerBankAutoLock = triggerBankAutoLock;
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    triggerBankAutoLock();
+  }
+});
+
+window.addEventListener('blur', () => {
+  triggerBankAutoLock();
 });
 
 // ============================================================================
@@ -830,13 +863,14 @@ function toggleAppTheme() {
 function initAppTheme() {
   try {
     const saved = localStorage.getItem("zen_app_theme");
-    if (saved === "light") {
-      applyAppTheme("light", false);
-    } else {
+    if (saved === "dark") {
       applyAppTheme("dark", false);
+    } else {
+      // ☀️ 디폴트는 화이트 모드
+      applyAppTheme("light", false);
     }
   } catch (e) {
-    applyAppTheme("dark", false);
+    applyAppTheme("light", false);
   }
 }
 
@@ -846,10 +880,27 @@ window.toggleAppTheme = toggleAppTheme;
 window.applyAppTheme = applyAppTheme;
 
 // ============================================================================
-// 🎯 [V4.2.2] 좌측 삼선 통합 노트 메뉴 & 최근 노트(최대 10개) 관리 엔진
+// 🎯 [V4.2.2] 좌측 삼선 통합 노트 메뉴 & 최근 노트 관리 엔진 (V4.7.3 개수 설정 연동)
 // ============================================================================
 const RECENT_NOTES_STORAGE_KEY = "zen_recent_notes";
-const MAX_RECENT_NOTES = 10;
+const RECENT_NOTES_COUNT_KEY = "zen_recent_notes_count";
+
+function getMaxRecentNotesCount() {
+  const val = parseInt(localStorage.getItem(RECENT_NOTES_COUNT_KEY), 10);
+  return [3, 5, 7, 10].includes(val) ? val : 5; // 기본값: 5개
+}
+
+function setSettingRecentNotesCount(count) {
+  const val = parseInt(count, 10);
+  if ([3, 5, 7, 10].includes(val)) {
+    localStorage.setItem(RECENT_NOTES_COUNT_KEY, String(val));
+    updateSegmentedActive('setting-recent-count-segmented', String(val));
+    renderRecentNotesList();
+    if (typeof showToast === 'function') {
+      showToast(`최근 노트 표시 개수가 ${val}개로 설정되었습니다.`);
+    }
+  }
+}
 
 function getRecentNotes() {
   try {
@@ -864,9 +915,10 @@ function getRecentNotes() {
 
 function saveRecentNotes(list) {
   try {
+    // 저장소에는 넉넉하게 최대 20개까지 보관하여 개수를 늘렸을 때 즉시 살아나도록 함
     localStorage.setItem(
       RECENT_NOTES_STORAGE_KEY,
-      JSON.stringify(list.slice(0, MAX_RECENT_NOTES)),
+      JSON.stringify(list.slice(0, 20)),
     );
   } catch (e) {
     console.warn("최근 노트 저장 실패:", e);
@@ -929,7 +981,8 @@ function renderRecentNotesList() {
     return;
   }
 
-  list.slice(0, MAX_RECENT_NOTES).forEach((item) => {
+  const maxCount = getMaxRecentNotesCount();
+  list.slice(0, maxCount).forEach((item) => {
     const div = document.createElement("div");
     const isCurrent = Number(currentMemoId) === Number(item.id);
     div.className = `recent-note-item ${isCurrent ? "is-current" : ""}`;
@@ -1122,3 +1175,118 @@ window.recordRecentNote = recordRecentNote;
 window.updateRecentNoteTitleIfExist = updateRecentNoteTitleIfExist;
 window.removeRecentNote = removeRecentNote;
 window.updateLeftMenuCurrentFolderPath = updateLeftMenuCurrentFolderPath;
+
+// ============================================================================
+// 🎯 [V4.6.0] Zen 환경설정 모달 제어 엔진
+// ============================================================================
+function openSettingsModal() {
+  const modal = document.getElementById('settings-modal');
+  if (!modal) return;
+
+  // 1. 현재 LocalStorage 설정값 동기화
+  const autoList = localStorage.getItem('zen_setting_auto_list') !== 'false';
+  const smartUndo = localStorage.getItem('zen_setting_smart_undo') !== 'false';
+  const cursorTarget = localStorage.getItem('zen_setting_cursor_target') || 'title';
+  const fontSize = localStorage.getItem('zen_setting_editor_font_size') || 'normal';
+  const recentCount = getMaxRecentNotesCount();
+
+  const autoListToggle = document.getElementById('setting-auto-list-toggle');
+  if (autoListToggle) autoListToggle.checked = autoList;
+
+  const smartUndoToggle = document.getElementById('setting-smart-undo-toggle');
+  if (smartUndoToggle) smartUndoToggle.checked = smartUndo;
+
+  updateSegmentedActive('setting-cursor-segmented', cursorTarget);
+  updateSegmentedActive('setting-fontsize-segmented', fontSize);
+  updateSegmentedActive('setting-recent-count-segmented', String(recentCount));
+  if (typeof updateExportLocationUI === 'function') updateExportLocationUI();
+
+  modal.style.display = 'flex';
+
+  // 🎯 [V4.7.4] 데스크톱/모바일 전 환경: 뒤로가기(popstate) 히스토리 연동
+  history.pushState({ modal: 'settings' }, '');
+}
+
+function closeSettingsModal(fromPopstate = false) {
+  const modal = document.getElementById('settings-modal');
+  if (modal && modal.style.display === 'flex') {
+    modal.style.display = 'none';
+    if (!fromPopstate && window.history.state && window.history.state.modal === 'settings') {
+      if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+      window.history.back();
+    }
+  }
+}
+
+function updateSegmentedActive(containerId, value) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const btns = container.querySelectorAll('.zen-segmented-btn');
+  btns.forEach(btn => {
+    if (btn.getAttribute('data-value') === value) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+function handleSettingAutoListChange(checked) {
+  localStorage.setItem('zen_setting_auto_list', checked ? 'true' : 'false');
+  if (typeof showToast === 'function') {
+    showToast(checked ? '자동 목록 변환이 활성화되었습니다.' : '자동 목록 변환이 꺼졌습니다. (- 텍스트 유지)');
+  }
+}
+
+function handleSettingSmartUndoChange(checked) {
+  localStorage.setItem('zen_setting_smart_undo', checked ? 'true' : 'false');
+  if (typeof showToast === 'function') {
+    showToast(checked ? '글머리기호 즉시 취소(Backspace)가 켜졌습니다.' : '글머리기호 즉시 취소가 꺼졌습니다.');
+  }
+}
+
+function setSettingCursorTarget(val) {
+  localStorage.setItem('zen_setting_cursor_target', val);
+  updateSegmentedActive('setting-cursor-segmented', val);
+  if (typeof showToast === 'function') {
+    showToast(val === 'body' ? '새 노트 작성 시 본문으로 바로 시작합니다.' : '새 노트 작성 시 제목부터 시작합니다.');
+  }
+}
+
+function setSettingEditorFontSize(val) {
+  localStorage.setItem('zen_setting_editor_font_size', val);
+  updateSegmentedActive('setting-fontsize-segmented', val);
+  applyEditorFontSize(val);
+  if (typeof showToast === 'function') {
+    showToast(val === 'large' ? '본문 글자 크기가 조금 더 커졌습니다.' : '본문 글자 크기가 표준으로 변경되었습니다.');
+  }
+}
+
+function applyEditorFontSize(val) {
+  const editorRoot = document.querySelector('#editor .ql-editor');
+  if (!editorRoot) return;
+  if (val === 'large') {
+    editorRoot.style.fontSize = '17.5px';
+    editorRoot.style.lineHeight = '1.75';
+  } else {
+    editorRoot.style.fontSize = '';
+    editorRoot.style.lineHeight = '';
+  }
+}
+
+// 초기화 시 폰트 설정 반영
+document.addEventListener('DOMContentLoaded', () => {
+  const fontSize = localStorage.getItem('zen_setting_editor_font_size') || 'normal';
+  if (fontSize === 'large') {
+    setTimeout(() => applyEditorFontSize('large'), 100);
+  }
+});
+
+window.openSettingsModal = openSettingsModal;
+window.closeSettingsModal = closeSettingsModal;
+window.handleSettingAutoListChange = handleSettingAutoListChange;
+window.handleSettingSmartUndoChange = handleSettingSmartUndoChange;
+window.setSettingCursorTarget = setSettingCursorTarget;
+window.setSettingEditorFontSize = setSettingEditorFontSize;
+window.setSettingRecentNotesCount = setSettingRecentNotesCount;
+window.applyEditorFontSize = applyEditorFontSize;
