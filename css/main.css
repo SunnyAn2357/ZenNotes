@@ -5142,6 +5142,9 @@ body:not(.light-theme) .zen-resize-handle::after {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
     pointer-events: auto;
     white-space: nowrap;
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     z-index: 3;
 }
 
@@ -5207,6 +5210,14 @@ body:not(.light-theme) .zen-img-tb-btn.active {
     background: var(--border);
     margin: 0 3px;
     flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .zen-img-tb-btn {
+        padding: 4px 6px;
+        font-size: 11px;
+        gap: 2px;
+    }
 }
 
 /* 5. Zen 전체화면 돋보기 뷰어 (Lightbox Modal) */

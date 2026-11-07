@@ -2764,6 +2764,15 @@ window.addEventListener('keydown', function (e) {
             <button type="button" class="zen-img-tb-btn" data-size="75%" title="너비 75%">75%</button>
             <button type="button" class="zen-img-tb-btn" data-size="100%" title="최대 너비 (100%)">100%</button>
             <div class="zen-img-tb-divider"></div>
+            <button type="button" class="zen-img-tb-btn" data-action="copy" title="이미지 복사 (Ctrl+C)">
+                <i class="fa-regular fa-copy"></i>
+                <span>복사</span>
+            </button>
+            <button type="button" class="zen-img-tb-btn" data-action="cut" title="이미지 잘라내기 (Ctrl+X)">
+                <i class="fa-solid fa-scissors"></i>
+                <span>잘라내기</span>
+            </button>
+            <div class="zen-img-tb-divider"></div>
             <button type="button" class="zen-img-tb-btn" data-action="zoom" title="원본 크게 확대 보기 (더블클릭)">
                 <i class="fa-solid fa-magnifying-glass-plus"></i>
                 <span>확대</span>
@@ -3017,6 +3026,106 @@ window.addEventListener('keydown', function (e) {
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
     }
 
+    // 🎯 [V4.9.10] 이미지/PDF 조각 클립보드 복사 함수 (Ctrl+C 및 툴바 복사 버튼)
+    async function copyActiveImage(showToastMsg = true) {
+        if (!activeResizingImg) return false;
+        const targetImg = activeResizingImg;
+        const src = targetImg.src;
+        if (!src) return false;
+
+        let copied = false;
+
+        // 1. 표준 Clipboard API 시도 (Blob 복사)
+        if (navigator.clipboard && window.isSecureContext !== false) {
+            try {
+                let blob = null;
+                if (src.startsWith('data:image/')) {
+                    const res = await fetch(src);
+                    blob = await res.blob();
+                } else if (src.startsWith('blob:')) {
+                    const res = await fetch(src);
+                    blob = await res.blob();
+                } else {
+                    // 일반 이미지/외부 URL: 캔버스를 통해 깨끗한 PNG Blob 추출
+                    blob = await new Promise((resolve, reject) => {
+                        const tempImg = new Image();
+                        tempImg.crossOrigin = 'anonymous';
+                        tempImg.onload = () => {
+                            try {
+                                const cvs = document.createElement('canvas');
+                                cvs.width = tempImg.naturalWidth || tempImg.width || 300;
+                                cvs.height = tempImg.naturalHeight || tempImg.height || 150;
+                                const ctx = cvs.getContext('2d');
+                                ctx.drawImage(tempImg, 0, 0);
+                                cvs.toBlob((b) => b ? resolve(b) : reject(new Error('Canvas null')), 'image/png');
+                            } catch (err) {
+                                reject(err);
+                            }
+                        };
+                        tempImg.onerror = reject;
+                        tempImg.src = src;
+                    });
+                }
+
+                if (blob && typeof ClipboardItem !== 'undefined') {
+                    const pngBlob = blob.type === 'image/png' ? blob : new Blob([await blob.arrayBuffer()], { type: 'image/png' });
+                    const clipData = {
+                        'image/png': pngBlob,
+                        'text/html': new Blob([targetImg.outerHTML], { type: 'text/html' })
+                    };
+                    await navigator.clipboard.write([new ClipboardItem(clipData)]);
+                    copied = true;
+                }
+            } catch (clipErr) {
+                console.warn('ClipboardItem blob write failed, trying fallback:', clipErr);
+            }
+        }
+
+        // 2. Fallback: 텍스트/HTML 복사 시도
+        if (!copied) {
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(src);
+                    copied = true;
+                }
+            } catch (textErr) {
+                console.warn('writeText fallback failed:', textErr);
+            }
+        }
+
+        // 3. Fallback: DOM Range + execCommand('copy')
+        if (!copied) {
+            try {
+                const range = document.createRange();
+                range.selectNode(targetImg);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                copied = document.execCommand('copy');
+                sel.removeAllRanges();
+            } catch (cmdErr) {
+                console.warn('execCommand copy fallback failed:', cmdErr);
+            }
+        }
+
+        if (showToastMsg) {
+            if (copied) {
+                if (typeof showToast === 'function') showToast("이미지가 복사되었습니다.");
+            } else {
+                if (typeof showToast === 'function') showToast("클립보드 복사에 실패했습니다.");
+            }
+        }
+        return copied;
+    }
+
+    // 🎯 [V4.9.10] 이미지/PDF 조각 잘라내기 함수 (Ctrl+X 및 툴바 잘라내기 버튼)
+    async function cutActiveImage() {
+        if (!activeResizingImg) return;
+        const success = await copyActiveImage(false);
+        deleteActiveImage();
+        if (typeof showToast === 'function') showToast("이미지를 잘라냈습니다.");
+    }
+
     // 3. 미니 툴바 버튼 클릭 이벤트
     toolbarEl.addEventListener('click', (e) => {
         e.preventDefault();
@@ -3029,6 +3138,10 @@ window.addEventListener('keydown', function (e) {
             if (!isNaN(pct)) {
                 applyImageWidthPercent(activeResizingImg, pct);
             }
+        } else if (btn.dataset.action === 'copy') {
+            copyActiveImage(true);
+        } else if (btn.dataset.action === 'cut') {
+            cutActiveImage();
         } else if (btn.dataset.action === 'zoom') {
             openZenImageLightbox(activeResizingImg.src);
         } else if (btn.dataset.action === 'delete') {
@@ -3170,11 +3283,52 @@ window.addEventListener('keydown', function (e) {
         hideZenImageResizer();
     }, { passive: true });
 
-    // 이미지가 선택된 상태에서 Delete / Backspace / Enter 키 입력 처리
+    // 🎯 [V4.9.10] 이미지가 선택된 상태에서 단축키 (Ctrl+C, Ctrl+X, Ctrl+Z, Ctrl+Y, Delete, Backspace, Enter) 처리
     window.addEventListener('keydown', (e) => {
         if (!activeResizingImg) return;
         const lbOpen = lightboxEl.classList.contains('is-open');
         if (lbOpen) return;
+
+        const isCtrl = e.ctrlKey || e.metaKey;
+        const keyLower = e.key ? e.key.toLowerCase() : '';
+
+        // [V4.9.10] 이미지 복사 (Ctrl+C / Cmd+C)
+        if (isCtrl && keyLower === 'c') {
+            e.preventDefault();
+            e.stopPropagation();
+            copyActiveImage(true);
+            return;
+        }
+
+        // [V4.9.10] 이미지 잘라내기 (Ctrl+X / Cmd+X)
+        if (isCtrl && keyLower === 'x') {
+            e.preventDefault();
+            e.stopPropagation();
+            cutActiveImage();
+            return;
+        }
+
+        // [V4.9.10] 실행 취소 (Ctrl+Z)
+        if (isCtrl && keyLower === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            hideZenImageResizer();
+            try {
+                quill.history.undo();
+            } catch (err) {}
+            return;
+        }
+
+        // [V4.9.10] 다시 실행 (Ctrl+Y 또는 Ctrl+Shift+Z)
+        if (isCtrl && (keyLower === 'y' || (keyLower === 'z' && e.shiftKey))) {
+            e.preventDefault();
+            e.stopPropagation();
+            hideZenImageResizer();
+            try {
+                quill.history.redo();
+            } catch (err) {}
+            return;
+        }
 
         if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
