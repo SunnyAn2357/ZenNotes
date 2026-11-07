@@ -1292,61 +1292,58 @@ window.setSettingRecentNotesCount = setSettingRecentNotesCount;
 window.applyEditorFontSize = applyEditorFontSize;
 
 // ============================================================================
-// 🎯 [V4.9.1] 화면 확대·축소 감지 및 '화면 확대·축소 초기화' 토스트 팝업 제어기
-// - 기본 배율(100%)이 아닐 경우 우측 상단 상태 컨테이너(.status-container) 왼쪽에 토스트 표출
-// - 클릭 시 즉시 배율 100% 원복 및 토스트 즉시 소멸
-// - 미조작 시 1분(60초)간 유지 후 자동 소멸
+// ============================================================================
+// 🎯 [V4.9.3] 화면 확대·축소 감지 및 '화면 확대·축소 초기화' 토스트 팝업 제어기
+// - 평상시 앱 상단 표시줄 하단, 노트 제목 높이(top: 32px), 가로 중앙 정렬(left: 50%)
+// - 화면 확대/축소에 영향받지 않는 견고한 Fixed 고정 위치
+// - C# WebView2 ZoomFactorChanged 네이티브 연동 및 브라우저/모바일 실시간 400ms 감지
+// - 클릭 시 즉시 100% 원복 및 즉시 소멸, 미조작 시 1분(60초) 유지 후 자동 소멸
 // ============================================================================
 let zoomResetToastTimer = null;
-let initialDevicePixelRatio = window.devicePixelRatio || 1.0;
+let baseDevicePixelRatio = window.devicePixelRatio || 1.0;
+let baseOuterInnerRatio = (window.outerWidth && window.innerWidth) ? (window.outerWidth / window.innerWidth) : 1.0;
 
 function isAppZoomed() {
   // 1. 모바일 / 브라우저 핀치줌 감지 (visualViewport)
   if (window.visualViewport && typeof window.visualViewport.scale === 'number') {
-    if (Math.abs(window.visualViewport.scale - 1.0) > 0.03) {
+    if (Math.abs(window.visualViewport.scale - 1.0) > 0.02) {
       return true;
     }
   }
-  // 2. 데스크톱 브라우저 / C# WebView2 배율 변경 감지 (devicePixelRatio)
-  if (initialDevicePixelRatio > 0) {
-    const curRatio = (window.devicePixelRatio || 1.0) / initialDevicePixelRatio;
-    if (Math.abs(curRatio - 1.0) > 0.05) {
+  // 2. 데스크톱 브라우저 / WebView2 배율 변경 감지 (devicePixelRatio)
+  if (baseDevicePixelRatio > 0) {
+    const curRatio = (window.devicePixelRatio || 1.0) / baseDevicePixelRatio;
+    if (Math.abs(curRatio - 1.0) > 0.02) {
+      return true;
+    }
+  }
+  // 3. 브라우저 창 확대/축소 비율 (outerWidth / innerWidth)
+  if (window.outerWidth && window.innerWidth && baseOuterInnerRatio > 0) {
+    const curWidthRatio = window.outerWidth / window.innerWidth;
+    if (Math.abs((curWidthRatio / baseOuterInnerRatio) - 1.0) > 0.03) {
       return true;
     }
   }
   return false;
 }
 
-function updateZoomToastPosition() {
-  const toast = document.getElementById("zen-zoom-reset-toast");
-  if (!toast || toast.style.display === "none") return;
-
-  const visibleStatusEl = Array.from(document.querySelectorAll(".status-container")).find(el => el.offsetParent !== null) || document.querySelector(".status-container");
-  if (visibleStatusEl) {
-    const rect = visibleStatusEl.getBoundingClientRect();
-    const rightDist = Math.max(10, Math.round(window.innerWidth - rect.left + 14));
-    const topDist = Math.round(rect.top + (rect.height / 2));
-    toast.style.right = rightDist + "px";
-    toast.style.top = topDist + "px";
-    toast.style.transform = "translateY(-50%)";
-  } else {
-    toast.style.right = (window.innerWidth <= 768 ? "120px" : "150px");
-    toast.style.top = (window.innerWidth <= 768 ? "38px" : "42px");
-    toast.style.transform = "translateY(-50%)";
-  }
-}
-
 function showZoomResetToast() {
   const toast = document.getElementById("zen-zoom-reset-toast");
   if (!toast) return;
 
-  updateZoomToastPosition();
+  // 인라인 스타일 제거하여 CSS 고정 중앙 좌표(top: 32px, left: 50%, transform: translateX(-50%)) 엄격 적용
+  toast.style.right = "";
+  toast.style.left = "";
+  toast.style.top = "";
+  toast.style.bottom = "";
+  toast.style.transform = "";
+
   toast.style.display = "inline-flex";
   requestAnimationFrame(() => {
     toast.classList.add("show");
   });
 
-  // 1분(60,000ms) 자동 소멸 타이머 리셋 및 재시작
+  // 1분(60,000ms) 자동 소멸 타이머
   if (zoomResetToastTimer) {
     clearTimeout(zoomResetToastTimer);
   }
@@ -1375,7 +1372,7 @@ function resetAppZoomScale() {
 
   let nativeHandled = false;
 
-  // 1. C# WebView2 데스크톱 환경 배율 즉시 원복
+  // 1. C# WebView2 데스크톱 환경 배율 즉시 1.0 원복
   if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
     try {
       window.chrome.webview.postMessage("resetZoom");
@@ -1402,7 +1399,7 @@ function resetAppZoomScale() {
     }
   }
 
-  setTimeout(checkAppZoomState, 300);
+  setTimeout(checkAppZoomState, 250);
 }
 
 function checkAppZoomState() {
@@ -1424,39 +1421,45 @@ function initZoomResetWatcher() {
 
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", checkAppZoomState, { passive: true });
-    window.visualViewport.addEventListener("scroll", updateZoomToastPosition, { passive: true });
+    window.visualViewport.addEventListener("scroll", checkAppZoomState, { passive: true });
   }
 
-  window.addEventListener("resize", () => {
-    checkAppZoomState();
-    updateZoomToastPosition();
-  }, { passive: true });
+  window.addEventListener("resize", checkAppZoomState, { passive: true });
 
   window.addEventListener("wheel", (e) => {
     if (e.ctrlKey) {
-      setTimeout(checkAppZoomState, 150);
+      setTimeout(checkAppZoomState, 80);
+      setTimeout(checkAppZoomState, 250);
     }
   }, { passive: true });
 
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
-      setTimeout(checkAppZoomState, 150);
+      setTimeout(checkAppZoomState, 80);
+      setTimeout(checkAppZoomState, 250);
     }
   });
 
   window.addEventListener("touchend", () => {
-    setTimeout(checkAppZoomState, 200);
+    setTimeout(checkAppZoomState, 150);
   }, { passive: true });
+
+  // 🎯 400ms 주기적 점검으로 어떤 방식의 확대/축소도 누락 없이 즉시 포착
+  setInterval(checkAppZoomState, 400);
 
   // 초기 로드 시점 기준 배율 갱신 및 상태 점검
   setTimeout(() => {
-    if (!initialDevicePixelRatio || initialDevicePixelRatio <= 0) {
-      initialDevicePixelRatio = window.devicePixelRatio || 1.0;
+    if (!baseDevicePixelRatio || baseDevicePixelRatio <= 0) {
+      baseDevicePixelRatio = window.devicePixelRatio || 1.0;
+    }
+    if (window.outerWidth && window.innerWidth) {
+      baseOuterInnerRatio = window.outerWidth / window.innerWidth;
     }
     checkAppZoomState();
-  }, 500);
+  }, 400);
 }
 
 window.addEventListener("DOMContentLoaded", initZoomResetWatcher);
-window.updateZoomToastPosition = updateZoomToastPosition;
+window.showZoomResetToast = showZoomResetToast;
+window.hideZoomResetToast = hideZoomResetToast;
 window.resetAppZoomScale = resetAppZoomScale;
