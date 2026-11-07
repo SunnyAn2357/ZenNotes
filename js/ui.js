@@ -1328,6 +1328,11 @@ function applyEditorZoom(newScale, silentToast = false) {
     }
   }
 
+  // 이미지 리사이저 오버레이 위치 실시간 동기화
+  if (typeof window.syncZenImageResizerPosition === "function") {
+    window.syncZenImageResizerPosition();
+  }
+
   // 100% 여부에 따른 토스트 제어
   if (Math.abs(editorZoomLevel - 1.0) > 0.02) {
     if (!silentToast) {

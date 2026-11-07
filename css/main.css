@@ -1804,7 +1804,8 @@ body.light-theme .ql-editor li[data-list="checked"] {
     height: auto;
     display: inline-block;
     vertical-align: top;
-    margin: 8px 6px 8px 0;
+    margin: 8px 0; /* 🎯 [V4.9.8] 우측 기본 여백(6px) 제거 -> 25% 4장, 75%+25% 2장, 50% 2장 한 줄 완벽 배치 */
+    box-sizing: border-box;
     border-radius: 0 !important; /* 🎯 [V4.4.7] 모서리 둥글림 제거 (원본 사각 유지) */
     -webkit-touch-callout: default !important;
     user-select: none !important;
@@ -4070,7 +4071,9 @@ body.light-theme {
         max-height: 238mm !important;
         height: auto !important;
         display: inline-block !important;
-        margin: 4px auto !important;
+        vertical-align: top !important;
+        margin: 4px 0 !important;
+        box-sizing: border-box !important;
         object-fit: contain !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
@@ -4079,6 +4082,7 @@ body.light-theme {
     .ql-editor img:not([style*="width"]):not([width]) {
         width: auto !important;
         display: block !important;
+        margin: 4px auto !important;
     }
 }
 

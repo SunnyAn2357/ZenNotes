@@ -232,9 +232,9 @@ const exportThemeCSS_Light = `
     .zen-export-wrapper blockquote { page-break-inside: avoid !important; break-inside: avoid !important; }
     .zen-export-wrapper li { page-break-inside: avoid !important; break-inside: avoid !important; }
 
-    /* 🎯 [V4.5.5 / V4.9.0] 제목 위의 상단 여백(약 19mm)과 이미지 하단 여백(약 20mm)이 대칭을 이루며, 사용자가 조절한 이미지 폭(width/style)도 존중 */
-    .zen-export-wrapper img { max-width: 100% !important; max-height: 238mm !important; height: auto !important; display: inline-block !important; vertical-align: top !important; margin: 4px auto !important; object-fit: contain !important; page-break-inside: avoid !important; break-inside: avoid !important; }
-    .zen-export-wrapper img:not([style*="width"]):not([width]) { width: auto !important; display: block !important; }
+    /* 🎯 [V4.5.5 / V4.9.8] 제목 위의 상단 여백(약 19mm)과 이미지 하단 여백(약 20mm)이 대칭을 이루며, 사용자가 조절한 이미지 폭(25% 4장, 75%+25% 2장 등)도 한 줄 배치 완벽 존중 */
+    .zen-export-wrapper img { max-width: 100% !important; max-height: 238mm !important; height: auto !important; display: inline-block !important; vertical-align: top !important; margin: 4px 0 !important; box-sizing: border-box !important; object-fit: contain !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+    .zen-export-wrapper img:not([style*="width"]):not([width]) { width: auto !important; display: block !important; margin: 4px auto !important; }
     .zen-export-wrapper p:has(> img:only-child) { margin: 2px 0 !important; }
 
     /* 🎯 [V4.5.3] 체크리스트(checked/unchecked) 및 인용구 리스트 PDF 렌더링 지원 */
@@ -427,7 +427,7 @@ const exportThemeCSS_Dual = `
 
     /* 링크 및 서식 */
     .ql-editor a { color: var(--zen-accent); text-decoration: underline; }
-    .ql-editor img { max-width: 100%; height: auto; border-radius: 0; display: inline-block; vertical-align: top; margin: 6px 6px 6px 0; }
+    .ql-editor img { max-width: 100%; height: auto; border-radius: 0; display: inline-block; vertical-align: top; margin: 6px 0; box-sizing: border-box; }
     .ql-editor .ql-strike-line-true { text-decoration: line-through; opacity: 0.6; }
 
     /* 코드 블록 공통 구조 */
@@ -502,8 +502,8 @@ const exportThemeCSS_Dual = `
         .zen-theme-switch-btn { display: none !important; }
         body.zen-export-body { background: #ffffff !important; color: #000000 !important; padding: 4px 2px 0 2px !important; }
         .ql-editor p, .ql-editor h1, .ql-editor h2, .ql-editor h3, .ql-editor li, .ql-editor blockquote, .ql-editor tr, .ql-editor img, .ql-editor .ql-code-block-container { page-break-inside: avoid !important; break-inside: avoid !important; }
-        .ql-editor img { max-width: 100% !important; max-height: 238mm !important; height: auto !important; display: inline-block !important; vertical-align: top !important; margin: 4px auto !important; object-fit: contain !important; }
-        .ql-editor img:not([style*="width"]):not([width]) { width: auto !important; display: block !important; }
+        .ql-editor img { max-width: 100% !important; max-height: 238mm !important; height: auto !important; display: inline-block !important; vertical-align: top !important; margin: 4px 0 !important; box-sizing: border-box !important; object-fit: contain !important; }
+        .ql-editor img:not([style*="width"]):not([width]) { width: auto !important; display: block !important; margin: 4px auto !important; }
         .ql-editor p, .ql-editor li { orphans: 3; widows: 3; }
         .ql-editor h1, .ql-editor h2, .ql-editor h3 { page-break-after: avoid !important; break-after: avoid !important; }
         .zen-doc-title { color: #000000 !important; }

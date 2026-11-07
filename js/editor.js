@@ -2816,13 +2816,18 @@ window.addEventListener('keydown', function (e) {
     const lbImg = lightboxEl.querySelector('#zen-lightbox-img');
     const lbZoomLabel = lightboxEl.querySelector('#zen-lb-zoom-reset');
 
-    // 에디터 본문 가용 내부 폭(패딩 제외) 계산 헬퍼
+    // 에디터 본문 가용 내부 폭(패딩 제외, 본문 CSS zoom 배율 완벽 반영) 계산 헬퍼
     function getEditorAvailableWidth() {
         if (!quill || !quill.root) return 600;
         const style = window.getComputedStyle(quill.root);
         const padLeft = parseFloat(style.paddingLeft) || 0;
         const padRight = parseFloat(style.paddingRight) || 0;
-        return Math.max(120, quill.root.clientWidth - padLeft - padRight);
+        const unzoomedAvail = Math.max(120, quill.root.clientWidth - padLeft - padRight);
+        const rootRect = quill.root.getBoundingClientRect();
+        const zoomFactor = (quill.root.offsetWidth > 0 && rootRect.width > 0)
+            ? (rootRect.width / quill.root.offsetWidth)
+            : 1;
+        return Math.max(120, unzoomedAvail * zoomFactor);
     }
 
     // 현재 이미지의 폭 퍼센트 추정
@@ -2957,6 +2962,7 @@ window.addEventListener('keydown', function (e) {
 
     window.showZenImageResizer = showZenImageResizer;
     window.hideZenImageResizer = hideZenImageResizer;
+    window.syncZenImageResizerPosition = requestSyncPosition;
 
     // 이미지 크기(퍼센트) 확정 적용 (Quill Blot & DOM 동시 반영 -> 저장/동기화/실행취소 100% 보장)
     function applyImageWidthPercent(img, pct) {
