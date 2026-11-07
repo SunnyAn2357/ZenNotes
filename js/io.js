@@ -2532,7 +2532,11 @@ function initGlobalFileDragAndDrop() {
 
     const files = Array.from(e.dataTransfer.files || []);
     if (files.length > 0) {
-      processDroppedFiles(files);
+      if (typeof promptFileDropAction === "function") {
+        promptFileDropAction(files);
+      } else {
+        processDroppedFiles(files);
+      }
     }
   }, true);
 
@@ -2548,6 +2552,289 @@ function initGlobalFileDragAndDrop() {
     dragCounter = 0;
     hideOverlay();
   });
+}
+
+// ============================================================================
+// 🎯 [V4.8.0] 파일 "여기에 삽입" & 드래그앤드롭 액션 모달 엔진
+// ============================================================================
+
+let pendingDroppedFiles = [];
+
+/**
+ * PDF 파일을 현재 편집 중인 노트의 커서 위치에 이미지로 삽입
+ * (1페이지: 즉시 삽입, 2페이지 이상: 페이지 선택 모달 표출 후 선택 페이지 삽입)
+ */
+async function insertPdfIntoCurrentMemo(file) {
+  if (!file) return;
+  showToast("PDF 문서를 분석하고 있습니다...");
+
+  try {
+    if (typeof pdfjsLib === "undefined") {
+      showToast("PDF 라이브러리를 불러올 수 없습니다.");
+      return;
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      new URL("./lib/pdfjs/", location.href).href + "pdf.worker.min.mjs";
+    const arrayBuf = await file.arrayBuffer();
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuf),
+      cMapUrl: new URL("./lib/pdfjs/", location.href).href + "cmaps/",
+      cMapPacked: true,
+      standardFontDataUrl: new URL("./lib/pdfjs/", location.href).href + "standard_fonts/"
+    });
+    const pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages;
+    const baseTitle = file.name.replace(/\.[^/.]+$/, "");
+
+    const range = (typeof quill !== "undefined" && quill.getSelection()) || {
+      index: typeof quill !== "undefined" ? Math.max(0, quill.getLength() - 1) : 0
+    };
+    let curIdx = range.index;
+
+    // 🎯 [Case A] 1페이지인 경우: 불필요한 질문 없이 즉시 변환하여 현재 위치 삽입
+    if (totalPages === 1) {
+      const base64Img = await renderPdfPageToBase64(pdf, 1);
+      quill.insertEmbed(curIdx, "image", base64Img, Quill.sources.USER);
+      quill.insertText(curIdx + 1, "\n", Quill.sources.USER);
+      quill.setSelection(curIdx + 2, Quill.sources.SILENT);
+      if (typeof executeSave === "function") await executeSave();
+      else if (typeof triggerAutoSave === "function") triggerAutoSave();
+      showToast("✅ PDF 1페이지를 현재 노트에 삽입했습니다!");
+      return;
+    }
+
+    // 🎯 [Case B] 2페이지 이상: 원하는 페이지만 골라 담을 수 있도록 페이지 선택 모달 표출
+    const modalRes = await showPdfPageRangeModal(pdf, totalPages, baseTitle);
+    if (modalRes.action === "cancel" || !modalRes.pages || modalRes.pages.length === 0) {
+      showToast("PDF 삽입이 취소되었습니다.");
+      return;
+    }
+
+    const selectedPages = modalRes.pages;
+    const countToLoad = selectedPages.length;
+
+    for (let idx = 0; idx < countToLoad; idx++) {
+      const pageNum = selectedPages[idx];
+      showToast(`PDF 변환 중... (${idx + 1} / ${countToLoad}장, p.${pageNum})`);
+      const base64Img = await renderPdfPageToBase64(pdf, pageNum);
+      quill.insertEmbed(curIdx, "image", base64Img, Quill.sources.USER);
+      quill.insertText(curIdx + 1, "\n", Quill.sources.USER);
+      curIdx += 2;
+    }
+    quill.setSelection(curIdx, Quill.sources.SILENT);
+    if (typeof executeSave === "function") await executeSave();
+    else if (typeof triggerAutoSave === "function") triggerAutoSave();
+    showToast(countToLoad === 1 ? "✅ 1개 페이지를 현재 노트에 삽입했습니다!" : `✅ 선택한 ${countToLoad}개 페이지를 현재 노트에 삽입했습니다!`);
+  } catch (err) {
+    console.error("PDF 삽입 실패:", err);
+    showToast(`PDF 삽입 중 오류가 발생했습니다: ${err.message || err}`);
+  }
+}
+
+/**
+ * 이미지 파일들을 현재 편집 중인 노트의 커서 위치에 순차적으로 삽입
+ */
+async function insertImagesIntoCurrentMemo(files) {
+  if (!files || files.length === 0) return;
+  const range = (typeof quill !== "undefined" && quill.getSelection()) || {
+    index: typeof quill !== "undefined" ? Math.max(0, quill.getLength() - 1) : 0
+  };
+  let curIdx = range.index;
+
+  for (const file of files) {
+    if (file.type.startsWith("image/")) {
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+      quill.insertEmbed(curIdx, "image", dataUrl, Quill.sources.USER);
+      quill.insertText(curIdx + 1, "\n", Quill.sources.USER);
+      curIdx += 2;
+    }
+  }
+  quill.setSelection(curIdx, Quill.sources.SILENT);
+  if (typeof triggerAutoSave === "function") triggerAutoSave();
+  showToast(files.length === 1 ? "✅ 이미지를 현재 노트에 삽입했습니다." : `✅ ${files.length}개의 이미지를 현재 노트에 삽입했습니다.`);
+}
+
+/**
+ * 텍스트/MD 파일 내용을 현재 커서 위치에 삽입
+ */
+async function insertTextFileIntoCurrentMemo(file) {
+  if (!file) return;
+  const content = await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.readAsText(file);
+  });
+  const range = (typeof quill !== "undefined" && quill.getSelection()) || {
+    index: typeof quill !== "undefined" ? Math.max(0, quill.getLength() - 1) : 0
+  };
+  quill.insertText(range.index, content, Quill.sources.USER);
+  quill.setSelection(range.index + content.length, Quill.sources.SILENT);
+  if (typeof triggerAutoSave === "function") triggerAutoSave();
+  showToast(`✅ ${file.name} 내용을 현재 노트에 삽입했습니다.`);
+}
+
+/**
+ * 임의의 단일/다중 파일을 현재 커서 위치에 삽입하는 디스패처
+ */
+async function insertFileIntoCurrentMemo(file) {
+  if (!file) return;
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (isPdf) {
+    await insertPdfIntoCurrentMemo(file);
+  } else if (file.type.startsWith("image/")) {
+    await insertImagesIntoCurrentMemo([file]);
+  } else {
+    await insertTextFileIntoCurrentMemo(file);
+  }
+}
+
+/**
+ * 드래그앤드롭 시 "새 노트 열기" vs "여기에 삽입" 선택 팝업 표출
+ */
+function promptFileDropAction(files) {
+  if (!files || files.length === 0) return;
+  pendingDroppedFiles = Array.from(files);
+
+  const modal = document.getElementById("file-drop-action-modal");
+  if (!modal) {
+    processDroppedFiles(pendingDroppedFiles);
+    return;
+  }
+
+  const iconEl = document.getElementById("drop-modal-icon");
+  const nameEl = document.getElementById("drop-modal-filename");
+  const insertBtn = document.getElementById("drop-action-insert-btn");
+
+  const firstFile = pendingDroppedFiles[0];
+  const isSingle = pendingDroppedFiles.length === 1;
+  const isPdf = isSingle && (firstFile.type === "application/pdf" || firstFile.name.toLowerCase().endsWith(".pdf"));
+  const isImage = isSingle && firstFile.type.startsWith("image/");
+
+  if (iconEl) {
+    if (isPdf) {
+      iconEl.className = "fa-solid fa-file-pdf";
+      iconEl.style.color = "#ef4444";
+    } else if (isImage) {
+      iconEl.className = "fa-solid fa-file-image";
+      iconEl.style.color = "#10b981";
+    } else {
+      iconEl.className = "fa-solid fa-file-arrow-up";
+      iconEl.style.color = "var(--accent, #6366f1)";
+    }
+  }
+
+  const formatSize = (bytes) => {
+    if (!bytes || bytes < 1024) return (bytes || 0) + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  if (nameEl) {
+    if (isSingle) {
+      nameEl.textContent = `${firstFile.name} (${formatSize(firstFile.size)})`;
+    } else {
+      const totalBytes = pendingDroppedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+      nameEl.textContent = `${firstFile.name} 외 ${pendingDroppedFiles.length - 1}개 (${formatSize(totalBytes)})`;
+    }
+  }
+
+  modal.style.display = "flex";
+  if (window.innerWidth <= 768) {
+    history.pushState({ modal: "file-drop-action" }, "");
+  }
+
+  setTimeout(() => {
+    if (insertBtn) insertBtn.focus();
+  }, 50);
+}
+
+/**
+ * 파일 드롭 액션 모달 닫기
+ */
+function closeFileDropActionModal() {
+  const modal = document.getElementById("file-drop-action-modal");
+  if (modal) modal.style.display = "none";
+  pendingDroppedFiles = [];
+}
+
+/**
+ * 팝업에서 "여기에 삽입" 선택 시 실행 (Enter)
+ */
+async function handleDropActionInsert() {
+  const files = [...pendingDroppedFiles];
+  closeFileDropActionModal();
+  if (files.length === 0) return;
+
+  // 단일 PDF
+  if (files.length === 1 && (files[0].type === "application/pdf" || files[0].name.toLowerCase().endsWith(".pdf"))) {
+    await insertPdfIntoCurrentMemo(files[0]);
+    return;
+  }
+
+  // 모두 이미지인 경우
+  const allImages = files.every((f) => f.type.startsWith("image/"));
+  if (allImages) {
+    await insertImagesIntoCurrentMemo(files);
+    return;
+  }
+
+  // 복합 또는 텍스트 파일
+  for (const file of files) {
+    await insertFileIntoCurrentMemo(file);
+  }
+}
+
+/**
+ * 팝업에서 "새 노트 열기" 선택 시 실행
+ */
+function handleDropActionNewNote() {
+  const files = [...pendingDroppedFiles];
+  closeFileDropActionModal();
+  if (files.length > 0) {
+    processDroppedFiles(files);
+  }
+}
+
+// 🎯 키보드(Enter: 여기에 삽입, ESC: 취소) 및 모달 클릭 바인딩
+window.addEventListener("keydown", (e) => {
+  const modal = document.getElementById("file-drop-action-modal");
+  if (modal && modal.style.display === "flex") {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      handleDropActionInsert();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFileDropActionModal();
+    }
+  }
+}, true); // 캡처링 단계에서 인터셉트하여 에디터 엔터 줄바꿈 차단
+
+// 모달 버튼 클릭 바인딩 초기화
+function initFileDropActionModalEvents() {
+  const modal = document.getElementById("file-drop-action-modal");
+  if (!modal) return;
+  const insertBtn = document.getElementById("drop-action-insert-btn");
+  const newNoteBtn = document.getElementById("drop-action-newnote-btn");
+  const cancelBtn = document.getElementById("drop-action-cancel-btn");
+
+  if (insertBtn) insertBtn.onclick = handleDropActionInsert;
+  if (newNoteBtn) newNoteBtn.onclick = handleDropActionNewNote;
+  if (cancelBtn) cancelBtn.onclick = closeFileDropActionModal;
+  modal.onclick = (e) => {
+    if (e.target === modal) closeFileDropActionModal();
+  };
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initFileDropActionModalEvents);
+} else {
+  initFileDropActionModalEvents();
 }
 
 // DOM 로드 완료 시 전역 드래그 앤 드롭 바인딩

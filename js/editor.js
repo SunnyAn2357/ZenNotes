@@ -491,14 +491,29 @@ const quill = new Quill('#editor', {
                 },
                 'video': customVideoHandler,
 
-                // 🎯 아래 3가지는 기획자님의 기존 코드 그대로 유지! (건드리지 마세요)
+                // 🎯 [V4.8.0] 이미지/PDF 확장 삽입 핸들러 (현재 노트 '삽입 전용')
                 'image': function () {
                     const input = document.createElement('input');
                     input.setAttribute('type', 'file');
-                    input.setAttribute('accept', 'image/*');
+                    input.setAttribute('accept', 'image/*,application/pdf,.pdf');
                     input.click();
                     input.onchange = () => {
-                        if (input.files[0]) handleImageFiles([input.files[0]]);
+                        const file = input.files[0];
+                        if (!file) return;
+                        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                        if (isPdf) {
+                            if (typeof insertPdfIntoCurrentMemo === 'function') {
+                                insertPdfIntoCurrentMemo(file);
+                            } else if (typeof handleFileImport === 'function') {
+                                handleFileImport({ target: { files: [file], value: '' } });
+                            }
+                        } else if (file.type.startsWith('image/')) {
+                            handleImageFiles([file]);
+                        } else {
+                            if (typeof insertFileIntoCurrentMemo === 'function') {
+                                insertFileIntoCurrentMemo(file);
+                            }
+                        }
                     };
                 },
 
@@ -652,7 +667,7 @@ function initToolbarTooltips() {
 
         // 미디어 / 링크
         '.ql-toolbar button.ql-link': '하이퍼링크 삽입 (Ctrl+K)',
-        '.ql-toolbar button.ql-image': '이미지 삽입 (Ctrl+V 붙여넣기 지원)',
+        '.ql-toolbar button.ql-image': 'PDF/이미지 삽입 (Ctrl+V 붙여넣기 지원)',
         '.ql-toolbar button.ql-video': '동영상 링크 삽입',
 
         // 유틸리티
@@ -1137,7 +1152,7 @@ const handleImageFiles = (files) => {
     });
 };
 
-// [통합 수정본] 이미지 파일 드래그 앤 드롭 지원 및 중복 삽입 완벽 차단
+// 🎯 [V4.8.0] 파일 드래그 앤 드롭 지원 및 "새 노트 열기 vs 여기에 삽입" 모달 연동
 ['dragover', 'drop'].forEach(ev => {
     quill.root.addEventListener(ev, (e) => {
         // 브라우저 기본 동작 차단
@@ -1147,7 +1162,12 @@ const handleImageFiles = (files) => {
         e.stopImmediatePropagation();
 
         if (ev === 'drop' && e.dataTransfer && e.dataTransfer.files.length > 0) {
-            handleImageFiles(e.dataTransfer.files);
+            const files = Array.from(e.dataTransfer.files);
+            if (typeof promptFileDropAction === 'function') {
+                promptFileDropAction(files);
+            } else if (typeof handleImageFiles === 'function') {
+                handleImageFiles(files);
+            }
         }
     }, true); // 👈 true(캡처링 단계)를 추가하여 Quill 엔진보다 먼저 이벤트를 낚아챕니다.
 });
@@ -1379,6 +1399,14 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        // 🎯 [V4.8.0] 외부 파일 드래그앤드롭 선택 모달 닫기
+        const dropModal = document.getElementById("file-drop-action-modal");
+        if (dropModal && dropModal.style.display === "flex") {
+            if (typeof closeFileDropActionModal === "function") closeFileDropActionModal();
+            else dropModal.style.display = "none";
+            return;
+        }
+
         const pdfModal = document.getElementById("pdf-import-modal");
         if (pdfModal && pdfModal.style.display === "flex") {
             const cancelBtn = document.getElementById("pdf-modal-cancel-btn");
@@ -1541,6 +1569,14 @@ window.addEventListener("popstate", (e) => {
     const specModal = document.getElementById("special-char-modal");
     if (specModal && (specModal.style.display === "flex" || specModal.classList.contains("is-open"))) {
         closeSpecialCharModal(true);
+        return;
+    }
+
+    // 🎯 [V4.8.0] 외부 파일 드래그앤드롭 선택 모달 닫기
+    const dropModal = document.getElementById("file-drop-action-modal");
+    if (dropModal && dropModal.style.display === "flex") {
+        if (typeof closeFileDropActionModal === "function") closeFileDropActionModal();
+        else dropModal.style.display = "none";
         return;
     }
 
