@@ -17,6 +17,32 @@ DividerBlot.blotName = 'divider';
 DividerBlot.tagName = 'hr';
 Quill.register(DividerBlot);
 
+// 🎯 [V4.9.0] 이미지 & PDF 조각 크기 조절(width, height, style, data-size) 영구 보존 및 Ctrl+Z 히스토리 호환 Blot
+const BaseImage = Quill.import('formats/image');
+const IMAGE_FORMAT_ATTRIBUTES = ['alt', 'height', 'width', 'style', 'data-size'];
+class CustomImage extends BaseImage {
+    static formats(domNode) {
+        return IMAGE_FORMAT_ATTRIBUTES.reduce((formats, attribute) => {
+            if (domNode.hasAttribute(attribute)) {
+                formats[attribute] = domNode.getAttribute(attribute);
+            }
+            return formats;
+        }, {});
+    }
+    format(name, value) {
+        if (IMAGE_FORMAT_ATTRIBUTES.indexOf(name) > -1) {
+            if (value) {
+                this.domNode.setAttribute(name, value);
+            } else {
+                this.domNode.removeAttribute(name);
+            }
+        } else {
+            super.format(name, value);
+        }
+    }
+}
+Quill.register(CustomImage, true);
+
 // 🎯 [V3.3.1 핵심 개선] 셀 내부 줄바꿈 전용 SoftBreak Blot 등록 (length=1로 영속성 보장)
 const Embed = Quill.import('blots/embed');
 class SoftBreakBlot extends Embed {
@@ -1178,13 +1204,15 @@ const handleImageFiles = (files) => {
 
 // 1. 빈 공간 클릭 시 에디터 포커스 (모든 모달/오버레이 및 파일 관리창 열려있을 땐 철통 방어)
 document.querySelector('.col-center').addEventListener('click', e => {
-    // 🎯 [완벽 방어] 모달(.fm-modal-overlay, .fm-modal, .special-char-overlay), 파일관리창, 툴팁, 헤더, 툴바, 에디터 내부 클릭 시 포커스 탈취 절대 차단!
+    // 🎯 [완벽 방어] 모달(.fm-modal-overlay, .fm-modal, .special-char-overlay), 파일관리창, 툴팁, 리사이저, 라이트박스, 헤더, 툴바, 에디터 내부 클릭 시 포커스 탈취 절대 차단!
     if (e.target.closest('.fm-modal-overlay') || 
         e.target.closest('.fm-modal') || 
         e.target.closest('.special-char-overlay') || 
         e.target.closest('#fm-security-modal') || 
         e.target.closest('#fm-move-modal') || 
         e.target.closest('#reset-confirm-modal') || 
+        e.target.closest('#zen-image-resizer') || 
+        e.target.closest('#zen-image-lightbox') || 
         e.target.closest('.editor-header') || 
         e.target.closest('.ql-toolbar') || 
         e.target.closest('.ql-editor') || 
@@ -1372,6 +1400,20 @@ if (tbEl) {
            ========================================== */
 document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+        // 🎯 [V4.9.0] 전체화면 이미지 돋보기 뷰어(Lightbox) 닫기 (최우선)
+        const lbModal = document.getElementById("zen-image-lightbox");
+        if (lbModal && lbModal.classList.contains("is-open")) {
+            if (typeof closeZenImageLightbox === "function") closeZenImageLightbox();
+            return;
+        }
+
+        // 🎯 [V4.9.0] 이미지 크기 조절 핸들(Resizer) 선택 해제
+        const imgResizer = document.getElementById("zen-image-resizer");
+        if (imgResizer && imgResizer.style.display === "block") {
+            if (typeof hideZenImageResizer === "function") hideZenImageResizer();
+            return;
+        }
+
         // [0순위] 환경설정 모달 닫기
         const settingsModal = document.getElementById("settings-modal");
         if (settingsModal && settingsModal.style.display === "flex") {
@@ -1541,6 +1583,21 @@ window.addEventListener("popstate", (e) => {
     // 2. 🚀 [다중 칸 전용 스위치 방어막 추가]
     if (typeof isProgrammaticBack !== 'undefined' && isProgrammaticBack) {
         isProgrammaticBack = false;
+        return;
+    }
+
+    // 🎯 [V4.9.0] 전체화면 이미지 돋보기 뷰어(Lightbox) 닫기
+    const lbModal = document.getElementById("zen-image-lightbox");
+    if (lbModal && lbModal.classList.contains("is-open")) {
+        if (typeof closeZenImageLightbox === "function") closeZenImageLightbox(true);
+        return;
+    }
+
+    // 🎯 [V4.9.0] 모바일에서 이미지 리사이저가 켜져 있을 때 뒤로가기 시 리사이저만 안전하게 닫기
+    const imgResizer = document.getElementById("zen-image-resizer");
+    if (imgResizer && imgResizer.style.display === "block") {
+        if (typeof hideZenImageResizer === "function") hideZenImageResizer();
+        history.pushState({ page: "main" }, "");
         return;
     }
 
@@ -2683,3 +2740,636 @@ window.addEventListener('keydown', function (e) {
         }
     }
 }, true);
+
+// ============================================================================
+// 🎯 [V4.9.0] Zen 스타일 이미지 & PDF 조각 크기 조절(Resizer) + 전체화면 돋보기 뷰어(Lightbox)
+// ============================================================================
+(function initZenImageResizerAndLightbox() {
+    let activeResizingImg = null;
+    let isDraggingResize = false;
+    let dragDir = 'se';
+    let dragStartX = 0;
+    let dragStartWidth = 0;
+    let dragEditorMaxWidth = 0;
+    let dragCurrentPct = 100;
+    let rafId = null;
+
+    // 1. 리사이저 오버레이 DOM 생성 (body 직속 부착 -> 에디터 본문 HTML 오염 0%)
+    const resizerEl = document.createElement('div');
+    resizerEl.id = 'zen-image-resizer';
+    resizerEl.innerHTML = `
+        <div class="zen-img-toolbar" id="zen-img-toolbar">
+            <button type="button" class="zen-img-tb-btn" data-size="25%" title="너비 25%">25%</button>
+            <button type="button" class="zen-img-tb-btn" data-size="50%" title="너비 50%">50%</button>
+            <button type="button" class="zen-img-tb-btn" data-size="75%" title="너비 75%">75%</button>
+            <button type="button" class="zen-img-tb-btn" data-size="100%" title="최대 너비 (100%)">100%</button>
+            <div class="zen-img-tb-divider"></div>
+            <button type="button" class="zen-img-tb-btn" data-action="zoom" title="원본 크게 확대 보기 (더블클릭)">
+                <i class="fa-solid fa-magnifying-glass-plus"></i>
+                <span>확대</span>
+            </button>
+            <button type="button" class="zen-img-tb-btn danger" data-action="delete" title="이미지 삭제 (Delete / Backspace)">
+                <i class="fa-regular fa-trash-can"></i>
+            </button>
+        </div>
+        <div class="zen-resize-badge" id="zen-resize-badge">100%</div>
+        <div class="zen-resize-handle nw" data-dir="nw"></div>
+        <div class="zen-resize-handle ne" data-dir="ne"></div>
+        <div class="zen-resize-handle sw" data-dir="sw"></div>
+        <div class="zen-resize-handle se" data-dir="se"></div>
+    `;
+    document.body.appendChild(resizerEl);
+
+    const toolbarEl = resizerEl.querySelector('#zen-img-toolbar');
+    const badgeEl = resizerEl.querySelector('#zen-resize-badge');
+
+    // 2. 전체화면 돋보기 뷰어 (Lightbox) DOM 생성
+    const lightboxEl = document.createElement('div');
+    lightboxEl.id = 'zen-image-lightbox';
+    lightboxEl.innerHTML = `
+        <button type="button" class="zen-lightbox-top-close" id="zen-lb-top-close" title="닫기 (ESC)">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="zen-lightbox-stage" id="zen-lightbox-stage">
+            <img id="zen-lightbox-img" src="" alt="확대 이미지" draggable="false" />
+        </div>
+        <div class="zen-lightbox-controls" onclick="event.stopPropagation()">
+            <button type="button" class="zen-lb-btn" id="zen-lb-zoom-out" title="축소 (-)">
+                <i class="fa-solid fa-minus"></i>
+            </button>
+            <button type="button" class="zen-lb-btn zen-lb-zoom-label" id="zen-lb-zoom-reset" title="100% 원본 비율로 초기화">
+                100%
+            </button>
+            <button type="button" class="zen-lb-btn" id="zen-lb-zoom-in" title="확대 (+)">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+            <div class="zen-img-tb-divider"></div>
+            <button type="button" class="zen-lb-btn" id="zen-lb-close-btn" title="닫기 (ESC)">
+                <i class="fa-solid fa-xmark"></i>
+                <span>닫기</span>
+            </button>
+        </div>
+    `;
+    document.body.appendChild(lightboxEl);
+
+    const lbStage = lightboxEl.querySelector('#zen-lightbox-stage');
+    const lbImg = lightboxEl.querySelector('#zen-lightbox-img');
+    const lbZoomLabel = lightboxEl.querySelector('#zen-lb-zoom-reset');
+
+    // 에디터 본문 가용 내부 폭(패딩 제외) 계산 헬퍼
+    function getEditorAvailableWidth() {
+        if (!quill || !quill.root) return 600;
+        const style = window.getComputedStyle(quill.root);
+        const padLeft = parseFloat(style.paddingLeft) || 0;
+        const padRight = parseFloat(style.paddingRight) || 0;
+        return Math.max(120, quill.root.clientWidth - padLeft - padRight);
+    }
+
+    // 현재 이미지의 폭 퍼센트 추정
+    function getCurrentImgPercent(img) {
+        if (!img) return 100;
+        const dataSize = img.getAttribute('data-size');
+        if (dataSize && dataSize.endsWith('%')) {
+            const parsed = parseInt(dataSize, 10);
+            if (!isNaN(parsed)) return parsed;
+        }
+        const inlineWidth = img.style && img.style.width;
+        if (inlineWidth && inlineWidth.endsWith('%')) {
+            const parsed = parseInt(inlineWidth, 10);
+            if (!isNaN(parsed)) return parsed;
+        }
+        const availW = getEditorAvailableWidth();
+        const rectW = img.getBoundingClientRect().width;
+        if (availW > 0 && rectW > 0) {
+            return Math.min(100, Math.max(10, Math.round((rectW / availW) * 100)));
+        }
+        return 100;
+    }
+
+    // 미니 툴바 버튼 활성 상태 갱신
+    function updateToolbarActiveButtons(pct) {
+        const sizeStr = `${pct}%`;
+        toolbarEl.querySelectorAll('.zen-img-tb-btn[data-size]').forEach(btn => {
+            if (btn.dataset.size === sizeStr) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    // 리사이저 위치 및 클리핑 동기화
+    function syncZenImageResizerPosition() {
+        if (!activeResizingImg || !activeResizingImg.isConnected || !quill.root.contains(activeResizingImg)) {
+            hideZenImageResizer();
+            return;
+        }
+
+        const fmPane = document.getElementById('file-manager-pane');
+        if (fmPane && fmPane.style.display === 'flex') {
+            hideZenImageResizer();
+            return;
+        }
+
+        const imgRect = activeResizingImg.getBoundingClientRect();
+        const editorContainer = document.querySelector('#editor') || quill.root;
+        const boundsRect = editorContainer.getBoundingClientRect();
+
+        // 이미지가 크기가 0이거나 에디터 가시 영역 밖으로 완전히 벗어난 경우 숨김 (허공 둥둥 떠다님 원천 차단!)
+        if (
+            imgRect.width <= 0 ||
+            imgRect.height <= 0 ||
+            imgRect.bottom < boundsRect.top + 8 ||
+            imgRect.top > boundsRect.bottom - 8
+        ) {
+            resizerEl.style.visibility = 'hidden';
+            resizerEl.style.opacity = '0';
+            return;
+        }
+
+        resizerEl.style.visibility = 'visible';
+        resizerEl.style.opacity = '1';
+        resizerEl.style.top = `${imgRect.top}px`;
+        resizerEl.style.left = `${imgRect.left}px`;
+        resizerEl.style.width = `${imgRect.width}px`;
+        resizerEl.style.height = `${imgRect.height}px`;
+
+        // 미니 툴바 상/하단 스마트 배치 (상단 서식 툴바와 겹치지 않도록 자동 회피)
+        toolbarEl.classList.remove('pos-bottom', 'pos-inside-top');
+        const spaceAbove = imgRect.top - boundsRect.top;
+        const spaceBelow = boundsRect.bottom - imgRect.bottom;
+
+        if (spaceAbove < 48) {
+            if (spaceBelow >= 48) {
+                toolbarEl.classList.add('pos-bottom');
+            } else {
+                toolbarEl.classList.add('pos-inside-top');
+            }
+        }
+
+        // 미니 툴바가 화면 좌우 밖으로 잘리지 않도록 X축 오프셋 자동 보정
+        toolbarEl.style.left = '50%';
+        toolbarEl.style.transform = 'translateX(-50%)';
+        const tbRect = toolbarEl.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        if (tbRect.left < 8) {
+            const shiftRight = 8 - tbRect.left;
+            toolbarEl.style.transform = `translateX(calc(-50% + ${shiftRight}px))`;
+        } else if (tbRect.right > viewportW - 8) {
+            const shiftLeft = tbRect.right - (viewportW - 8);
+            toolbarEl.style.transform = `translateX(calc(-50% - ${shiftLeft}px))`;
+        }
+    }
+
+    function requestSyncPosition() {
+        if (!activeResizingImg) return;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(syncZenImageResizerPosition);
+    }
+
+    // 이미지 선택 및 리사이저 표시
+    function showZenImageResizer(img) {
+        if (!img) return;
+        activeResizingImg = img;
+        resizerEl.style.display = 'block';
+
+        // 모바일에서 이미지 터치 시 가상 키보드가 올라와 화면을 가리지 않도록 포커스 완화
+        if (window.innerWidth <= 768) {
+            if (quill && typeof quill.blur === 'function') quill.blur();
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+        }
+
+        const pct = getCurrentImgPercent(img);
+        updateToolbarActiveButtons(pct);
+        badgeEl.textContent = `${pct}%`;
+        syncZenImageResizerPosition();
+    }
+
+    // 리사이저 숨기기
+    function hideZenImageResizer() {
+        activeResizingImg = null;
+        isDraggingResize = false;
+        resizerEl.classList.remove('is-dragging');
+        resizerEl.style.display = 'none';
+    }
+
+    window.showZenImageResizer = showZenImageResizer;
+    window.hideZenImageResizer = hideZenImageResizer;
+
+    // 이미지 크기(퍼센트) 확정 적용 (Quill Blot & DOM 동시 반영 -> 저장/동기화/실행취소 100% 보장)
+    function applyImageWidthPercent(img, pct) {
+        if (!img) return;
+        const clamped = Math.max(10, Math.min(100, Math.round(pct)));
+        const styleVal = `width: ${clamped}%; height: auto;`;
+        const sizeVal = `${clamped}%`;
+
+        img.setAttribute('style', styleVal);
+        img.setAttribute('data-size', sizeVal);
+        img.removeAttribute('width');
+        img.removeAttribute('height');
+
+        try {
+            const blot = Quill.find(img);
+            if (blot && typeof blot.format === 'function') {
+                blot.format('style', styleVal);
+                blot.format('data-size', sizeVal);
+                blot.format('width', false);
+                blot.format('height', false);
+            }
+        } catch (err) {
+            console.warn('Image blot format sync:', err);
+        }
+
+        updateToolbarActiveButtons(clamped);
+        badgeEl.textContent = sizeVal;
+        syncZenImageResizerPosition();
+        setTimeout(syncZenImageResizerPosition, 20);
+
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
+    }
+
+    // 선택된 이미지 삭제 헬퍼
+    function deleteActiveImage() {
+        if (!activeResizingImg) return;
+        const targetImg = activeResizingImg;
+        hideZenImageResizer();
+
+        try {
+            const blot = Quill.find(targetImg);
+            if (blot) {
+                const idx = quill.getIndex(blot);
+                quill.deleteText(idx, 1, Quill.sources.USER);
+                quill.setSelection(idx, 0, Quill.sources.SILENT);
+            } else {
+                targetImg.remove();
+            }
+        } catch (e) {
+            targetImg.remove();
+        }
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
+    }
+
+    // 3. 미니 툴바 버튼 클릭 이벤트
+    toolbarEl.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const btn = e.target.closest('.zen-img-tb-btn');
+        if (!btn || !activeResizingImg) return;
+
+        if (btn.dataset.size) {
+            const pct = parseInt(btn.dataset.size, 10);
+            if (!isNaN(pct)) {
+                applyImageWidthPercent(activeResizingImg, pct);
+            }
+        } else if (btn.dataset.action === 'zoom') {
+            openZenImageLightbox(activeResizingImg.src);
+        } else if (btn.dataset.action === 'delete') {
+            deleteActiveImage();
+        }
+    });
+
+    ['mousedown', 'touchstart'].forEach(evt => {
+        resizerEl.addEventListener(evt, (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+    });
+
+    // 4. 모서리 4개 핸들 드래그 리사이징 (마우스 & 모바일 터치 통합 지원)
+    function startResizeDrag(clientX, dir, e) {
+        if (!activeResizingImg) return;
+        if (e && e.cancelable) e.preventDefault();
+        isDraggingResize = true;
+        dragDir = dir || 'se';
+        dragStartX = clientX;
+        dragStartWidth = activeResizingImg.getBoundingClientRect().width;
+        dragEditorMaxWidth = getEditorAvailableWidth();
+        dragCurrentPct = getCurrentImgPercent(activeResizingImg);
+
+        resizerEl.classList.add('is-dragging');
+        badgeEl.textContent = `${dragCurrentPct}% · ${Math.round(dragStartWidth)}px`;
+    }
+
+    function moveResizeDrag(clientX) {
+        if (!isDraggingResize || !activeResizingImg) return;
+        const dx = clientX - dragStartX;
+        const deltaW = (dragDir === 'nw' || dragDir === 'sw') ? -dx : dx;
+        const minPx = Math.max(48, Math.round(dragEditorMaxWidth * 0.1));
+        const newWidthPx = Math.max(minPx, Math.min(dragEditorMaxWidth, dragStartWidth + deltaW));
+
+        let pct = Math.round((newWidthPx / dragEditorMaxWidth) * 100);
+        pct = Math.max(10, Math.min(100, pct));
+
+        // 25%, 50%, 75%, 100% 근처(±2%)에서 부드러운 마그네틱 스냅
+        const snapTargets = [25, 50, 75, 100];
+        for (const snap of snapTargets) {
+            if (Math.abs(pct - snap) <= 2) {
+                pct = snap;
+                break;
+            }
+        }
+
+        dragCurrentPct = pct;
+        activeResizingImg.style.width = `${pct}%`;
+        activeResizingImg.style.height = 'auto';
+        activeResizingImg.setAttribute('data-size', `${pct}%`);
+
+        const currentRenderedW = Math.round(activeResizingImg.getBoundingClientRect().width);
+        badgeEl.textContent = `${pct}% · ${currentRenderedW}px`;
+        updateToolbarActiveButtons(pct);
+        syncZenImageResizerPosition();
+    }
+
+    function endResizeDrag() {
+        if (!isDraggingResize) return;
+        isDraggingResize = false;
+        resizerEl.classList.remove('is-dragging');
+        if (activeResizingImg) {
+            applyImageWidthPercent(activeResizingImg, dragCurrentPct);
+        }
+    }
+
+    resizerEl.querySelectorAll('.zen-resize-handle').forEach(handle => {
+        handle.addEventListener('mousedown', (e) => {
+            startResizeDrag(e.clientX, handle.dataset.dir, e);
+        });
+        handle.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                startResizeDrag(e.touches[0].clientX, handle.dataset.dir, e);
+            }
+        }, { passive: false });
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isDraggingResize) {
+            e.preventDefault();
+            moveResizeDrag(e.clientX);
+        }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+        if (isDraggingResize && e.touches.length === 1) {
+            if (e.cancelable) e.preventDefault();
+            moveResizeDrag(e.touches[0].clientX);
+        }
+    }, { passive: false });
+
+    window.addEventListener('mouseup', endResizeDrag);
+    window.addEventListener('touchend', endResizeDrag);
+
+    // 5. 에디터 내 이미지 클릭 / 터치 / 더블클릭 감지
+    quill.root.addEventListener('click', (e) => {
+        const img = e.target.closest('img');
+        if (img && quill.root.contains(img)) {
+            e.stopPropagation();
+            showZenImageResizer(img);
+        } else if (activeResizingImg) {
+            hideZenImageResizer();
+        }
+    });
+
+    // PC에서 이미지 더블클릭 시 즉시 전체화면 돋보기 뷰어 오픈
+    quill.root.addEventListener('dblclick', (e) => {
+        const img = e.target.closest('img');
+        if (img && quill.root.contains(img) && img.src) {
+            e.preventDefault();
+            e.stopPropagation();
+            openZenImageLightbox(img.src);
+        }
+    });
+
+    // 에디터 바깥 클릭 시 리사이저 해제
+    document.addEventListener('mousedown', (e) => {
+        if (!activeResizingImg) return;
+        if (
+            e.target === activeResizingImg ||
+            e.target.closest('#zen-image-resizer') ||
+            e.target.closest('#zen-image-lightbox')
+        ) {
+            return;
+        }
+        hideZenImageResizer();
+    });
+
+    document.addEventListener('touchstart', (e) => {
+        if (!activeResizingImg) return;
+        if (
+            e.target === activeResizingImg ||
+            e.target.closest('#zen-image-resizer') ||
+            e.target.closest('#zen-image-lightbox')
+        ) {
+            return;
+        }
+        hideZenImageResizer();
+    }, { passive: true });
+
+    // 이미지가 선택된 상태에서 Delete / Backspace / Enter 키 입력 처리
+    window.addEventListener('keydown', (e) => {
+        if (!activeResizingImg) return;
+        const lbOpen = lightboxEl.classList.contains('is-open');
+        if (lbOpen) return;
+
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            e.stopPropagation();
+            deleteActiveImage();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            const targetImg = activeResizingImg;
+            hideZenImageResizer();
+            try {
+                const blot = Quill.find(targetImg);
+                if (blot) {
+                    const idx = quill.getIndex(blot);
+                    quill.focus();
+                    quill.setSelection(idx + 1, 0, Quill.sources.USER);
+                }
+            } catch (err) {}
+        }
+    }, true);
+
+    // 스크롤 및 창 크기 변경 시 리사이저 위치 실시간 추적
+    quill.root.addEventListener('scroll', requestSyncPosition, { passive: true });
+    const colCenterEl = document.querySelector('.col-center');
+    if (colCenterEl) colCenterEl.addEventListener('scroll', requestSyncPosition, { passive: true });
+    const editorContainerEl = document.querySelector('#editor');
+    if (editorContainerEl) editorContainerEl.addEventListener('scroll', requestSyncPosition, { passive: true });
+    window.addEventListener('resize', requestSyncPosition, { passive: true });
+    window.addEventListener('scroll', requestSyncPosition, { passive: true });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', requestSyncPosition, { passive: true });
+        window.visualViewport.addEventListener('scroll', requestSyncPosition, { passive: true });
+    }
+
+    // 에디터 텍스트 변경 시 리사이저 위치 재조정 또는 해제
+    quill.on('text-change', () => {
+        if (activeResizingImg) {
+            if (!activeResizingImg.isConnected || !quill.root.contains(activeResizingImg)) {
+                hideZenImageResizer();
+            } else {
+                requestSyncPosition();
+            }
+        }
+    });
+
+    // ========================================================================
+    // 🔍 Zen 전체화면 돋보기 뷰어 (Lightbox) 확대/축소/패닝(Pan & Pinch) 엔진
+    // ========================================================================
+    let lbScale = 1;
+    let lbTranslateX = 0;
+    let lbTranslateY = 0;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let initialPinchDist = 0;
+    let initialPinchScale = 1;
+
+    function updateLightboxTransform() {
+        lbImg.style.transform = `translate(${lbTranslateX}px, ${lbTranslateY}px) scale(${lbScale})`;
+        lbZoomLabel.textContent = `${Math.round(lbScale * 100)}%`;
+    }
+
+    function setLightboxZoom(newScale, resetPan = false) {
+        lbScale = Math.max(0.5, Math.min(5, Math.round(newScale * 100) / 100));
+        if (resetPan || lbScale <= 1) {
+            lbTranslateX = 0;
+            lbTranslateY = 0;
+        }
+        updateLightboxTransform();
+    }
+
+    function openZenImageLightbox(src) {
+        if (!src) return;
+        lbImg.src = src;
+        lbScale = 1;
+        lbTranslateX = 0;
+        lbTranslateY = 0;
+        updateLightboxTransform();
+        lightboxEl.classList.add('is-open');
+        history.pushState({ modal: 'image-lightbox' }, '');
+    }
+
+    function closeZenImageLightbox(fromPopstate = false) {
+        if (!lightboxEl.classList.contains('is-open')) return;
+        lightboxEl.classList.remove('is-open');
+        isPanning = false;
+        lbStage.classList.remove('is-panning');
+
+        if (!fromPopstate && window.history.state && window.history.state.modal === 'image-lightbox') {
+            if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+            history.back();
+        }
+    }
+
+    window.openZenImageLightbox = openZenImageLightbox;
+    window.closeZenImageLightbox = closeZenImageLightbox;
+
+    // 컨트롤 바 버튼 이벤트
+    lightboxEl.querySelector('#zen-lb-zoom-in').addEventListener('click', () => setLightboxZoom(lbScale + 0.25));
+    lightboxEl.querySelector('#zen-lb-zoom-out').addEventListener('click', () => setLightboxZoom(lbScale - 0.25));
+    lightboxEl.querySelector('#zen-lb-zoom-reset').addEventListener('click', () => setLightboxZoom(1, true));
+    lightboxEl.querySelector('#zen-lb-close-btn').addEventListener('click', () => closeZenImageLightbox(false));
+    lightboxEl.querySelector('#zen-lb-top-close').addEventListener('click', () => closeZenImageLightbox(false));
+
+    // 마우스 휠로 부드러운 확대/축소
+    lightboxEl.addEventListener('wheel', (e) => {
+        if (!lightboxEl.classList.contains('is-open')) return;
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.2 : -0.2;
+        setLightboxZoom(lbScale + delta);
+    }, { passive: false });
+
+    // 이미지 더블클릭 시 100% <-> 200% 즉시 전환
+    lbImg.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (lbScale > 1.05) {
+            setLightboxZoom(1, true);
+        } else {
+            setLightboxZoom(2, false);
+        }
+    });
+
+    // 마우스 드래그 패닝 (배경 클릭 시 닫기 포함)
+    let didMoveDuringPan = false;
+    lbStage.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        isPanning = true;
+        didMoveDuringPan = false;
+        panStartX = e.clientX - lbTranslateX;
+        panStartY = e.clientY - lbTranslateY;
+        lbStage.classList.add('is-panning');
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        const nextX = e.clientX - panStartX;
+        const nextY = e.clientY - panStartY;
+        if (Math.abs(nextX - lbTranslateX) > 4 || Math.abs(nextY - lbTranslateY) > 4) {
+            didMoveDuringPan = true;
+        }
+        lbTranslateX = nextX;
+        lbTranslateY = nextY;
+        updateLightboxTransform();
+    });
+
+    window.addEventListener('mouseup', (e) => {
+        if (!isPanning) return;
+        isPanning = false;
+        lbStage.classList.remove('is-panning');
+        // 드래그하지 않고 어두운 배경(stage)을 단순 클릭했을 때 닫기
+        if (!didMoveDuringPan && e.target === lbStage) {
+            closeZenImageLightbox(false);
+        }
+    });
+
+    // 모바일 터치 패닝 & 두 손가락 핀치 줌
+    lbStage.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            isPanning = true;
+            didMoveDuringPan = false;
+            panStartX = e.touches[0].clientX - lbTranslateX;
+            panStartY = e.touches[0].clientY - lbTranslateY;
+            lbStage.classList.add('is-panning');
+        } else if (e.touches.length === 2) {
+            isPanning = false;
+            didMoveDuringPan = true;
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            initialPinchDist = Math.hypot(dx, dy);
+            initialPinchScale = lbScale;
+        }
+    }, { passive: true });
+
+    lbStage.addEventListener('touchmove', (e) => {
+        if (!lightboxEl.classList.contains('is-open')) return;
+        if (e.cancelable) e.preventDefault();
+        if (e.touches.length === 1 && isPanning) {
+            const nextX = e.touches[0].clientX - panStartX;
+            const nextY = e.touches[0].clientY - panStartY;
+            if (Math.abs(nextX - lbTranslateX) > 4 || Math.abs(nextY - lbTranslateY) > 4) {
+                didMoveDuringPan = true;
+            }
+            lbTranslateX = nextX;
+            lbTranslateY = nextY;
+            updateLightboxTransform();
+        } else if (e.touches.length === 2 && initialPinchDist > 0) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.hypot(dx, dy);
+            const ratio = dist / initialPinchDist;
+            setLightboxZoom(initialPinchScale * ratio);
+        }
+    }, { passive: false });
+
+    lbStage.addEventListener('touchend', (e) => {
+        if (e.touches.length === 0) {
+            isPanning = false;
+            initialPinchDist = 0;
+            lbStage.classList.remove('is-panning');
+        }
+    }, { passive: true });
+})();
+

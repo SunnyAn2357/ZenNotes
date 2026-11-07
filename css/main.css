@@ -1723,12 +1723,15 @@ body.light-theme .ql-editor li[data-list="checked"] {
 .ql-editor img {
     max-width: 100%;
     height: auto;
-    display: block;
-    margin: 16px 0;
+    display: inline-block;
+    vertical-align: top;
+    margin: 8px 6px 8px 0;
     border-radius: 0 !important; /* 🎯 [V4.4.7] 모서리 둥글림 제거 (원본 사각 유지) */
     -webkit-touch-callout: default !important;
     user-select: none !important;
     pointer-events: auto !important;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
 }
 
 /* 다른 기기에서 불러와서 소스가 빈 이미지의 자리 표시자 역할 */
@@ -3986,13 +3989,17 @@ body.light-theme {
     .ql-editor img {
         max-width: 100% !important;
         max-height: 238mm !important;
-        width: auto !important;
         height: auto !important;
-        display: block !important;
+        display: inline-block !important;
         margin: 4px auto !important;
         object-fit: contain !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+    }
+
+    .ql-editor img:not([style*="width"]):not([width]) {
+        width: auto !important;
+        display: block !important;
     }
 }
 
@@ -4947,4 +4954,310 @@ body:not(.light-theme) .zen-settings-done-btn:hover {
     background: #2d2d32;
     border-color: #52525b;
     color: #ffffff;
+}
+
+/* ==========================================================================
+   🎯 [V4.9.0] Zen 스타일 이미지 & PDF 조각 리사이저 + 전체화면 돋보기 뷰어 (Lightbox)
+   ========================================================================== */
+
+/* 1. 리사이즈 선택 박스 (에디터 외부 오버레이로 문서 오염 0% 및 스크롤 정밀 추적) */
+#zen-image-resizer {
+    position: fixed;
+    z-index: 950;
+    pointer-events: none;
+    border: 1.5px solid var(--accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    box-sizing: border-box;
+    display: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+body:not(.light-theme) #zen-image-resizer {
+    box-shadow: 0 0 0 3px rgba(120, 169, 255, 0.16);
+}
+
+/* 2. 모서리 4점 드래그 핸들 (시각적으로는 단정한 12px 스퀘어, 터치 영역은 28px 확보) */
+.zen-resize-handle {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    touch-action: none;
+}
+
+.zen-resize-handle::after {
+    content: '';
+    width: 11px;
+    height: 11px;
+    background: #ffffff;
+    border: 2px solid var(--accent);
+    border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+body:not(.light-theme) .zen-resize-handle::after {
+    background: #1e1e20;
+    border-color: var(--accent);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.6);
+}
+
+.zen-resize-handle:hover::after,
+.zen-resize-handle:active::after {
+    transform: scale(1.22);
+    background: var(--accent);
+}
+
+.zen-resize-handle.nw { top: -14px; left: -14px; cursor: nwse-resize; }
+.zen-resize-handle.ne { top: -14px; right: -14px; cursor: nesw-resize; }
+.zen-resize-handle.sw { bottom: -14px; left: -14px; cursor: nesw-resize; }
+.zen-resize-handle.se { bottom: -14px; right: -14px; cursor: nwse-resize; }
+
+/* 3. 드래그 중 실시간 크기/배율 캡슐 배지 */
+.zen-resize-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--toast-bg);
+    color: var(--toast-text);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    box-shadow: var(--toast-shadow);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    white-space: nowrap;
+}
+
+#zen-image-resizer.is-dragging .zen-resize-badge {
+    opacity: 1;
+}
+
+/* 4. 상단/하단 플로팅 미니 툴바 (Zen 세그먼트 캡슐 스타일) */
+.zen-img-toolbar {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 10px);
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+    pointer-events: auto;
+    white-space: nowrap;
+    z-index: 3;
+}
+
+body:not(.light-theme) .zen-img-toolbar {
+    background: #1e1e20;
+    border-color: #38393b;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* 이미지 상단이 툴바에 가려질 만큼 위에 있을 때는 미니바를 아래쪽에 배치 */
+.zen-img-toolbar.pos-bottom {
+    bottom: auto;
+    top: calc(100% + 10px);
+}
+
+/* 이미지가 아주 클 때 화면 안에 미니바가 항상 보이도록 위치 보정 */
+.zen-img-toolbar.pos-inside-top {
+    bottom: auto;
+    top: 10px;
+}
+
+.zen-img-tb-btn {
+    padding: 5px 9px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: background 0.15s ease, color 0.15s ease;
+    line-height: 1;
+}
+
+.zen-img-tb-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+}
+
+.zen-img-tb-btn.active {
+    background: #f1f3f6;
+    color: var(--accent);
+    font-weight: 700;
+}
+
+body:not(.light-theme) .zen-img-tb-btn.active {
+    background: #2f2f35;
+    color: var(--accent);
+}
+
+.zen-img-tb-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+}
+
+.zen-img-tb-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+
+/* 5. Zen 전체화면 돋보기 뷰어 (Lightbox Modal) */
+#zen-image-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 17, 20, 0.88);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 100020;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+#zen-image-lightbox.is-open {
+    display: flex;
+}
+
+.zen-lightbox-stage {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: grab;
+}
+
+.zen-lightbox-stage.is-panning {
+    cursor: grabbing;
+}
+
+#zen-lightbox-img {
+    max-width: 92vw;
+    max-height: 86vh;
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform 0.08s ease-out;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    background: #ffffff;
+    pointer-events: auto;
+    -webkit-user-drag: none;
+}
+
+.zen-lightbox-stage.is-panning #zen-lightbox-img {
+    transition: none;
+}
+
+/* 라이트박스 하단 플로팅 Zen 컨트롤 바 */
+.zen-lightbox-controls {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    z-index: 2;
+}
+
+body:not(.light-theme) .zen-lightbox-controls {
+    background: #1e1e20;
+    border-color: #38393b;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+}
+
+.zen-lb-btn {
+    padding: 7px 11px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.zen-lb-btn:hover {
+    background: var(--surface-hover);
+    color: var(--accent);
+}
+
+.zen-lb-zoom-label {
+    min-width: 52px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    font-weight: 700;
+}
+
+/* 우측 상단 닫기 버튼 */
+.zen-lightbox-top-close {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(30, 30, 32, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.zen-lightbox-top-close:hover {
+    background: rgba(239, 68, 68, 0.85);
+    border-color: transparent;
+    transform: scale(1.05);
+}
+
+@media print {
+    #zen-image-resizer,
+    #zen-image-lightbox {
+        display: none !important;
+    }
 }
