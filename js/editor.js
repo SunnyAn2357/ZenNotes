@@ -2766,11 +2766,11 @@ window.addEventListener('keydown', function (e) {
             <div class="zen-img-tb-divider"></div>
             <button type="button" class="zen-img-tb-btn" data-action="copy" title="이미지 복사 (Ctrl+C)">
                 <i class="fa-regular fa-copy"></i>
-                <span>복사</span>
+                <span>Copy</span>
             </button>
             <button type="button" class="zen-img-tb-btn" data-action="cut" title="이미지 잘라내기 (Ctrl+X)">
                 <i class="fa-solid fa-scissors"></i>
-                <span>잘라내기</span>
+                <span>Cut</span>
             </button>
             <div class="zen-img-tb-divider"></div>
             <button type="button" class="zen-img-tb-btn" data-action="zoom" title="원본 크게 확대 보기 (더블클릭)">

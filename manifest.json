@@ -1,7 +1,7 @@
 ﻿{
   "name": "ZenNotes",
   "short_name": "ZenNotes",
-  "version": "4.9.10",
+  "version": "4.9.11",
   "id": "/ZenNotes/",
   "start_url": "./",
   "display": "standalone",
@@ -31,4 +31,5 @@
     }
   }
 }
+
 

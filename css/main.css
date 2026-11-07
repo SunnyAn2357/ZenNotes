@@ -5199,9 +5199,22 @@ body:not(.light-theme) .zen-img-tb-btn.active {
     color: var(--accent);
 }
 
+.zen-img-tb-btn.danger {
+    color: #e57373; /* 부드러운 파스텔톤 레드 */
+}
+
 .zen-img-tb-btn.danger:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--danger);
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+body:not(.light-theme) .zen-img-tb-btn.danger {
+    color: #f87171; /* 다크모드 파스텔톤 레드 */
+}
+
+body:not(.light-theme) .zen-img-tb-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
 }
 
 .zen-img-tb-divider {
@@ -5213,10 +5226,17 @@ body:not(.light-theme) .zen-img-tb-btn.active {
 }
 
 @media (max-width: 600px) {
+    .zen-img-toolbar {
+        padding: 3px 4px;
+        gap: 1.5px;
+    }
     .zen-img-tb-btn {
-        padding: 4px 6px;
+        padding: 4px 5px;
         font-size: 11px;
-        gap: 2px;
+        gap: 2.5px;
+    }
+    .zen-img-tb-divider {
+        margin: 0 1.5px;
     }
 }
 
