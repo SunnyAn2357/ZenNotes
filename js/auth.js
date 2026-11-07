@@ -77,11 +77,8 @@ function checkAuthState() {
   const isExplicitLogout = localStorage.getItem("zen_explicit_logout") === "true";
 
   if (authBtn) {
-    if (fbUser && fbUser.email) {
-      authBtn.setAttribute("title", `클라우드 연동 중 (${fbUser.email}) - 클릭 시 로그아웃`);
-    } else {
-      authBtn.setAttribute("title", "Google 계정 로그인 (클라우드 동기화)");
-    }
+    // 🎯 [V4.4.7] 밀양시 BI 버튼: 툴팁을 "로그인(추후 지원)"으로 고정
+    authBtn.setAttribute("title", "로그인(추후 지원)");
   }
 
   window.ZEN_IS_ONLINE = isOnline;
@@ -98,12 +95,36 @@ window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
 
-// 🎯 [V4.9.12] 개인용 Google 계정 로그인 / 로그아웃 즉시 연동 (원터치)
+// 🎯 [V4.7.5] 밀양시 BI 버튼: 1회 클릭 시 "로그인(추후 지원)", 2초 내 5연타(5-tap) 시 시크릿 구글 로그인/로그아웃 트리거
+let secretTapCount = 0;
+let secretTapTimer = null;
+
 const authBtnEl = document.getElementById("btn-auth");
 if (authBtnEl) {
   authBtnEl.addEventListener("click", (e) => {
     if (e) e.stopPropagation();
-    handleCloudAuthLegacy();
+
+    secretTapCount++;
+
+    if (secretTapTimer) {
+      clearTimeout(secretTapTimer);
+    }
+
+    if (secretTapCount >= 5) {
+      secretTapCount = 0;
+      if (navigator.vibrate) {
+        try { navigator.vibrate(50); } catch (_) {}
+      }
+      showToast("🔑 시크릿 클라우드 연결 모드를 실행합니다.");
+      handleCloudAuthLegacy();
+      return;
+    }
+
+    secretTapTimer = setTimeout(() => {
+      secretTapCount = 0;
+    }, 2000);
+
+    showToast("로그인(추후 지원)");
   });
 }
 
