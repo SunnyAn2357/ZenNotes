@@ -1293,63 +1293,78 @@ window.applyEditorFontSize = applyEditorFontSize;
 
 // ============================================================================
 // ============================================================================
-// 🎯 [V4.9.3] 화면 확대·축소 감지 및 '화면 확대·축소 초기화' 토스트 팝업 제어기
-// - 평상시 앱 상단 표시줄 하단, 노트 제목 높이(top: 32px), 가로 중앙 정렬(left: 50%)
-// - 화면 확대/축소에 영향받지 않는 견고한 Fixed 고정 위치
-// - C# WebView2 ZoomFactorChanged 네이티브 연동 및 브라우저/모바일 실시간 400ms 감지
+// 🎯 [V4.9.4] 화면 확대·축소 감지 및 '화면 확대·축소 초기화' 토스트 팝업 제어기
+// - 앱 상단 표시줄 하단, 노트 제목 높이(top: 32px), 가로 중앙 정렬(left: 50%)
+// - 10% 단위 정률 스냅 & 화면 배율의 정확한 역방향 스케일링(1 / scaleFactor)
+//   => 화면을 아무리 확대/축소해도 토스트 팝업은 물리적 화면상 항상 100% 동일 크기 및 위치 유지!
+// - C# WebView2 ZoomFactorChanged 10% 정률 스냅 네이티브 연동 & 웹/모바일 400ms 감지
 // - 클릭 시 즉시 100% 원복 및 즉시 소멸, 미조작 시 1분(60초) 유지 후 자동 소멸
 // ============================================================================
 let zoomResetToastTimer = null;
 let baseDevicePixelRatio = window.devicePixelRatio || 1.0;
 let baseOuterInnerRatio = (window.outerWidth && window.innerWidth) ? (window.outerWidth / window.innerWidth) : 1.0;
+let currentAppZoomFactor = 1.0;
 
 function isAppZoomed() {
   // 1. 모바일 / 브라우저 핀치줌 감지 (visualViewport)
   if (window.visualViewport && typeof window.visualViewport.scale === 'number') {
     if (Math.abs(window.visualViewport.scale - 1.0) > 0.02) {
-      return true;
+      return { isZoomed: true, factor: window.visualViewport.scale };
     }
   }
   // 2. 데스크톱 브라우저 / WebView2 배율 변경 감지 (devicePixelRatio)
   if (baseDevicePixelRatio > 0) {
     const curRatio = (window.devicePixelRatio || 1.0) / baseDevicePixelRatio;
     if (Math.abs(curRatio - 1.0) > 0.02) {
-      return true;
+      return { isZoomed: true, factor: curRatio };
     }
   }
   // 3. 브라우저 창 확대/축소 비율 (outerWidth / innerWidth)
   if (window.outerWidth && window.innerWidth && baseOuterInnerRatio > 0) {
     const curWidthRatio = window.outerWidth / window.innerWidth;
     if (Math.abs((curWidthRatio / baseOuterInnerRatio) - 1.0) > 0.03) {
-      return true;
+      return { isZoomed: true, factor: (curWidthRatio / baseOuterInnerRatio) };
     }
   }
-  return false;
+  return { isZoomed: false, factor: 1.0 };
 }
 
-function showZoomResetToast() {
+function applyInverseZoomToast(scaleFactor) {
   const toast = document.getElementById("zen-zoom-reset-toast");
   if (!toast) return;
 
-  // 인라인 스타일 제거하여 CSS 고정 중앙 좌표(top: 32px, left: 50%, transform: translateX(-50%)) 엄격 적용
-  toast.style.right = "";
-  toast.style.left = "";
-  toast.style.top = "";
-  toast.style.bottom = "";
-  toast.style.transform = "";
+  if (!scaleFactor || scaleFactor <= 0.1) scaleFactor = 1.0;
+  // 10% 단위(0.1 단위) 정률 스냅 (0.5, 0.6, ... 1.0, 1.1, 1.2 ...)
+  const snappedFactor = Math.round(scaleFactor * 10.0) / 10.0;
+  currentAppZoomFactor = snappedFactor;
+
+  // 정확한 역스케일링 비율: 화면이 Z배 확대되면 토스트는 1/Z로 축소되어 화면상 크기 100% 불변
+  const inv = 1.0 / snappedFactor;
+  const baseTop = (window.innerWidth <= 768) ? 24 : 32;
+  const invTop = Math.round(baseTop * inv);
+
+  toast.style.setProperty("top", `${invTop}px`, "important");
+  toast.style.setProperty("left", "50%", "important");
+  toast.style.setProperty("transform", `translateX(-50%) scale(${inv.toFixed(4)})`, "important");
+  toast.style.setProperty("transform-origin", "center top", "important");
 
   toast.style.display = "inline-flex";
   requestAnimationFrame(() => {
     toast.classList.add("show");
   });
 
-  // 1분(60,000ms) 자동 소멸 타이머
+  // 1분(60,000ms) 자동 소멸 타이머 리셋 및 재시작
   if (zoomResetToastTimer) {
     clearTimeout(zoomResetToastTimer);
   }
   zoomResetToastTimer = setTimeout(() => {
     hideZoomResetToast();
   }, 60000);
+}
+
+function showZoomResetToast() {
+  const state = isAppZoomed();
+  applyInverseZoomToast(state.isZoomed ? state.factor : currentAppZoomFactor);
 }
 
 function hideZoomResetToast() {
@@ -1363,6 +1378,9 @@ function hideZoomResetToast() {
   setTimeout(() => {
     if (!toast.classList.contains("show")) {
       toast.style.display = "none";
+      toast.style.removeProperty("top");
+      toast.style.removeProperty("transform");
+      toast.style.removeProperty("transform-origin");
     }
   }, 220);
 }
@@ -1403,8 +1421,9 @@ function resetAppZoomScale() {
 }
 
 function checkAppZoomState() {
-  if (isAppZoomed()) {
-    showZoomResetToast();
+  const state = isAppZoomed();
+  if (state.isZoomed) {
+    applyInverseZoomToast(state.factor);
   } else {
     hideZoomResetToast();
   }
@@ -1428,15 +1447,15 @@ function initZoomResetWatcher() {
 
   window.addEventListener("wheel", (e) => {
     if (e.ctrlKey) {
-      setTimeout(checkAppZoomState, 80);
-      setTimeout(checkAppZoomState, 250);
+      setTimeout(checkAppZoomState, 60);
+      setTimeout(checkAppZoomState, 200);
     }
   }, { passive: true });
 
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
-      setTimeout(checkAppZoomState, 80);
-      setTimeout(checkAppZoomState, 250);
+      setTimeout(checkAppZoomState, 60);
+      setTimeout(checkAppZoomState, 200);
     }
   });
 
@@ -1463,3 +1482,4 @@ window.addEventListener("DOMContentLoaded", initZoomResetWatcher);
 window.showZoomResetToast = showZoomResetToast;
 window.hideZoomResetToast = hideZoomResetToast;
 window.resetAppZoomScale = resetAppZoomScale;
+window.applyInverseZoomToast = applyInverseZoomToast;

@@ -390,17 +390,18 @@ body.light-theme .update-toast-btn {
 }
 
 /* ============================================================================
-   🎯 [V4.9.3] 화면 확대·축소 초기화 토스트 팝업 (Zoom Reset Toast)
+   🎯 [V4.9.4] 화면 확대·축소 초기화 토스트 팝업 (Zoom Reset Toast)
    - 앱 상단 파란색 표시줄 하단, 노트 제목 높이(top: 32px), 가로 중앙 정렬(left: 50%)
-   - 화면 확대/축소에 영향을 받지 않는 고정 위치 (Fixed Top-Center)
+   - 화면 확대/축소와 정확히 반대로 역스케일링(1 / scale)되어 물리 화면상 100% 크기 불변
 ============================================================================ */
 #zen-zoom-reset-toast {
     position: fixed !important;
-    top: 32px !important;
+    top: 32px;
     left: 50% !important;
     right: auto !important;
     bottom: auto !important;
-    transform: translateX(-50%) translateY(-6px) scale(0.96) !important;
+    transform: translateX(-50%);
+    transform-origin: center top !important;
     z-index: 10005 !important;
     display: none;
     align-items: center;
@@ -422,25 +423,22 @@ body.light-theme .update-toast-btn {
     -webkit-user-select: none;
     white-space: nowrap;
     opacity: 0;
-    transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
     pointer-events: auto;
 }
 
 #zen-zoom-reset-toast.show {
     display: inline-flex !important;
     opacity: 1 !important;
-    transform: translateX(-50%) translateY(0) scale(1) !important;
 }
 
 #zen-zoom-reset-toast:hover {
     border-color: var(--accent) !important;
-    transform: translateX(-50%) translateY(0) scale(1.03) !important;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important;
 }
 
 #zen-zoom-reset-toast:active {
-    transform: translateX(-50%) translateY(0) scale(0.97) !important;
-    opacity: 0.9 !important;
+    opacity: 0.85 !important;
 }
 
 #zen-zoom-reset-toast .zoom-reset-icon {
