@@ -1,4 +1,4 @@
-<!-- ZenNotes -->
+﻿<!-- ZenNotes -->
 
 <!DOCTYPE html>
 <html lang="ko">
@@ -14,23 +14,22 @@
 
     <title>ZenNotes</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=4.7.6">
-    <link rel="apple-touch-icon" href="img192.png?v=4.7.6">
-    <link rel="manifest" href="manifest.json?v=4.7.6">
+    <link rel="icon" type="image/png" href="favicon.png?v=4.7.7">
+    <link rel="apple-touch-icon" href="img192.png?v=4.7.7">
+    <link rel="manifest" href="manifest.json?v=4.7.7">
 
-    <link rel="stylesheet" as="style" crossorigin
-        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
-    <!-- [V4.7.6] pdf.js 4.10.38 (CVE-2024-4367 패치) -->
-    <script type="module">import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.min.mjs"; window.pdfjsLib = pdfjsLib;</script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
+    <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="lib/highlight/atom-one-dark.min.css">
+    <link href="lib/quill/quill.snow.css" rel="stylesheet">
+    <!-- [V4.7.7] pdf.js 4.10.38 (CVE-2024-4367 패치) - 로컬 번들 -->
+    <script type="module">import * as pdfjsLib from "./lib/pdfjs/pdf.min.mjs"; window.pdfjsLib = pdfjsLib;</script>
+    <script src="lib/highlight/highlight.min.js"></script>
+    <script src="lib/quill/quill.js"></script>
+    <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
+    <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.7.6">
+    <link rel="stylesheet" href="css/main.css?v=4.7.7">
 
 </head>
 
@@ -675,7 +674,7 @@
             <div class="zen-settings-footer">
                 <div class="zen-settings-app-badge">
                     <i class="fa-solid fa-note-sticky"></i>
-                    <span>ZenNotes v4.7.6</span>
+                    <span>ZenNotes v4.7.7</span>
                 </div>
                 <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
                     닫기
@@ -710,19 +709,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=4.7.6"></script>
-    <script src="js/db.js?v=4.7.6"></script>
-    <script src="js/ui.js?v=4.7.6"></script>
-    <script src="js/editor.js?v=4.7.6"></script>
-    <script src="js/file_manager.js?v=4.7.6"></script>
-    <script src="js/io.js?v=4.7.6"></script>
-    <script src="js/auth.js?v=4.7.6"></script>
+    <script src="js/globals.js?v=4.7.7"></script>
+    <script src="js/db.js?v=4.7.7"></script>
+    <script src="js/ui.js?v=4.7.7"></script>
+    <script src="js/editor.js?v=4.7.7"></script>
+    <script src="js/file_manager.js?v=4.7.7"></script>
+    <script src="js/io.js?v=4.7.7"></script>
+    <script src="js/auth.js?v=4.7.7"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.7.6");
+            console.log("✨ 현재 버전: v4.7.7");
             console.log("=========================================");
         });
     </script>
@@ -730,4 +729,5 @@
 </body>
 
 </html>
+
 

@@ -672,8 +672,6 @@ async function exportHTML() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtml(t)}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/joungkyun/font-d2coding/d2coding.css">
     ${exportThemeCSS_Dual}
 </head>
 <body class="zen-export-body">
@@ -1993,13 +1991,13 @@ function handleFileImport(e) {
     reader.onload = async function () {
       try {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.worker.min.mjs";
+          new URL("./lib/pdfjs/", location.href).href + "pdf.worker.min.mjs";
         const typedarray = new Uint8Array(this.result);
         const loadingTask = pdfjsLib.getDocument({
           data: typedarray,
-          cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/",
+          cMapUrl: new URL("./lib/pdfjs/", location.href).href + "cmaps/",
           cMapPacked: true,
-          standardFontDataUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/"
+          standardFontDataUrl: new URL("./lib/pdfjs/", location.href).href + "standard_fonts/"
         });
         const pdf = await loadingTask.promise;
         const totalPages = pdf.numPages;
@@ -2408,13 +2406,13 @@ async function processDroppedFiles(files) {
       try {
         if (typeof pdfjsLib !== "undefined") {
           pdfjsLib.GlobalWorkerOptions.workerSrc =
-            "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.worker.min.mjs";
+            new URL("./lib/pdfjs/", location.href).href + "pdf.worker.min.mjs";
           const arrayBuf = await item.file.arrayBuffer();
           const loadingTask = pdfjsLib.getDocument({
             data: new Uint8Array(arrayBuf),
-            cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/",
+            cMapUrl: new URL("./lib/pdfjs/", location.href).href + "cmaps/",
             cMapPacked: true,
-            standardFontDataUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/"
+            standardFontDataUrl: new URL("./lib/pdfjs/", location.href).href + "standard_fonts/"
           });
           const pdf = await loadingTask.promise;
           const pagesToRender = Math.min(pdf.numPages, 30);
