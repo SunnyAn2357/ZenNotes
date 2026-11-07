@@ -115,7 +115,6 @@ if (authBtnEl) {
       if (navigator.vibrate) {
         try { navigator.vibrate(50); } catch (_) {}
       }
-      showToast("🔑 시크릿 클라우드 연결 모드를 실행합니다.");
       handleCloudAuthLegacy();
       return;
     }
