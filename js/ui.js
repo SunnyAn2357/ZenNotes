@@ -270,16 +270,27 @@ window.addEventListener("load", () => {
   }
 });
 
-// 🎯 [완벽 교정] 오작동 방지 0.5초 지연 + 유령 버튼(투명 클릭) 완벽 차단 토스트
+// 🎯 [V4.9.12] Zen 스타일 컴팩트 캡슐형 토스트 (모바일 1줄 칼정렬 & 줄바꿈 방어)
 function showToast(msg, undoData = null) {
   let toast = document.getElementById("zen-toast");
   if (!toast) {
     toast = document.createElement("div");
     toast.id = "zen-toast";
-    toast.style.cssText =
-      "position:fixed; bottom:50px; left:50%; transform:translateX(-50%); background:var(--toast-bg); color:var(--toast-text); border:1px solid var(--border); padding:12px 24px; border-radius:12px; font-size:14px; font-weight:600; z-index:99999 !important; opacity:0; transition:opacity 0.25s ease-in-out; white-space:pre-wrap; text-align:center; line-height:1.4; box-shadow:0 12px 32px rgba(0,0,0,0.35); width:max-content; max-width:90vw; word-break:keep-all; display:flex; align-items:center; gap:20px; pointer-events:none;";
     document.body.appendChild(toast);
   }
+
+  const hasNewline = typeof msg === "string" && msg.includes("\n");
+  const isMobile = window.innerWidth <= 600;
+
+  toast.style.cssText =
+    "position:fixed; bottom:calc(36px + env(safe-area-inset-bottom, 0px)); left:50%; transform:translateX(-50%); " +
+    "background:var(--toast-bg); color:var(--toast-text); border:1px solid var(--border); " +
+    (isMobile ? "padding:8px 16px; font-size:12.5px; border-radius:24px; gap:12px; " : "padding:10px 20px; font-size:13.5px; border-radius:28px; gap:16px; ") +
+    "font-weight:600; z-index:99999 !important; opacity:0; transition:opacity 0.25s ease-in-out; " +
+    "text-align:center; line-height:1.35; box-shadow:0 12px 32px rgba(0,0,0,0.35); " +
+    "width:max-content; max-width:calc(100vw - 32px); box-sizing:border-box; display:flex; align-items:center; justify-content:center; " +
+    (hasNewline ? "white-space:pre-wrap; word-break:break-word; " : "white-space:nowrap; word-break:normal; ") +
+    "pointer-events:none;";
   toast.style.zIndex = "99999";
 
   let html = `<span>${msg}</span>`;
@@ -287,7 +298,7 @@ function showToast(msg, undoData = null) {
   if (undoData) {
     lastUndoData = undoData;
     // 처음엔 투명하고 터치 불가 상태로 대기
-    html += `<button id="zen-undo-btn" style="color:var(--accent); font-weight:700; font-size:14px; padding:10px 12px; background:rgba(120,169,255,0.15); border:none; border-radius:6px; cursor:pointer; transition:opacity 0.3s ease-in-out, background 0.2s; flex-shrink:0; opacity:0; pointer-events:none;">실행 취소</button>`;
+    html += `<button id="zen-undo-btn" style="color:var(--accent); font-weight:700; font-size:13px; padding:6px 12px; background:rgba(120,169,255,0.15); border:none; border-radius:16px; cursor:pointer; transition:opacity 0.3s ease-in-out, background 0.2s; flex-shrink:0; opacity:0; pointer-events:none; white-space:nowrap;">실행 취소</button>`;
   }
 
   toast.innerHTML = html;
@@ -1234,14 +1245,14 @@ function updateSegmentedActive(containerId, value) {
 function handleSettingAutoListChange(checked) {
   localStorage.setItem('zen_setting_auto_list', checked ? 'true' : 'false');
   if (typeof showToast === 'function') {
-    showToast(checked ? '자동 목록 변환이 활성화되었습니다.' : '자동 목록 변환이 꺼졌습니다. (- 텍스트 유지)');
+    showToast(checked ? '자동 목록 변환이 켜졌습니다.' : '자동 목록 변환이 꺼졌습니다.');
   }
 }
 
 function handleSettingSmartUndoChange(checked) {
   localStorage.setItem('zen_setting_smart_undo', checked ? 'true' : 'false');
   if (typeof showToast === 'function') {
-    showToast(checked ? '글머리기호 즉시 취소(Backspace)가 켜졌습니다.' : '글머리기호 즉시 취소가 꺼졌습니다.');
+    showToast(checked ? '글머리기호 즉시 취소가 켜졌습니다.' : '글머리기호 즉시 취소가 꺼졌습니다.');
   }
 }
 
@@ -1249,7 +1260,7 @@ function setSettingCursorTarget(val) {
   localStorage.setItem('zen_setting_cursor_target', val);
   updateSegmentedActive('setting-cursor-segmented', val);
   if (typeof showToast === 'function') {
-    showToast(val === 'body' ? '새 노트 작성 시 본문으로 바로 시작합니다.' : '새 노트 작성 시 제목부터 시작합니다.');
+    showToast(val === 'body' ? '새 노트 작성 시 본문부터 시작합니다.' : '새 노트 작성 시 제목부터 시작합니다.');
   }
 }
 

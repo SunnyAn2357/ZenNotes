@@ -77,8 +77,11 @@ function checkAuthState() {
   const isExplicitLogout = localStorage.getItem("zen_explicit_logout") === "true";
 
   if (authBtn) {
-    // 🎯 [V4.4.7] 밀양시 BI 버튼: 툴팁을 "로그인(추후 지원)"으로 고정
-    authBtn.setAttribute("title", "로그인(추후 지원)");
+    if (fbUser && fbUser.email) {
+      authBtn.setAttribute("title", `클라우드 연동 중 (${fbUser.email}) - 클릭 시 로그아웃`);
+    } else {
+      authBtn.setAttribute("title", "Google 계정 로그인 (클라우드 동기화)");
+    }
   }
 
   window.ZEN_IS_ONLINE = isOnline;
@@ -95,36 +98,12 @@ window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
 
-// 🎯 [V4.7.5] 밀양시 BI 버튼: 1회 클릭 시 "로그인(추후 지원)", 2초 내 5연타(5-tap) 시 시크릿 구글 로그인/로그아웃 트리거
-let secretTapCount = 0;
-let secretTapTimer = null;
-
+// 🎯 [V4.9.12] 개인용 Google 계정 로그인 / 로그아웃 즉시 연동 (원터치)
 const authBtnEl = document.getElementById("btn-auth");
 if (authBtnEl) {
   authBtnEl.addEventListener("click", (e) => {
     if (e) e.stopPropagation();
-
-    secretTapCount++;
-
-    if (secretTapTimer) {
-      clearTimeout(secretTapTimer);
-    }
-
-    if (secretTapCount >= 5) {
-      secretTapCount = 0;
-      if (navigator.vibrate) {
-        try { navigator.vibrate(50); } catch (_) {}
-      }
-      showToast("🔑 시크릿 클라우드 연결 모드를 실행합니다.");
-      handleCloudAuthLegacy();
-      return;
-    }
-
-    secretTapTimer = setTimeout(() => {
-      secretTapCount = 0;
-    }, 2000);
-
-    showToast("로그인(추후 지원)");
+    handleCloudAuthLegacy();
   });
 }
 
@@ -184,13 +163,13 @@ async function handleCloudAuthLegacy() {
     const code = e && e.code ? e.code : "";
     if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
     if (code === "auth/popup-blocked") {
-      showToast("팝업이 차단되었습니다.\n브라우저에서 팝업을 허용해 주세요.");
+      showToast("팝업이 차단되었습니다. 브라우저에서 팝업을 허용해 주세요.");
     } else if (code === "auth/unauthorized-domain") {
-      showToast("승인되지 않은 도메인입니다.\nFirebase 콘솔의 승인된 도메인을 확인해 주세요.");
+      showToast("승인되지 않은 도메인입니다. Firebase 콘솔 승인 도메인을 확인해 주세요.");
     } else if (code === "auth/network-request-failed") {
       showToast("네트워크 오류로 로그인하지 못했습니다.");
     } else {
-      showToast("로그인에 실패했습니다.");
+      showToast("로그인 실패: " + (e.message || code));
     }
     console.error("❌ [Firebase Auth] 로그인 실패:", e);
   }
