@@ -1293,67 +1293,86 @@ window.applyEditorFontSize = applyEditorFontSize;
 
 // ============================================================================
 // ============================================================================
-// 🎯 [V4.9.4] 화면 확대·축소 감지 및 '화면 확대·축소 초기화' 토스트 팝업 제어기
-// - 앱 상단 표시줄 하단, 노트 제목 높이(top: 32px), 가로 중앙 정렬(left: 50%)
-// - 10% 단위 정률 스냅 & 화면 배율의 정확한 역방향 스케일링(1 / scaleFactor)
-//   => 화면을 아무리 확대/축소해도 토스트 팝업은 물리적 화면상 항상 100% 동일 크기 및 위치 유지!
-// - C# WebView2 ZoomFactorChanged 10% 정률 스냅 네이티브 연동 & 웹/모바일 400ms 감지
-// - 클릭 시 즉시 100% 원복 및 즉시 소멸, 미조작 시 1분(60초) 유지 후 자동 소멸
+// 🎯 [V4.9.5] 에디터 본문 독립 확대·축소(Word/Notion 방식) & 초기화 토스트 엔진
+// - 앱 창 프레임(상단바, 사이드바, 툴바)은 100% 고정하여 화면 흔들림·지터 원천 차단
+// - 에디터 본문(.ql-editor, 글자, 이미지, 표)만 Ctrl+Wheel 및 모바일 핀치로 부드럽게 확대/축소 (50% ~ 250%)
+// - 배율 != 100%일 때 상단 중앙(top: 32px, left: 50%)에 '화면 확대·축소 초기화' 토스트 표출
+// - 토스트는 본문 바깥 body 직속이므로 언제나 100% 정규 크기 불변 유지!
+// - 클릭 또는 Ctrl + 0 시 즉시 100% 원복 및 소멸, 미조작 시 1분(60초) 후 자동 숨김
 // ============================================================================
+let editorZoomLevel = 1.0;
 let zoomResetToastTimer = null;
-let baseDevicePixelRatio = window.devicePixelRatio || 1.0;
-let baseOuterInnerRatio = (window.outerWidth && window.innerWidth) ? (window.outerWidth / window.innerWidth) : 1.0;
-let currentAppZoomFactor = 1.0;
+let initialPinchDist = 0;
+let initialPinchZoom = 1.0;
 
-function isAppZoomed() {
-  // 1. 모바일 / 브라우저 핀치줌 감지 (visualViewport)
-  if (window.visualViewport && typeof window.visualViewport.scale === 'number') {
-    if (Math.abs(window.visualViewport.scale - 1.0) > 0.02) {
-      return { isZoomed: true, factor: window.visualViewport.scale };
-    }
-  }
-  // 2. 데스크톱 브라우저 / WebView2 배율 변경 감지 (devicePixelRatio)
-  if (baseDevicePixelRatio > 0) {
-    const curRatio = (window.devicePixelRatio || 1.0) / baseDevicePixelRatio;
-    if (Math.abs(curRatio - 1.0) > 0.02) {
-      return { isZoomed: true, factor: curRatio };
-    }
-  }
-  // 3. 브라우저 창 확대/축소 비율 (outerWidth / innerWidth)
-  if (window.outerWidth && window.innerWidth && baseOuterInnerRatio > 0) {
-    const curWidthRatio = window.outerWidth / window.innerWidth;
-    if (Math.abs((curWidthRatio / baseOuterInnerRatio) - 1.0) > 0.03) {
-      return { isZoomed: true, factor: (curWidthRatio / baseOuterInnerRatio) };
-    }
-  }
-  return { isZoomed: false, factor: 1.0 };
+/**
+ * 에디터 본문(.ql-editor) 요소를 안전하게 탐색
+ */
+function getTargetEditorElement() {
+  return document.querySelector("#editor .ql-editor") || document.querySelector(".ql-editor");
 }
 
-function applyInverseZoomToast(scaleFactor) {
+/**
+ * 에디터 본문 CSS 배율 적용 및 토스트 상태 갱신
+ */
+function applyEditorZoom(newScale, silentToast = false) {
+  const clamped = Math.max(0.5, Math.min(2.5, Math.round(newScale * 100) / 100));
+  editorZoomLevel = clamped;
+
+  const target = getTargetEditorElement();
+  if (target) {
+    if (Math.abs(clamped - 1.0) <= 0.02) {
+      target.style.removeProperty("zoom");
+    } else {
+      target.style.zoom = clamped.toFixed(2);
+    }
+  }
+
+  // 100% 여부에 따른 토스트 제어
+  if (Math.abs(editorZoomLevel - 1.0) > 0.02) {
+    if (!silentToast) {
+      showZoomResetToast();
+    }
+  } else {
+    hideZoomResetToast();
+  }
+}
+
+/**
+ * 상대 배율 변경 (+0.1, -0.1 등)
+ */
+function changeEditorZoomDelta(delta) {
+  applyEditorZoom(editorZoomLevel + delta);
+}
+
+/**
+ * 에디터 본문 배율 100% 원복
+ */
+function resetEditorZoom() {
+  hideZoomResetToast();
+  applyEditorZoom(1.0);
+
+  // C# 데스크톱 앱 창 줌도 방어적으로 1.0 원복
+  if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+    try {
+      window.chrome.webview.postMessage("resetZoom");
+    } catch (e) {}
+  }
+}
+
+/**
+ * '화면 확대·축소 초기화' 토스트 팝업 표시
+ */
+function showZoomResetToast() {
   const toast = document.getElementById("zen-zoom-reset-toast");
   if (!toast) return;
-
-  if (!scaleFactor || scaleFactor <= 0.1) scaleFactor = 1.0;
-  // 10% 단위(0.1 단위) 정률 스냅 (0.5, 0.6, ... 1.0, 1.1, 1.2 ...)
-  const snappedFactor = Math.round(scaleFactor * 10.0) / 10.0;
-  currentAppZoomFactor = snappedFactor;
-
-  // 정확한 역스케일링 비율: 화면이 Z배 확대되면 토스트는 1/Z로 축소되어 화면상 크기 100% 불변
-  const inv = 1.0 / snappedFactor;
-  const baseTop = (window.innerWidth <= 768) ? 24 : 32;
-  const invTop = Math.round(baseTop * inv);
-
-  toast.style.setProperty("top", `${invTop}px`, "important");
-  toast.style.setProperty("left", "50%", "important");
-  toast.style.setProperty("transform", `translateX(-50%) scale(${inv.toFixed(4)})`, "important");
-  toast.style.setProperty("transform-origin", "center top", "important");
 
   toast.style.display = "inline-flex";
   requestAnimationFrame(() => {
     toast.classList.add("show");
   });
 
-  // 1분(60,000ms) 자동 소멸 타이머 리셋 및 재시작
+  // 1분(60초) 자동 소멸 타이머 리셋
   if (zoomResetToastTimer) {
     clearTimeout(zoomResetToastTimer);
   }
@@ -1362,11 +1381,9 @@ function applyInverseZoomToast(scaleFactor) {
   }, 60000);
 }
 
-function showZoomResetToast() {
-  const state = isAppZoomed();
-  applyInverseZoomToast(state.isZoomed ? state.factor : currentAppZoomFactor);
-}
-
+/**
+ * '화면 확대·축소 초기화' 토스트 팝업 숨김
+ */
 function hideZoomResetToast() {
   if (zoomResetToastTimer) {
     clearTimeout(zoomResetToastTimer);
@@ -1374,112 +1391,113 @@ function hideZoomResetToast() {
   }
   const toast = document.getElementById("zen-zoom-reset-toast");
   if (!toast) return;
+
   toast.classList.remove("show");
   setTimeout(() => {
     if (!toast.classList.contains("show")) {
       toast.style.display = "none";
-      toast.style.removeProperty("top");
-      toast.style.removeProperty("transform");
-      toast.style.removeProperty("transform-origin");
     }
   }, 220);
 }
 
-function resetAppZoomScale() {
-  hideZoomResetToast();
-
-  let nativeHandled = false;
-
-  // 1. C# WebView2 데스크톱 환경 배율 즉시 1.0 원복
-  if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
-    try {
-      window.chrome.webview.postMessage("resetZoom");
-      nativeHandled = true;
-    } catch (e) {}
-  }
-
-  // 2. 모바일 / 브라우저 핀치줌 리셋 (viewport 메타태그 토글 및 스크롤 원복)
-  const metaViewport = document.querySelector('meta[name="viewport"]');
-  if (metaViewport) {
-    const originalContent = metaViewport.getAttribute("content") || "width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes";
-    metaViewport.setAttribute("content", "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no");
-    window.scrollTo(0, 0);
-    setTimeout(() => {
-      metaViewport.setAttribute("content", originalContent);
-      setTimeout(checkAppZoomState, 150);
-    }, 100);
-  }
-
-  // 3. 브라우저 안내 (C# 앱이 아닌 일반 PC 웹 브라우저 환경)
-  if (!nativeHandled && window.innerWidth > 768) {
-    if (typeof showToast === 'function') {
-      showToast("화면 배율이 100%로 초기화되었습니다. (브라우저 단축키: Ctrl + 0)");
-    }
-  }
-
-  setTimeout(checkAppZoomState, 250);
-}
-
-function checkAppZoomState() {
-  const state = isAppZoomed();
-  if (state.isZoomed) {
-    applyInverseZoomToast(state.factor);
-  } else {
-    hideZoomResetToast();
-  }
-}
-
-function initZoomResetWatcher() {
+/**
+ * 에디터 독립 확대·축소 제스처 및 단축키 리스너 초기화
+ */
+function initEditorZoomEngine() {
   const toast = document.getElementById("zen-zoom-reset-toast");
   if (toast) {
     toast.addEventListener("click", (e) => {
       e.stopPropagation();
-      resetAppZoomScale();
+      resetEditorZoom();
     });
   }
 
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", checkAppZoomState, { passive: true });
-    window.visualViewport.addEventListener("scroll", checkAppZoomState, { passive: true });
-  }
-
-  window.addEventListener("resize", checkAppZoomState, { passive: true });
-
+  // 1. 에디터 및 본문 영역 Ctrl + Wheel 감지
   window.addEventListener("wheel", (e) => {
-    if (e.ctrlKey) {
-      setTimeout(checkAppZoomState, 60);
-      setTimeout(checkAppZoomState, 200);
-    }
-  }, { passive: true });
+    if (!e.ctrlKey) return;
 
+    // 마우스 커서가 에디터 본문, 중앙 칼럼, 툴바 등 에디터 관련 영역 위에 있을 때 가로챔
+    const target = e.target;
+    const isEditorArea = target && (
+      target.closest("#editor") ||
+      target.closest(".quill-wrapper") ||
+      target.closest(".col-center") ||
+      target.closest(".ql-editor")
+    );
+
+    if (isEditorArea) {
+      e.preventDefault();
+      e.stopPropagation();
+      const step = 0.05;
+      if (e.deltaY < 0) {
+        changeEditorZoomDelta(step);
+      } else if (e.deltaY > 0) {
+        changeEditorZoomDelta(-step);
+      }
+    }
+  }, { passive: false });
+
+  // 2. 단축키 감지: Ctrl + 0 (리셋), Ctrl + '+' / '=' (확대), Ctrl + '-' (축소)
   window.addEventListener("keydown", (e) => {
-    if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
-      setTimeout(checkAppZoomState, 60);
-      setTimeout(checkAppZoomState, 200);
+    if (e.ctrlKey) {
+      if (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') {
+        if (Math.abs(editorZoomLevel - 1.0) > 0.02) {
+          e.preventDefault();
+          resetEditorZoom();
+        }
+      } else if (e.key === '+' || e.key === '=' || e.code === 'Equal' || e.code === 'NumpadAdd') {
+        e.preventDefault();
+        changeEditorZoomDelta(0.1);
+      } else if (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') {
+        e.preventDefault();
+        changeEditorZoomDelta(-0.1);
+      }
     }
   });
 
-  window.addEventListener("touchend", () => {
-    setTimeout(checkAppZoomState, 150);
+  // 3. 모바일 터치 2점 핀치 제스처 (에디터 영역 한정)
+  const editorArea = document.querySelector(".col-center") || document.body;
+  editorArea.addEventListener("touchstart", (e) => {
+    if (e.touches && e.touches.length === 2) {
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      initialPinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      initialPinchZoom = editorZoomLevel;
+    }
   }, { passive: true });
 
-  // 🎯 400ms 주기적 점검으로 어떤 방식의 확대/축소도 누락 없이 즉시 포착
-  setInterval(checkAppZoomState, 400);
+  editorArea.addEventListener("touchmove", (e) => {
+    if (e.touches && e.touches.length === 2 && initialPinchDist > 0) {
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const currentDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const ratio = currentDist / initialPinchDist;
+      applyEditorZoom(initialPinchZoom * ratio);
+      e.preventDefault(); // 전체 창 핀치 방지
+    }
+  }, { passive: false });
 
-  // 초기 로드 시점 기준 배율 갱신 및 상태 점검
-  setTimeout(() => {
-    if (!baseDevicePixelRatio || baseDevicePixelRatio <= 0) {
-      baseDevicePixelRatio = window.devicePixelRatio || 1.0;
+  editorArea.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) {
+      initialPinchDist = 0;
     }
-    if (window.outerWidth && window.innerWidth) {
-      baseOuterInnerRatio = window.outerWidth / window.innerWidth;
+  }, { passive: true });
+
+  // 노트를 새로 로드할 때 현재 배율 유지 적용
+  document.addEventListener("zen-memo-loaded", () => {
+    if (Math.abs(editorZoomLevel - 1.0) > 0.02) {
+      const target = getTargetEditorElement();
+      if (target) {
+        target.style.zoom = editorZoomLevel.toFixed(2);
+      }
     }
-    checkAppZoomState();
-  }, 400);
+  });
 }
 
-window.addEventListener("DOMContentLoaded", initZoomResetWatcher);
+// 하위 호환성 글로벌 함수 노출
 window.showZoomResetToast = showZoomResetToast;
 window.hideZoomResetToast = hideZoomResetToast;
-window.resetAppZoomScale = resetAppZoomScale;
-window.applyInverseZoomToast = applyInverseZoomToast;
+window.resetAppZoomScale = resetEditorZoom;
+window.resetEditorZoom = resetEditorZoom;
+window.applyEditorZoom = applyEditorZoom;
+window.addEventListener("DOMContentLoaded", initEditorZoomEngine);
