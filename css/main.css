@@ -390,6 +390,69 @@ body.light-theme .update-toast-btn {
 }
 
 /* ============================================================================
+   🎯 [V4.9.1] 화면 확대·축소 초기화 토스트 팝업 (Zoom Reset Toast)
+   - 기본 배율(100%)이 아닐 때 우측 상단 상태 컨테이너(.status-container) 왼쪽에 표시
+   - 화이트/다크 모드 Zen 토스트 디자인 완벽 계승 (--toast-bg, --toast-text, --border)
+============================================================================ */
+#zen-zoom-reset-toast {
+    position: fixed;
+    z-index: 10002;
+    display: none;
+    align-items: center;
+    gap: 7px;
+    background: var(--toast-bg);
+    color: var(--toast-text);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.2px;
+    box-shadow: var(--toast-shadow);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background 0.2s ease;
+}
+
+#zen-zoom-reset-toast.show {
+    opacity: 1;
+}
+
+#zen-zoom-reset-toast:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+#zen-zoom-reset-toast:active {
+    opacity: 0.85;
+}
+
+#zen-zoom-reset-toast .zoom-reset-icon {
+    font-size: 11.5px;
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+#zen-zoom-reset-toast:hover .zoom-reset-icon {
+    transform: rotate(-180deg);
+}
+
+@media print {
+    #zen-zoom-reset-toast {
+        display: none !important;
+    }
+}
+
+/* ============================================================================
    🎯 [V4.1.5] 전체 화면 파일 드래그 앤 드롭 오버레이 (File Drag & Drop Overlay)
 ============================================================================ */
 .drop-zone-overlay {

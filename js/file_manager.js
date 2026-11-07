@@ -2074,6 +2074,7 @@ function openFileManager() {
 
   document.getElementById("file-manager-pane").style.display = "flex";
   document.getElementById("fm-search-input").value = ""; // 🎯 진입 시 검색창 초기화
+  if (typeof updateZoomToastPosition === 'function') setTimeout(updateZoomToastPosition, 50);
 
   // 🎯 에디터 완벽 비활성화 (검색창 타이핑 시 글자 새는 현상 2차 원천 차단)
   quill.blur();
@@ -2159,6 +2160,7 @@ function closeFileManager() {
   // 🎯 창을 닫으면 다시 글을 쓸 수 있도록 에디터 잠금 해제
   quill.enable();
   cancelFmMultiSelect();
+  if (typeof updateZoomToastPosition === 'function') setTimeout(updateZoomToastPosition, 50);
 }
 
 // 🎯 [완벽 교정] 어떤 폴더(특히 보안폴더)에서도 Home으로 안전하게 복귀하는 타임머신

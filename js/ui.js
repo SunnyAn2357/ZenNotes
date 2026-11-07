@@ -1290,3 +1290,173 @@ window.setSettingCursorTarget = setSettingCursorTarget;
 window.setSettingEditorFontSize = setSettingEditorFontSize;
 window.setSettingRecentNotesCount = setSettingRecentNotesCount;
 window.applyEditorFontSize = applyEditorFontSize;
+
+// ============================================================================
+// 🎯 [V4.9.1] 화면 확대·축소 감지 및 '화면 확대·축소 초기화' 토스트 팝업 제어기
+// - 기본 배율(100%)이 아닐 경우 우측 상단 상태 컨테이너(.status-container) 왼쪽에 토스트 표출
+// - 클릭 시 즉시 배율 100% 원복 및 토스트 즉시 소멸
+// - 미조작 시 1분(60초)간 유지 후 자동 소멸
+// ============================================================================
+let zoomResetToastTimer = null;
+let initialDevicePixelRatio = window.devicePixelRatio || 1.0;
+
+function isAppZoomed() {
+  // 1. 모바일 / 브라우저 핀치줌 감지 (visualViewport)
+  if (window.visualViewport && typeof window.visualViewport.scale === 'number') {
+    if (Math.abs(window.visualViewport.scale - 1.0) > 0.03) {
+      return true;
+    }
+  }
+  // 2. 데스크톱 브라우저 / C# WebView2 배율 변경 감지 (devicePixelRatio)
+  if (initialDevicePixelRatio > 0) {
+    const curRatio = (window.devicePixelRatio || 1.0) / initialDevicePixelRatio;
+    if (Math.abs(curRatio - 1.0) > 0.05) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function updateZoomToastPosition() {
+  const toast = document.getElementById("zen-zoom-reset-toast");
+  if (!toast || toast.style.display === "none") return;
+
+  const visibleStatusEl = Array.from(document.querySelectorAll(".status-container")).find(el => el.offsetParent !== null) || document.querySelector(".status-container");
+  if (visibleStatusEl) {
+    const rect = visibleStatusEl.getBoundingClientRect();
+    const rightDist = Math.max(10, Math.round(window.innerWidth - rect.left + 14));
+    const topDist = Math.round(rect.top + (rect.height / 2));
+    toast.style.right = rightDist + "px";
+    toast.style.top = topDist + "px";
+    toast.style.transform = "translateY(-50%)";
+  } else {
+    toast.style.right = (window.innerWidth <= 768 ? "120px" : "150px");
+    toast.style.top = (window.innerWidth <= 768 ? "38px" : "42px");
+    toast.style.transform = "translateY(-50%)";
+  }
+}
+
+function showZoomResetToast() {
+  const toast = document.getElementById("zen-zoom-reset-toast");
+  if (!toast) return;
+
+  updateZoomToastPosition();
+  toast.style.display = "inline-flex";
+  requestAnimationFrame(() => {
+    toast.classList.add("show");
+  });
+
+  // 1분(60,000ms) 자동 소멸 타이머 리셋 및 재시작
+  if (zoomResetToastTimer) {
+    clearTimeout(zoomResetToastTimer);
+  }
+  zoomResetToastTimer = setTimeout(() => {
+    hideZoomResetToast();
+  }, 60000);
+}
+
+function hideZoomResetToast() {
+  if (zoomResetToastTimer) {
+    clearTimeout(zoomResetToastTimer);
+    zoomResetToastTimer = null;
+  }
+  const toast = document.getElementById("zen-zoom-reset-toast");
+  if (!toast) return;
+  toast.classList.remove("show");
+  setTimeout(() => {
+    if (!toast.classList.contains("show")) {
+      toast.style.display = "none";
+    }
+  }, 220);
+}
+
+function resetAppZoomScale() {
+  hideZoomResetToast();
+
+  let nativeHandled = false;
+
+  // 1. C# WebView2 데스크톱 환경 배율 즉시 원복
+  if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+    try {
+      window.chrome.webview.postMessage("resetZoom");
+      nativeHandled = true;
+    } catch (e) {}
+  }
+
+  // 2. 모바일 / 브라우저 핀치줌 리셋 (viewport 메타태그 토글 및 스크롤 원복)
+  const metaViewport = document.querySelector('meta[name="viewport"]');
+  if (metaViewport) {
+    const originalContent = metaViewport.getAttribute("content") || "width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes";
+    metaViewport.setAttribute("content", "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no");
+    window.scrollTo(0, 0);
+    setTimeout(() => {
+      metaViewport.setAttribute("content", originalContent);
+      setTimeout(checkAppZoomState, 150);
+    }, 100);
+  }
+
+  // 3. 브라우저 안내 (C# 앱이 아닌 일반 PC 웹 브라우저 환경)
+  if (!nativeHandled && window.innerWidth > 768) {
+    if (typeof showToast === 'function') {
+      showToast("화면 배율이 100%로 초기화되었습니다. (브라우저 단축키: Ctrl + 0)");
+    }
+  }
+
+  setTimeout(checkAppZoomState, 300);
+}
+
+function checkAppZoomState() {
+  if (isAppZoomed()) {
+    showZoomResetToast();
+  } else {
+    hideZoomResetToast();
+  }
+}
+
+function initZoomResetWatcher() {
+  const toast = document.getElementById("zen-zoom-reset-toast");
+  if (toast) {
+    toast.addEventListener("click", (e) => {
+      e.stopPropagation();
+      resetAppZoomScale();
+    });
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", checkAppZoomState, { passive: true });
+    window.visualViewport.addEventListener("scroll", updateZoomToastPosition, { passive: true });
+  }
+
+  window.addEventListener("resize", () => {
+    checkAppZoomState();
+    updateZoomToastPosition();
+  }, { passive: true });
+
+  window.addEventListener("wheel", (e) => {
+    if (e.ctrlKey) {
+      setTimeout(checkAppZoomState, 150);
+    }
+  }, { passive: true });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+      setTimeout(checkAppZoomState, 150);
+    }
+  });
+
+  window.addEventListener("touchend", () => {
+    setTimeout(checkAppZoomState, 200);
+  }, { passive: true });
+
+  // 초기 로드 시점 기준 배율 갱신 및 상태 점검
+  setTimeout(() => {
+    if (!initialDevicePixelRatio || initialDevicePixelRatio <= 0) {
+      initialDevicePixelRatio = window.devicePixelRatio || 1.0;
+    }
+    checkAppZoomState();
+  }, 500);
+}
+
+window.addEventListener("DOMContentLoaded", initZoomResetWatcher);
+window.updateZoomToastPosition = updateZoomToastPosition;
+window.resetAppZoomScale = resetAppZoomScale;
