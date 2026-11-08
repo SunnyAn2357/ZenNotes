@@ -4,7 +4,12 @@
     "ignore": [
       "firebase.json",
       ".firebaserc",
-      "CHANGELOG.md",
+      "**/*.md",
+      "**/*.txt",
+      "**/*.pdf",
+      "**/*.bak",
+      "**/*.bat",
+      "**/*.ps1",
       "**/.*",
       "**/node_modules/**"
     ],

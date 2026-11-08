@@ -1,8 +1,8 @@
 {
-  "name": "ZenNotes",
-  "short_name": "ZenNotes",
-  "version": "4.9.15",
-  "id": "/ZenNotes/",
+  "name": "MY 노트",
+  "short_name": "MY 노트",
+  "version": "1.0.0",
+  "id": "/MY_Note/",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#131314",

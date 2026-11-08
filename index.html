@@ -1,4 +1,4 @@
-﻿<!-- ZenNotes -->
+﻿<!-- MY 노트 -->
 
 <!DOCTYPE html>
 <html lang="ko">
@@ -6,30 +6,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ZenNotes">
     <meta name="theme-color" id="meta-theme-color-desktop" media="(min-width: 769px)" content="#eef1f5">
     <meta name="theme-color" id="meta-theme-color-mobile" media="(max-width: 768px)" content="#eef1f5">
 
-    <title>ZenNotes</title>
+    <title>MY 노트 V1.0.0</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=4.9.15">
-    <link rel="apple-touch-icon" href="img192.png?v=4.9.15">
-    <link rel="manifest" href="manifest.json?v=4.9.15">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.0.0">
+    <link rel="manifest" href="manifest.json?v=1.0.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="lib/highlight/atom-one-dark.min.css">
     <link href="lib/quill/quill.snow.css" rel="stylesheet">
-    <!-- [V4.9.0] pdf.js 4.10.38 (CVE-2024-4367 패치) - 로컬 번들 -->
+    <!-- [V4.9.0] pdf.js 4.10.38 (CVE-2024-4367 패치) - 로컬 번들(외부 CDN 차단) -->
     <script type="module">import * as pdfjsLib from "./lib/pdfjs/pdf.min.mjs"; window.pdfjsLib = pdfjsLib;</script>
     <script src="lib/highlight/highlight.min.js"></script>
     <script src="lib/quill/quill.js"></script>
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=4.9.15">
+    <link rel="stylesheet" href="css/main.css?v=1.0.0">
 
 </head>
 
@@ -705,7 +701,7 @@
             <div class="zen-settings-footer">
                 <div class="zen-settings-app-badge">
                     <i class="fa-solid fa-note-sticky"></i>
-                    <span>ZenNotes v4.9.15</span>
+                    <span>MY 노트 V1.0.0</span>
                 </div>
                 <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
                     닫기
@@ -736,23 +732,23 @@
     </div>
 
     <!-- 🔥 [V4.3.0] Firebase SDK (구글 드라이브 GAPI/GIS 대체) -->
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <!-- [V4.9.0] 업무용 외부 연결 차단 (Firebase SDK 비활성화): firebase-app-compat.js -->
+    <!-- [V4.9.0] 업무용 외부 연결 차단 (Firebase SDK 비활성화): firebase-auth-compat.js -->
+    <!-- [V4.9.0] 업무용 외부 연결 차단 (Firebase SDK 비활성화): firebase-firestore-compat.js -->
 
-    <script src="js/globals.js?v=4.9.15"></script>
-    <script src="js/db.js?v=4.9.15"></script>
-    <script src="js/ui.js?v=4.9.15"></script>
-    <script src="js/editor.js?v=4.9.15"></script>
-    <script src="js/file_manager.js?v=4.9.15"></script>
-    <script src="js/io.js?v=4.9.15"></script>
-    <script src="js/auth.js?v=4.9.15"></script>
+    <script src="js/globals.js?v=1.0.0"></script>
+    <script src="js/db.js?v=1.0.0"></script>
+    <script src="js/ui.js?v=1.0.0"></script>
+    <script src="js/editor.js?v=1.0.0"></script>
+    <script src="js/file_manager.js?v=1.0.0"></script>
+    <script src="js/io.js?v=1.0.0"></script>
+    <script src="js/auth.js?v=1.0.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
-            console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: v4.9.15");
+            console.log("🚀 MY 노트 앱 로딩 완료!");
+            console.log("✨ 현재 버전: V1.0.0");
             console.log("=========================================");
         });
     </script>
@@ -760,7 +756,6 @@
 </body>
 
 </html>
-
 
 
 
