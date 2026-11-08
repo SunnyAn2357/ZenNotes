@@ -95,11 +95,37 @@ window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
 
-// 🎯 [V4.4.7] 밀양시 BI 버튼 클릭 (창 닫지 않고 토스트 표시)
-document.getElementById("btn-auth").addEventListener("click", (e) => {
-  if (e) e.stopPropagation();
-  showToast("로그인(추후 지원)");
-});
+// 🎯 [V4.7.5] 밀양시 BI 버튼: 1회 클릭 시 "로그인(추후 지원)", 2초 내 5연타(5-tap) 시 시크릿 구글 로그인/로그아웃 트리거
+let secretTapCount = 0;
+let secretTapTimer = null;
+
+const authBtnEl = document.getElementById("btn-auth");
+if (authBtnEl) {
+  authBtnEl.addEventListener("click", (e) => {
+    if (e) e.stopPropagation();
+
+    secretTapCount++;
+
+    if (secretTapTimer) {
+      clearTimeout(secretTapTimer);
+    }
+
+    if (secretTapCount >= 5) {
+      secretTapCount = 0;
+      if (navigator.vibrate) {
+        try { navigator.vibrate(50); } catch (_) {}
+      }
+      handleCloudAuthLegacy();
+      return;
+    }
+
+    secretTapTimer = setTimeout(() => {
+      secretTapCount = 0;
+    }, 2000);
+
+    showToast("로그인(추후 지원)");
+  });
+}
 
 // [V4.3.0 클라우드 인증 보존 함수 - 추후 지원 시 재연동]
 async function handleCloudAuthLegacy() {
@@ -111,7 +137,8 @@ async function handleCloudAuthLegacy() {
 
   // 1. 로그인 상태 → 명시적 로그아웃 (정책 ①)
   if (fbUser) {
-    const confirmLogout = confirm("클라우드 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.");
+    const userLabel = fbUser.email ? `현재 [${fbUser.email}] 계정으로 연동 중입니다.\n\n` : "";
+    const confirmLogout = confirm(`${userLabel}클라우드 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.`);
     if (!confirmLogout) return;
 
     localStorage.setItem("zen_explicit_logout", "true");
@@ -156,13 +183,13 @@ async function handleCloudAuthLegacy() {
     const code = e && e.code ? e.code : "";
     if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
     if (code === "auth/popup-blocked") {
-      showToast("팝업이 차단되었습니다.\n브라우저에서 팝업을 허용해 주세요.");
+      showToast("팝업이 차단되었습니다. 브라우저에서 팝업을 허용해 주세요.");
     } else if (code === "auth/unauthorized-domain") {
-      showToast("승인되지 않은 도메인입니다.\nFirebase 콘솔의 승인된 도메인을 확인해 주세요.");
+      showToast("승인되지 않은 도메인입니다. Firebase 콘솔 승인 도메인을 확인해 주세요.");
     } else if (code === "auth/network-request-failed") {
       showToast("네트워크 오류로 로그인하지 못했습니다.");
     } else {
-      showToast("로그인에 실패했습니다.");
+      showToast("로그인 실패: " + (e.message || code));
     }
     console.error("❌ [Firebase Auth] 로그인 실패:", e);
   }
