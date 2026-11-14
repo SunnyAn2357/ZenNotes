@@ -575,7 +575,7 @@
         <div class="fm-modal" style="max-width: 420px; width: 92vw;" onclick="event.stopPropagation()">
             <div class="fm-modal-header" style="padding: 15px 20px;">
                 <span style="font-size: 15.5px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-link" style="color: var(--accent);"></i> 하이퍼링크 연결
+                    <i class="fa-solid fa-link" style="color: var(--accent);"></i> <span id="link-modal-title-text">하이퍼링크 연결</span>
                 </span>
                 <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeLinkInsertModal()"></i>
             </div>
@@ -604,12 +604,13 @@
                     <input type="text" id="link-modal-url-input" class="link-field-input"
                         placeholder="https:// 또는 C:\경로\..." autocomplete="off"
                         onkeydown="if(event.key==='Enter'){event.preventDefault();submitLinkInsertModal();}">
-                    <div class="link-field-hint">
-                        ※ 웹 주소(https://...), 폴더 경로(C:\...), 파일 경로(D:\문서.hwp) 모두 지원
+                    <div class="link-field-hint" id="link-modal-hint">
+                        ※ 웹 주소(https://...) 지원 (PC 파일·폴더 연결은 데스크톱 앱 전용)
                     </div>
                 </div>
             </div>
             <div class="fm-modal-footer" style="padding: 12px 18px;" onclick="event.stopPropagation()">
+                <button type="button" id="link-modal-unlink-btn" style="display: none; background: rgba(239, 68, 68, 0.12); color: #ef4444; margin-right: auto;" onclick="unlinkFromLinkModal()">링크 해제</button>
                 <button type="button" style="background: var(--surface-hover); color: var(--text-main);" onclick="closeLinkInsertModal()">취소</button>
                 <button type="button" id="link-modal-submit-btn" style="background: var(--accent); color: var(--accent-contrast);" onclick="submitLinkInsertModal()">연결하기</button>
             </div>
@@ -840,19 +841,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.1.0"></script>
-    <script src="js/db.js?v=1.1.0"></script>
-    <script src="js/ui.js?v=1.1.0"></script>
-    <script src="js/editor.js?v=1.1.0"></script>
-    <script src="js/file_manager.js?v=1.1.0"></script>
-    <script src="js/io.js?v=1.1.0"></script>
-    <script src="js/auth.js?v=1.1.0"></script>
+    <script src="js/globals.js?v=1.1.1"></script>
+    <script src="js/db.js?v=1.1.1"></script>
+    <script src="js/ui.js?v=1.1.1"></script>
+    <script src="js/editor.js?v=1.1.1"></script>
+    <script src="js/file_manager.js?v=1.1.1"></script>
+    <script src="js/io.js?v=1.1.1"></script>
+    <script src="js/auth.js?v=1.1.1"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: V1.1.0");
+            console.log("✨ 현재 버전: V1.1.1");
             console.log("=========================================");
         });
     </script>

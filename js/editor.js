@@ -678,8 +678,8 @@ function initToolbarTooltips() {
         '.ql-toolbar button.ql-divider': '구분선 (--- / ___ / ***)',
 
         // 미디어 / 링크
-        '.ql-toolbar button.ql-link': '하이퍼링크 삽입 (Ctrl+K)',
-        '.ql-toolbar button.ql-image': 'PDF/이미지 삽입 (Ctrl+V 붙여넣기 지원)',
+        '.ql-toolbar button.ql-link': '하이퍼링크 연결 (URL·파일·폴더) (Ctrl+K)',
+        '.ql-toolbar button.ql-image': 'PDF/이미지 삽입 (Ctrl+V · 우클릭 편집 지원)',
         '.ql-toolbar button.ql-video': '동영상 링크 삽입',
 
         // 유틸리티
@@ -834,6 +834,25 @@ if (quill && quill.theme && quill.theme.tooltip) {
                 }
             });
         }
+
+        // 🎯 [V1.1.1] 기존 링크 툴팁의 [수정] 클릭 시 스마트 하이퍼링크 모달로 일원화
+        const actionEl = tooltipRoot.querySelector('a.ql-action');
+        if (actionEl) {
+            actionEl.addEventListener('click', (e) => {
+                if (!tooltipRoot.classList.contains('ql-editing') && quill.theme.tooltip.linkRange) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const r = { ...quill.theme.tooltip.linkRange };
+                    quill.theme.tooltip.hide();
+                    quill.setSelection(r.index, r.length, Quill.sources.SILENT);
+                    openLinkInsertModal({ isEdit: true, range: r });
+                }
+            }, true);
+        }
+
+        if (quill.theme.tooltip.textbox) {
+            quill.theme.tooltip.textbox.setAttribute('placeholder', 'https:// 또는 C:\\경로\\...');
+        }
     }
 
     // 🎯 데스크톱 C# 네이티브 응답 수신 (찾아보기 결과 및 오류 토스트)
@@ -925,6 +944,7 @@ if (quill && quill.root) {
 // 🎯 [V1.0.4] 스마트 하이퍼링크 연결 모달 제어 (URL · 파일 · 폴더 통합 + 순수 파일/폴더명 자동 추출)
 let pendingLinkModalRange = null;
 let pendingLinkModalHasSelection = false;
+let pendingLinkModalIsEdit = false;
 
 function extractLeafNameFromPath(rawPath) {
     if (!rawPath || typeof rawPath !== 'string') return '';
@@ -960,11 +980,11 @@ function requestNativeLinkPick(kind) {
     }));
 }
 
-function openLinkInsertModal() {
+function openLinkInsertModal(opts = {}) {
     const modal = document.getElementById('link-insert-modal');
     if (!modal) return;
 
-    let range = quill.getSelection();
+    let range = (opts && opts.range) ? opts.range : quill.getSelection();
     if (!range) {
         range = (quill.selection && quill.selection.savedRange)
             ? quill.selection.savedRange
@@ -974,25 +994,52 @@ function openLinkInsertModal() {
         range = { index: Math.max(0, quill.getLength() - 1), length: 0 };
     }
 
-    pendingLinkModalRange = { index: range.index, length: range.length };
-    pendingLinkModalHasSelection = range.length > 0;
+    const formatsAtRange = quill.getFormat(range);
+    const hasExistingLink = Boolean(formatsAtRange && formatsAtRange.link);
+    const isEditMode = Boolean((opts && opts.isEdit) || (range.length > 0 && hasExistingLink));
 
+    pendingLinkModalRange = { index: range.index, length: range.length };
+    pendingLinkModalHasSelection = !isEditMode && range.length > 0;
+    pendingLinkModalIsEdit = isEditMode;
+
+    const titleTextEl = document.getElementById('link-modal-title-text');
+    const submitBtn = document.getElementById('link-modal-submit-btn');
+    const unlinkBtn = document.getElementById('link-modal-unlink-btn');
+    const hintEl = document.getElementById('link-modal-hint');
     const badge = document.getElementById('link-modal-selected-badge');
     const selectedTextEl = document.getElementById('link-modal-selected-text');
     const textGroup = document.getElementById('link-modal-text-group');
     const textInp = document.getElementById('link-modal-text-input');
     const urlInp = document.getElementById('link-modal-url-input');
     const nativePickers = document.getElementById('link-modal-native-pickers');
+    const isDesktop = Boolean(window.chrome && window.chrome.webview);
 
     if (nativePickers) {
-        nativePickers.style.display = (window.chrome && window.chrome.webview) ? 'inline-flex' : 'none';
+        nativePickers.style.display = isDesktop ? 'inline-flex' : 'none';
     }
+    if (hintEl) {
+        hintEl.textContent = isDesktop
+            ? '※ 웹 주소(https://...), 폴더 경로(C:\\...), 파일 경로(D:\\문서.hwp) 모두 지원'
+            : '※ 웹 주소(https://...) 지원 (PC 파일·폴더 연결은 데스크톱 앱 전용)';
+    }
+    if (titleTextEl) titleTextEl.textContent = isEditMode ? '하이퍼링크 수정' : '하이퍼링크 연결';
+    if (submitBtn) submitBtn.textContent = isEditMode ? '수정 완료' : '연결하기';
+    if (unlinkBtn) unlinkBtn.style.display = isEditMode ? 'inline-flex' : 'none';
 
     let initialUrl = '';
-    if (pendingLinkModalHasSelection) {
+    if (isEditMode) {
+        const selectedText = range.length > 0 ? quill.getText(range.index, range.length) : '';
+        initialUrl = formatsAtRange.link || '';
+        if (badge) badge.style.display = 'none';
+        if (textGroup) textGroup.style.display = 'flex';
+        if (textInp) {
+            textInp.value = selectedText;
+            textInp.dataset.autoFilled = '0';
+        }
+        if (range.length > 0) showLinkSelectionHighlight(range);
+    } else if (pendingLinkModalHasSelection) {
         const selectedText = quill.getText(range.index, range.length).trim();
-        const formats = quill.getFormat(range);
-        initialUrl = formats.link || '';
+        initialUrl = formatsAtRange.link || '';
         if (!initialUrl && (/^https?:\/\//i.test(selectedText) || isLocalFileOrFolderPath(selectedText))) {
             initialUrl = selectedText;
         } else if (!initialUrl && /^\S+@\S+\.\S+$/.test(selectedText)) {
@@ -1030,7 +1077,10 @@ function openLinkInsertModal() {
     modal.style.display = 'flex';
     history.pushState({ modal: 'link-insert' }, '');
     setTimeout(() => {
-        if (urlInp) urlInp.focus();
+        if (urlInp) {
+            urlInp.focus();
+            if (isEditMode) urlInp.select();
+        }
     }, 40);
 }
 
@@ -1068,15 +1118,22 @@ function submitLinkInsertModal() {
     if (!cleanUrl) return;
 
     const r = pendingLinkModalRange || { index: Math.max(0, quill.getLength() - 1), length: 0 };
-    const hasSel = pendingLinkModalHasSelection && r.length > 0;
+    const isEdit = pendingLinkModalIsEdit;
+    const hasSel = !isEdit && pendingLinkModalHasSelection && r.length > 0;
     const customText = hasSel
         ? ''
         : ((textInp ? textInp.value.trim() : '') || extractLeafNameFromPath(cleanUrl) || cleanUrl);
 
     pendingLinkModalRange = null;
+    pendingLinkModalIsEdit = false;
     closeLinkInsertModal();
 
-    if (hasSel) {
+    if (isEdit && r.length > 0) {
+        quill.deleteText(r.index, r.length, Quill.sources.USER);
+        quill.insertText(r.index, customText, 'link', cleanUrl, Quill.sources.USER);
+        quill.setSelection(r.index + customText.length, 0, Quill.sources.USER);
+        quill.format('link', false, Quill.sources.SILENT);
+    } else if (hasSel) {
         quill.setSelection(r.index, r.length, Quill.sources.SILENT);
         quill.formatText(r.index, r.length, 'link', cleanUrl, Quill.sources.USER);
         quill.setSelection(r.index + r.length, 0, Quill.sources.USER);
@@ -1089,9 +1146,22 @@ function submitLinkInsertModal() {
     }
 }
 
+function unlinkFromLinkModal() {
+    const r = pendingLinkModalRange;
+    pendingLinkModalRange = null;
+    pendingLinkModalIsEdit = false;
+    closeLinkInsertModal();
+    if (r && r.length > 0) {
+        quill.formatText(r.index, r.length, 'link', false, Quill.sources.USER);
+        quill.setSelection(r.index + r.length, 0, Quill.sources.USER);
+        if (typeof showToast === 'function') showToast('하이퍼링크가 해제되었습니다.');
+    }
+}
+
 window.openLinkInsertModal = openLinkInsertModal;
 window.closeLinkInsertModal = closeLinkInsertModal;
 window.submitLinkInsertModal = submitLinkInsertModal;
+window.unlinkFromLinkModal = unlinkFromLinkModal;
 window.requestNativeLinkPick = requestNativeLinkPick;
 
 // 🎯 [V3.4.4] 마크다운 문법 안내 모달 제어 함수
@@ -1460,6 +1530,26 @@ quill.on('text-change', function (delta, oldDelta, source) {
         // 5. 🎯 [V4.3.4] 인라인 코드 (`내용`)
         const codeMatch = fullText.match(/`([^`]+)` $/);
         if (codeMatch) { applyInlineFormat(codeMatch[0], codeMatch[1], 'code'); return; }
+
+        // 6. 🎯 [V1.1.1] 마크다운 하이퍼링크 ([이름](링크) ) 즉시 변환 (URL + 로컬 파일/폴더 지원)
+        const linkMdMatch = fullText.match(/\[([^\]]+)\]\(([^)]+)\) $/);
+        if (linkMdMatch) {
+            const matchedStr = linkMdMatch[0];
+            const label = linkMdMatch[1].trim();
+            const rawUrl = linkMdMatch[2].trim();
+            if (label && rawUrl) {
+                const cleanUrl = normalizeLinkInput(rawUrl);
+                const start = selection.index - matchedStr.length;
+                setTimeout(() => {
+                    quill.deleteText(start, matchedStr.length, Quill.sources.USER);
+                    quill.insertText(start, label, 'link', cleanUrl, Quill.sources.USER);
+                    quill.insertText(start + label.length, ' ', { link: false }, Quill.sources.USER);
+                    quill.setSelection(start + label.length + 1, 0, Quill.sources.SILENT);
+                    quill.format('link', false, Quill.sources.SILENT);
+                }, 10);
+                return;
+            }
+        }
     }
 });
 
