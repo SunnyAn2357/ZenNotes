@@ -454,49 +454,10 @@ const quill = new Quill('#editor', {
                         this.quill.formatLine(range.index, targetLen, 'blockquote', !isQuote, Quill.sources.USER);
                     }
                 },
-                // 🎯 [V3.4.4] 하이퍼링크 커스텀 핸들러: 선택 블록 자동 입력 + 블록 시각화 고정 + 모바일 가상 키보드 팝업 방지
+                // 🎯 [V1.0.4] 스마트 하이퍼링크 연결 모달 (선택 텍스트 유무 무관, URL · 파일 · 폴더 통합)
                 'link': function (value) {
                     if (value) {
-                        let range = this.quill.getSelection();
-                        if (!range || range.length === 0) {
-                            range = (this.quill.selection && this.quill.selection.savedRange && this.quill.selection.savedRange.length > 0)
-                                ? this.quill.selection.savedRange
-                                : lastValidTextSelection;
-                        }
-                        if (!range || range.length === 0) {
-                            showToast("링크를 적용할 텍스트를 먼저 드래그하여 선택해주세요.");
-                            return;
-                        }
-
-                        // 모바일에서 터치로 인해 풀린 블록 선택 영역을 에디터에 즉시 복원
-                        this.quill.setSelection(range.index, range.length, Quill.sources.SILENT);
-                        activeMenuSelection = { index: range.index, length: range.length };
-
-                        // 1. 선택된 블록 영역을 시각적으로 선명하게 표시 (포커스 이동 후에도 영역 유지)
-                        showLinkSelectionHighlight(range);
-
-                        const formats = this.quill.getFormat(range);
-                        const selectedText = this.quill.getText(range.index, range.length).trim();
-                        let preview = formats.link || selectedText;
-                        if (/^\S+@\S+\.\S+$/.test(preview) && !preview.startsWith('mailto:')) {
-                            preview = 'mailto:' + preview;
-                        }
-
-                        const { tooltip } = this.quill.theme;
-
-                        // 2. 모바일 가상 키보드가 즉시 튀어나오지 않도록 edit 실행 전에 미리 readonly 부여
-                        if (window.innerWidth <= 768 && tooltip && tooltip.textbox) {
-                            tooltip.textbox.setAttribute('readonly', 'readonly');
-                            const unlockInput = () => {
-                                tooltip.textbox.removeAttribute('readonly');
-                                tooltip.textbox.focus();
-                            };
-                            tooltip.textbox.addEventListener('touchstart', unlockInput, { once: true });
-                            tooltip.textbox.addEventListener('click', unlockInput, { once: true });
-                            history.pushState({ modal: 'ql-tooltip' }, '');
-                        }
-
-                        tooltip.edit('link', preview);
+                        openLinkInsertModal();
                     } else {
                         this.quill.format('link', false);
                         removeLinkSelectionHighlight();
@@ -883,10 +844,20 @@ if (quill && quill.theme && quill.theme.tooltip) {
                 const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
                 if (!data || !data.type) return;
                 if (data.type === 'pickedLinkPath' && data.path) {
-                    const tb = quill.theme.tooltip && quill.theme.tooltip.textbox;
-                    if (tb) {
-                        tb.value = data.path;
-                        tb.focus();
+                    const linkModal = document.getElementById('link-insert-modal');
+                    if (linkModal && linkModal.style.display === 'flex') {
+                        const urlInp = document.getElementById('link-modal-url-input');
+                        if (urlInp) {
+                            urlInp.value = data.path;
+                            applyAutoLinkDisplayText(data.path);
+                            urlInp.focus();
+                        }
+                    } else {
+                        const tb = quill.theme.tooltip && quill.theme.tooltip.textbox;
+                        if (tb) {
+                            tb.value = data.path;
+                            tb.focus();
+                        }
                     }
                 } else if (data.type === 'openExternalError' && data.message && typeof showToast === 'function') {
                     showToast(data.message);
@@ -944,6 +915,178 @@ if (quill && quill.root) {
         }
     }, { passive: true });
 }
+
+// 🎯 [V1.0.4] 스마트 하이퍼링크 연결 모달 제어 (URL · 파일 · 폴더 통합 + 순수 파일/폴더명 자동 추출)
+let pendingLinkModalRange = null;
+let pendingLinkModalHasSelection = false;
+
+function extractLeafNameFromPath(rawPath) {
+    if (!rawPath || typeof rawPath !== 'string') return '';
+    let cleaned = rawPath.trim().replace(/^["']|["']$/g, '');
+    if (!cleaned || !isLocalFileOrFolderPath(cleaned)) return '';
+    if (/^file:\/\//i.test(cleaned)) {
+        try { cleaned = decodeURIComponent(cleaned.replace(/^file:\/+/i, '')); } catch { }
+    }
+    cleaned = cleaned.replace(/[\\/]+$/, '');
+    const parts = cleaned.split(/[\\/]/).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : cleaned;
+}
+
+function applyAutoLinkDisplayText(rawPath) {
+    if (pendingLinkModalHasSelection) return;
+    const textInp = document.getElementById('link-modal-text-input');
+    if (!textInp) return;
+    if (textInp.value.trim() !== '' && textInp.dataset.autoFilled !== '1') return;
+    const leaf = extractLeafNameFromPath(rawPath);
+    if (leaf) {
+        textInp.value = leaf;
+        textInp.dataset.autoFilled = '1';
+    } else if (textInp.dataset.autoFilled === '1') {
+        textInp.value = '';
+        textInp.dataset.autoFilled = '0';
+    }
+}
+
+function requestNativeLinkPick(kind) {
+    if (!(window.chrome && window.chrome.webview)) return;
+    window.chrome.webview.postMessage(JSON.stringify({
+        type: kind === 'folder' ? 'pickLinkFolder' : 'pickLinkFile'
+    }));
+}
+
+function openLinkInsertModal() {
+    const modal = document.getElementById('link-insert-modal');
+    if (!modal) return;
+
+    let range = quill.getSelection();
+    if (!range) {
+        range = (quill.selection && quill.selection.savedRange)
+            ? quill.selection.savedRange
+            : (typeof lastValidTextSelection !== 'undefined' ? lastValidTextSelection : null);
+    }
+    if (!range) {
+        range = { index: Math.max(0, quill.getLength() - 1), length: 0 };
+    }
+
+    pendingLinkModalRange = { index: range.index, length: range.length };
+    pendingLinkModalHasSelection = range.length > 0;
+
+    const badge = document.getElementById('link-modal-selected-badge');
+    const selectedTextEl = document.getElementById('link-modal-selected-text');
+    const textGroup = document.getElementById('link-modal-text-group');
+    const textInp = document.getElementById('link-modal-text-input');
+    const urlInp = document.getElementById('link-modal-url-input');
+    const nativePickers = document.getElementById('link-modal-native-pickers');
+
+    if (nativePickers) {
+        nativePickers.style.display = (window.chrome && window.chrome.webview) ? 'inline-flex' : 'none';
+    }
+
+    let initialUrl = '';
+    if (pendingLinkModalHasSelection) {
+        const selectedText = quill.getText(range.index, range.length).trim();
+        const formats = quill.getFormat(range);
+        initialUrl = formats.link || '';
+        if (!initialUrl && (/^https?:\/\//i.test(selectedText) || isLocalFileOrFolderPath(selectedText))) {
+            initialUrl = selectedText;
+        } else if (!initialUrl && /^\S+@\S+\.\S+$/.test(selectedText)) {
+            initialUrl = 'mailto:' + selectedText;
+        }
+        if (badge) badge.style.display = 'block';
+        if (selectedTextEl) selectedTextEl.textContent = selectedText;
+        if (textGroup) textGroup.style.display = 'none';
+        showLinkSelectionHighlight(range);
+    } else {
+        if (badge) badge.style.display = 'none';
+        if (textGroup) textGroup.style.display = 'flex';
+        if (textInp) {
+            textInp.value = '';
+            textInp.dataset.autoFilled = '0';
+            if (!textInp.dataset.boundAuto) {
+                textInp.dataset.boundAuto = '1';
+                textInp.addEventListener('input', () => {
+                    textInp.dataset.autoFilled = '0';
+                });
+            }
+        }
+    }
+
+    if (urlInp) {
+        urlInp.value = initialUrl;
+        if (!urlInp.dataset.boundAuto) {
+            urlInp.dataset.boundAuto = '1';
+            urlInp.addEventListener('input', () => {
+                applyAutoLinkDisplayText(urlInp.value);
+            });
+        }
+    }
+
+    modal.style.display = 'flex';
+    history.pushState({ modal: 'link-insert' }, '');
+    setTimeout(() => {
+        if (urlInp) urlInp.focus();
+    }, 40);
+}
+
+function closeLinkInsertModal(fromPopstate = false) {
+    const modal = document.getElementById('link-insert-modal');
+    if (!modal || modal.style.display === 'none' || modal.style.display === '') return;
+    modal.style.display = 'none';
+    removeLinkSelectionHighlight();
+
+    if (!fromPopstate && window.history.state && window.history.state.modal === 'link-insert') {
+        if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+        history.back();
+    }
+
+    if (pendingLinkModalRange) {
+        const r = pendingLinkModalRange;
+        pendingLinkModalRange = null;
+        setTimeout(() => {
+            quill.setSelection(r.index, r.length, Quill.sources.USER);
+        }, 20);
+    }
+}
+
+function submitLinkInsertModal() {
+    const urlInp = document.getElementById('link-modal-url-input');
+    const textInp = document.getElementById('link-modal-text-input');
+    const rawUrl = urlInp ? urlInp.value.trim() : '';
+    if (!rawUrl) {
+        if (typeof showToast === 'function') showToast('연결할 주소 또는 파일/폴더 경로를 입력하세요.');
+        if (urlInp) urlInp.focus();
+        return;
+    }
+
+    const cleanUrl = normalizeLinkInput(rawUrl);
+    if (!cleanUrl) return;
+
+    const r = pendingLinkModalRange || { index: Math.max(0, quill.getLength() - 1), length: 0 };
+    const hasSel = pendingLinkModalHasSelection && r.length > 0;
+    const customText = hasSel
+        ? ''
+        : ((textInp ? textInp.value.trim() : '') || extractLeafNameFromPath(cleanUrl) || cleanUrl);
+
+    pendingLinkModalRange = null;
+    closeLinkInsertModal();
+
+    if (hasSel) {
+        quill.setSelection(r.index, r.length, Quill.sources.SILENT);
+        quill.formatText(r.index, r.length, 'link', cleanUrl, Quill.sources.USER);
+        quill.setSelection(r.index + r.length, 0, Quill.sources.USER);
+    } else {
+        quill.insertText(r.index, customText, 'link', cleanUrl, Quill.sources.USER);
+        const afterIdx = r.index + customText.length;
+        quill.insertText(afterIdx, ' ', { link: false }, Quill.sources.USER);
+        quill.setSelection(afterIdx + 1, 0, Quill.sources.USER);
+        quill.format('link', false, Quill.sources.SILENT);
+    }
+}
+
+window.openLinkInsertModal = openLinkInsertModal;
+window.closeLinkInsertModal = closeLinkInsertModal;
+window.submitLinkInsertModal = submitLinkInsertModal;
+window.requestNativeLinkPick = requestNativeLinkPick;
 
 // 🎯 [V3.4.4] 마크다운 문법 안내 모달 제어 함수
 function openMarkdownHelpModal() {
@@ -1617,6 +1760,12 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        const linkInsertModal = document.getElementById("link-insert-modal");
+        if (linkInsertModal && linkInsertModal.style.display === "flex") {
+            closeLinkInsertModal();
+            return;
+        }
+
         const specModal = document.getElementById("special-char-modal");
         if (specModal && (specModal.style.display === "flex" || specModal.classList.contains("is-open"))) {
             closeSpecialCharModal();
@@ -1794,6 +1943,12 @@ window.addEventListener("popstate", (e) => {
     const mdModal = document.getElementById("markdown-help-modal");
     if (mdModal && mdModal.style.display === "flex") {
         closeMarkdownHelpModal(true);
+        return;
+    }
+
+    const linkInsertModal = document.getElementById("link-insert-modal");
+    if (linkInsertModal && linkInsertModal.style.display === "flex") {
+        closeLinkInsertModal(true);
         return;
     }
 

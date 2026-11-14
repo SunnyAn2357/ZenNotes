@@ -570,6 +570,52 @@
         </div>
     </div>
 
+    <!-- 🎯 [V1.0.4] 스마트 하이퍼링크 연결 모달 (URL · 파일 · 폴더 통합) -->
+    <div id="link-insert-modal" class="fm-modal-overlay" onclick="if(event.target === this) closeLinkInsertModal();">
+        <div class="fm-modal" style="max-width: 420px; width: 92vw;" onclick="event.stopPropagation()">
+            <div class="fm-modal-header" style="padding: 15px 20px;">
+                <span style="font-size: 15.5px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-link" style="color: var(--accent);"></i> 하이퍼링크 연결
+                </span>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeLinkInsertModal()"></i>
+            </div>
+            <div class="fm-modal-body link-modal-body" onclick="event.stopPropagation()">
+                <div id="link-modal-selected-badge" class="link-selected-badge" style="display: none;">
+                    선택 텍스트: <strong id="link-modal-selected-text"></strong>
+                </div>
+                <div id="link-modal-text-group" class="link-field-group">
+                    <label for="link-modal-text-input" class="link-field-label">표시할 텍스트</label>
+                    <input type="text" id="link-modal-text-input" class="link-field-input"
+                        placeholder="미입력 시 파일명/폴더명 또는 주소 자동 입력" autocomplete="off"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitLinkInsertModal();}">
+                </div>
+                <div class="link-field-group">
+                    <div class="link-field-header-row">
+                        <label for="link-modal-url-input" class="link-field-label">연결할 주소 또는 폴더/파일 경로</label>
+                        <div id="link-modal-native-pickers" class="link-native-pickers" style="display: none;">
+                            <button type="button" class="link-pick-btn" onclick="requestNativeLinkPick('file')" title="내 PC에서 파일 선택">
+                                <i class="fa-regular fa-file"></i> 파일
+                            </button>
+                            <button type="button" class="link-pick-btn" onclick="requestNativeLinkPick('folder')" title="내 PC에서 폴더 선택">
+                                <i class="fa-regular fa-folder"></i> 폴더
+                            </button>
+                        </div>
+                    </div>
+                    <input type="text" id="link-modal-url-input" class="link-field-input"
+                        placeholder="https:// 또는 C:\경로\..." autocomplete="off"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitLinkInsertModal();}">
+                    <div class="link-field-hint">
+                        ※ 웹 주소(https://...), 폴더 경로(C:\...), 파일 경로(D:\문서.hwp) 모두 지원
+                    </div>
+                </div>
+            </div>
+            <div class="fm-modal-footer" style="padding: 12px 18px;" onclick="event.stopPropagation()">
+                <button type="button" style="background: var(--surface-hover); color: var(--text-main);" onclick="closeLinkInsertModal()">취소</button>
+                <button type="button" id="link-modal-submit-btn" style="background: var(--accent); color: var(--accent-contrast);" onclick="submitLinkInsertModal()">연결하기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 🎯 [V4.5.6] 모든 데이터 초기화 전 보안 폴더 검사 & Zen 경고 모달 -->
     <div id="reset-confirm-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeResetConfirmModal()">
         <div class="fm-modal" style="max-width: 440px; width: 92vw; border-radius: 16px;">
