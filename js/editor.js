@@ -896,27 +896,90 @@ if (specCharBtn) {
     });
 }
 
-// 🎯 [통합 완료] 이미지 붙여넣기 완벽 제어 엔진
-// (HTML 찌꺼기 차단 + 깔끔한 줄바꿈 및 커서 이동 적용)
+// 🎯 [통합 완료] 이미지·PDF 클립보드 붙여넣기 완벽 제어 엔진
+// (clipboard.files + clipboard.items 이중 추출, PDF 붙여넣기, HTML data:image 폴백 지원)
+function extractClipboardFiles(clipboard) {
+    const collected = [];
+    const seen = new Set();
+
+    const addFile = (f) => {
+        if (!f) return;
+        const key = `${f.name || ''}|${f.size}|${f.type || ''}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            collected.push(f);
+        }
+    };
+
+    if (clipboard.files && clipboard.files.length) {
+        Array.from(clipboard.files).forEach(addFile);
+    }
+    if (clipboard.items && clipboard.items.length) {
+        Array.from(clipboard.items).forEach(item => {
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) addFile(file);
+            }
+        });
+    }
+    return collected;
+}
+
+function dataUrlToImageFile(dataUrl, index = 0) {
+    try {
+        const parts = dataUrl.split(',');
+        if (parts.length < 2) return null;
+        const mimeMatch = parts[0].match(/data:(image\/[a-zA-Z0-9.+-]+);base64/i);
+        if (!mimeMatch) return null;
+        const mime = mimeMatch[1].toLowerCase();
+        const ext = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+        const bin = atob(parts[1]);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new File([bytes], `pasted_image_${Date.now()}_${index}.${ext}`, { type: mime });
+    } catch (e) {
+        return null;
+    }
+}
+
 quill.root.addEventListener('paste', function (e) {
     const clipboard = e.clipboardData || window.clipboardData;
-    if (!clipboard || !clipboard.files.length) return;
+    if (!clipboard) return;
 
-    // 1. 클립보드에 이미지 파일이 하나라도 포함되어 있는지 확인합니다.
-    const hasImageFile = Array.from(clipboard.files).some(file => file.type.startsWith('image/'));
+    const files = extractClipboardFiles(clipboard);
+    const imageFiles = files.filter(f => f.type && f.type.startsWith('image/'));
+    const pdfFiles = files.filter(f => f.type === 'application/pdf' || (f.name && f.name.toLowerCase().endsWith('.pdf')));
 
-    if (hasImageFile) {
-        // 2. 이미지가 있다면 브라우저의 기본 붙여넣기(HTML 태그 등)를 완전히 차단합니다.
+    if (imageFiles.length > 0 || pdfFiles.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
 
-        // 3. 클립보드 안에서 '이미지 파일'만 정밀하게 골라냅니다.
-        const imageFiles = Array.from(clipboard.files).filter(file => file.type.startsWith('image/'));
-
-        // 4. 골라낸 이미지들을 완성도 높은 처리 함수(줄바꿈 + 커서 이동)로 전달합니다.
-        handleImageFiles(imageFiles);
+        if (imageFiles.length > 0) {
+            handleImageFiles(imageFiles);
+        }
+        if (pdfFiles.length > 0 && typeof insertPdfIntoCurrentMemo === 'function') {
+            insertPdfIntoCurrentMemo(pdfFiles[0]);
+        }
+        return;
     }
-    // 💡 이미지가 없는 일반 텍스트 붙여넣기라면 이 로직을 무시하고 Quill의 기본 텍스트 세탁 로직이 작동합니다.
+
+    // 💡 파일 목록이 비어 있을 때, HTML 클립보드 안의 data:image/* <img> 태그 추출
+    const htmlData = clipboard.getData ? clipboard.getData('text/html') : '';
+    if (htmlData && htmlData.includes('data:image/')) {
+        const doc = new DOMParser().parseFromString(htmlData, 'text/html');
+        const imgEls = Array.from(doc.querySelectorAll('img[src^="data:image/"]'));
+        const extracted = imgEls
+            .map((img, idx) => dataUrlToImageFile(img.getAttribute('src'), idx))
+            .filter(Boolean);
+
+        if (extracted.length > 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            handleImageFiles(extracted);
+            return;
+        }
+    }
+    // 💡 일반 텍스트/서식 붙여넣기라면 Quill의 기본 텍스트 세탁 로직이 작동합니다.
 }, true);
 
 // 🎯 [Pro 통합 버전] 마크다운 자동 변환 엔진 (밑줄, 취소선, 코드블록 추가)

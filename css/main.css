@@ -4384,6 +4384,42 @@ body.is-pdf-exporting .quill-wrapper {
     line-height: 1.4;
 }
 
+.md-key-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.md-key-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+@media screen and (max-width: 480px) {
+    #markdown-help-modal .md-help-body {
+        padding: 8px 12px 12px;
+    }
+    .md-help-table th,
+    .md-help-table td {
+        padding: 6px 4px;
+        font-size: 12px;
+    }
+    .md-help-table code.md-key {
+        font-size: 11px;
+        padding: 1px 4px;
+    }
+    .md-key-row {
+        gap: 4px;
+    }
+    .md-key-pair {
+        font-size: 11px;
+        gap: 1px;
+    }
+}
+
 .md-help-table {
     width: 100%;
     border-collapse: collapse;
