@@ -861,6 +861,12 @@ if (quill && quill.theme && quill.theme.tooltip) {
                     }
                 } else if (data.type === 'openExternalError' && data.message && typeof showToast === 'function') {
                     showToast(data.message);
+                } else if (data.type === 'imageEditedFromMyPdf') {
+                    if (typeof window.handleImageEditedFromMyPdf === 'function') {
+                        window.handleImageEditedFromMyPdf(data);
+                    }
+                } else if (data.type === 'myPdfLaunchError' && data.message && typeof showToast === 'function') {
+                    showToast(data.message);
                 }
             } catch { }
         });
@@ -3868,5 +3874,313 @@ window.addEventListener('keydown', function (e) {
             lbStage.classList.remove('is-panning');
         }
     }, { passive: true });
+})();
+
+// ============================================================================
+// 🖼️ [V1.1.0] 이미지 전용 Zen 우클릭 컨텍스트 메뉴 & MY PDF 연동 엔진
+// ============================================================================
+(function initZenImageContextMenu() {
+    const imgMenu = document.getElementById('image-context-menu');
+    const replaceInput = document.getElementById('image-replace-input');
+    if (!imgMenu || !window.quill) return;
+
+    let contextTargetImg = null;
+    const pendingMyPdfEdits = new Map();
+
+    function hideImageContextMenu() {
+        imgMenu.style.display = 'none';
+    }
+
+    async function imageElementToPngBase64(imgEl) {
+        const src = imgEl.src || '';
+        if (src.startsWith('data:image/png;base64,')) {
+            return src.split(',')[1] || '';
+        }
+        return await new Promise((resolve, reject) => {
+            const tempImg = new Image();
+            tempImg.crossOrigin = 'anonymous';
+            tempImg.onload = () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = tempImg.naturalWidth || imgEl.naturalWidth || imgEl.width || 800;
+                    canvas.height = tempImg.naturalHeight || imgEl.naturalHeight || imgEl.height || 600;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(tempImg, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/png');
+                    resolve(dataUrl.split(',')[1] || '');
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            tempImg.onerror = () => reject(new Error('이미지 로드 실패'));
+            tempImg.src = src;
+        });
+    }
+
+    function showImageContextMenu(imgEl, clientX, clientY) {
+        if (!imgEl || !window.quill) return;
+        contextTargetImg = imgEl;
+
+        const tableMenu = document.getElementById('table-context-menu');
+        if (tableMenu) tableMenu.style.display = 'none';
+
+        if (typeof showZenImageResizer === 'function') {
+            showZenImageResizer(imgEl);
+        }
+
+        const isDesktop = Boolean(window.chrome && window.chrome.webview);
+        imgMenu.querySelectorAll('.desktop-only-menu-item').forEach((el) => {
+            el.style.display = isDesktop ? '' : 'none';
+        });
+
+        const curW = (imgEl.style.width || '').trim();
+        imgMenu.querySelectorAll('.image-menu-size-btn').forEach((btn) => {
+            btn.classList.toggle('active', curW === btn.dataset.size);
+        });
+
+        imgMenu.style.visibility = 'hidden';
+        imgMenu.style.display = 'block';
+        const menuWidth = imgMenu.offsetWidth || 220;
+        const menuHeight = imgMenu.offsetHeight || 320;
+        imgMenu.style.visibility = '';
+
+        let x = clientX;
+        let y = clientY;
+        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+        imgMenu.style.left = `${Math.max(10, x)}px`;
+        imgMenu.style.top = `${Math.max(10, y)}px`;
+    }
+
+    // PC 우클릭 가로채기 (캡처 단계에서 표 메뉴와 분리)
+    quill.root.addEventListener('contextmenu', (e) => {
+        const img = e.target.closest('img');
+        if (!img) {
+            hideImageContextMenu();
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        showImageContextMenu(img, e.clientX, e.clientY);
+    });
+
+    // 모바일 롱프레스 지원
+    let imgTouchTimer = null;
+    let imgTouchX = 0;
+    let imgTouchY = 0;
+    quill.root.addEventListener('touchstart', (e) => {
+        const img = e.target.closest('img');
+        if (!img || e.touches.length > 1) return;
+        imgTouchX = e.touches[0].clientX;
+        imgTouchY = e.touches[0].clientY;
+        imgTouchTimer = setTimeout(() => {
+            if (navigator.vibrate) navigator.vibrate(40);
+            showImageContextMenu(img, imgTouchX, imgTouchY);
+        }, 450);
+    }, { passive: true });
+    quill.root.addEventListener('touchmove', (e) => {
+        if (imgTouchTimer && e.touches.length > 0) {
+            if (Math.abs(e.touches[0].clientX - imgTouchX) > 10 || Math.abs(e.touches[0].clientY - imgTouchY) > 10) {
+                clearTimeout(imgTouchTimer);
+                imgTouchTimer = null;
+            }
+        }
+    }, { passive: true });
+    quill.root.addEventListener('touchend', () => {
+        if (imgTouchTimer) {
+            clearTimeout(imgTouchTimer);
+            imgTouchTimer = null;
+        }
+    }, { passive: true });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#image-context-menu')) {
+            hideImageContextMenu();
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && imgMenu.style.display === 'block') {
+            hideImageContextMenu();
+        }
+    });
+
+    // 크기 빠른 조절 버튼
+    imgMenu.querySelectorAll('.image-menu-size-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const pct = parseInt(btn.dataset.size, 10);
+            hideImageContextMenu();
+            if (contextTargetImg && typeof showZenImageResizer === 'function') {
+                showZenImageResizer(contextTargetImg);
+            }
+            if (typeof applyImageWidthPercent === 'function' && !isNaN(pct)) {
+                applyImageWidthPercent(pct);
+            }
+        });
+    });
+
+    // 메뉴 항목 클릭 동작
+    imgMenu.querySelectorAll('.table-menu-item').forEach((item) => {
+        item.addEventListener('click', async () => {
+            const action = item.dataset.action;
+            const targetImg = contextTargetImg;
+            hideImageContextMenu();
+            if (!targetImg) return;
+
+            if (typeof showZenImageResizer === 'function') {
+                showZenImageResizer(targetImg);
+            }
+
+            switch (action) {
+                case 'edit-mypdf': {
+                    if (!window.chrome || !window.chrome.webview) {
+                        if (typeof showToast === 'function') showToast('데스크톱 MY 노트 앱에서만 지원됩니다.');
+                        return;
+                    }
+                    try {
+                        const base64 = await imageElementToPngBase64(targetImg);
+                        const editId = `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                        targetImg.dataset.mypdfEditId = editId;
+                        pendingMyPdfEdits.set(editId, {
+                            memoId: typeof currentMemoId !== 'undefined' ? currentMemoId : null,
+                            prevWidth: targetImg.style.width || targetImg.getAttribute('width') || ''
+                        });
+                        window.chrome.webview.postMessage(JSON.stringify({
+                            type: 'editImageInMyPdf',
+                            editId,
+                            dataBase64: base64
+                        }));
+                        if (typeof showToast === 'function') showToast('MY PDF에서 이미지를 여는 중...');
+                    } catch (err) {
+                        console.error(err);
+                        if (typeof showToast === 'function') showToast('이미지를 MY PDF로 전달하지 못했습니다.');
+                    }
+                    break;
+                }
+                case 'zoom-view': {
+                    if (typeof openZenImageLightbox === 'function') {
+                        openZenImageLightbox(targetImg.src);
+                    }
+                    break;
+                }
+                case 'copy': {
+                    if (typeof copyActiveImage === 'function') {
+                        await copyActiveImage();
+                    }
+                    break;
+                }
+                case 'cut': {
+                    if (typeof cutActiveImage === 'function') {
+                        await cutActiveImage();
+                    }
+                    break;
+                }
+                case 'save-as': {
+                    try {
+                        const base64 = await imageElementToPngBase64(targetImg);
+                        const binStr = atob(base64);
+                        const bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                        const blob = new Blob([bytes], { type: 'image/png' });
+                        const fileName = `MY노트_이미지_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.png`;
+                        if (typeof saveExportBlob === 'function') {
+                            await saveExportBlob(blob, fileName, [{ description: 'PNG 이미지', accept: { 'image/png': ['.png'] } }]);
+                        } else {
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = fileName;
+                            a.click();
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        if (typeof showToast === 'function') showToast('이미지 저장에 실패했습니다.');
+                    }
+                    break;
+                }
+                case 'replace-image': {
+                    if (replaceInput) {
+                        replaceInput.value = '';
+                        replaceInput.click();
+                    }
+                    break;
+                }
+                case 'delete': {
+                    if (typeof deleteActiveImage === 'function') {
+                        deleteActiveImage();
+                    }
+                    break;
+                }
+            }
+        });
+    });
+
+    if (replaceInput) {
+        replaceInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file || !contextTargetImg) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                const newSrc = reader.result;
+                if (typeof newSrc === 'string') {
+                    replaceImageElementInQuill(contextTargetImg, newSrc, contextTargetImg.style.width || '');
+                    if (typeof showToast === 'function') showToast('이미지가 교체되었습니다.');
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function replaceImageElementInQuill(targetImg, newSrc, keepWidth) {
+        if (!targetImg || !window.quill) return false;
+        const blot = Quill.find(targetImg);
+        if (blot) {
+            const idx = quill.getIndex(blot);
+            quill.deleteText(idx, 1, Quill.sources.USER);
+            quill.insertEmbed(idx, 'image', newSrc, Quill.sources.USER);
+            if (keepWidth) {
+                quill.formatText(idx, 1, 'width', keepWidth, Quill.sources.USER);
+            }
+            const [newLeaf] = quill.getLeaf(idx);
+            if (newLeaf && newLeaf.domNode && newLeaf.domNode.tagName === 'IMG') {
+                if (keepWidth) newLeaf.domNode.style.width = keepWidth;
+                if (typeof showZenImageResizer === 'function') {
+                    setTimeout(() => showZenImageResizer(newLeaf.domNode), 30);
+                }
+            }
+            if (typeof saveCurrentMemo === 'function') saveCurrentMemo();
+            return true;
+        }
+        targetImg.src = newSrc;
+        if (typeof saveCurrentMemo === 'function') saveCurrentMemo();
+        return true;
+    }
+
+    window.handleImageEditedFromMyPdf = function (data) {
+        if (!data || !data.dataBase64) return;
+        const mime = data.mimeType || 'image/png';
+        const newSrc = `data:${mime};base64,${data.dataBase64}`;
+        const editId = data.editId || '';
+        const meta = pendingMyPdfEdits.get(editId);
+
+        let targetImg = editId ? quill.root.querySelector(`img[data-mypdf-edit-id="${editId}"]`) : null;
+        if (!targetImg && typeof activeResizerImg !== 'undefined' && activeResizerImg && quill.root.contains(activeResizerImg)) {
+            targetImg = activeResizerImg;
+        }
+
+        if (targetImg) {
+            const prevWidth = (meta && meta.prevWidth) || targetImg.style.width || targetImg.getAttribute('width') || '';
+            replaceImageElementInQuill(targetImg, newSrc, prevWidth);
+            if (typeof showToast === 'function') {
+                showToast('MY PDF 편집 이미지가 노트에 반영되었습니다.');
+            }
+        } else {
+            if (typeof showToast === 'function') {
+                showToast('편집된 이미지가 다운로드 폴더에 저장되었습니다. (원본 노트가 닫혀 있음)');
+            }
+        }
+    };
 })();
 

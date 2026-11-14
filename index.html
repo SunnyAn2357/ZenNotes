@@ -791,24 +791,68 @@
         <div class="table-menu-item text-danger" data-action="delete-table"><i class="fa-solid fa-trash-can"></i> 표 전체 삭제</div>
     </div>
 
+    <!-- 🖼️ [V1.1.0] 이미지 전용 Zen 우클릭 컨텍스트 메뉴 -->
+    <div id="image-context-menu" class="table-context-menu image-context-menu" style="display: none;">
+        <div class="table-menu-item accent-item desktop-only-menu-item" data-action="edit-mypdf">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>MY PDF에서 편집</span>
+        </div>
+        <div class="table-menu-divider desktop-only-menu-item"></div>
+        <div class="table-menu-item" data-action="zoom-view">
+            <i class="fa-solid fa-magnifying-glass-plus"></i>
+            <span>확대 보기</span>
+        </div>
+        <div class="table-menu-item" data-action="copy">
+            <i class="fa-regular fa-copy"></i>
+            <span>이미지 복사</span>
+            <span class="menu-shortcut-hint">Ctrl+C</span>
+        </div>
+        <div class="table-menu-item" data-action="cut">
+            <i class="fa-solid fa-scissors"></i>
+            <span>잘라내기</span>
+            <span class="menu-shortcut-hint">Ctrl+X</span>
+        </div>
+        <div class="table-menu-item" data-action="save-as">
+            <i class="fa-solid fa-download"></i>
+            <span>다른 이름으로 저장...</span>
+        </div>
+        <div class="table-menu-divider"></div>
+        <div class="image-menu-size-row" title="이미지 너비 비율">
+            <button type="button" class="image-menu-size-btn" data-size="25%">25%</button>
+            <button type="button" class="image-menu-size-btn" data-size="50%">50%</button>
+            <button type="button" class="image-menu-size-btn" data-size="75%">75%</button>
+            <button type="button" class="image-menu-size-btn" data-size="100%">100%</button>
+        </div>
+        <div class="table-menu-item" data-action="replace-image">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>이미지 교체...</span>
+        </div>
+        <div class="table-menu-divider"></div>
+        <div class="table-menu-item text-danger" data-action="delete">
+            <i class="fa-solid fa-trash-can"></i>
+            <span>이미지 삭제</span>
+        </div>
+    </div>
+    <input type="file" id="image-replace-input" accept="image/*" style="display: none;" />
+
     <!-- 🔥 [V4.3.0] Firebase SDK (구글 드라이브 GAPI/GIS 대체) -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.0.5"></script>
-    <script src="js/db.js?v=1.0.5"></script>
-    <script src="js/ui.js?v=1.0.5"></script>
-    <script src="js/editor.js?v=1.0.5"></script>
-    <script src="js/file_manager.js?v=1.0.5"></script>
-    <script src="js/io.js?v=1.0.5"></script>
-    <script src="js/auth.js?v=1.0.5"></script>
+    <script src="js/globals.js?v=1.1.0"></script>
+    <script src="js/db.js?v=1.1.0"></script>
+    <script src="js/ui.js?v=1.1.0"></script>
+    <script src="js/editor.js?v=1.1.0"></script>
+    <script src="js/file_manager.js?v=1.1.0"></script>
+    <script src="js/io.js?v=1.1.0"></script>
+    <script src="js/auth.js?v=1.1.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: V1.0.5");
+            console.log("✨ 현재 버전: V1.1.0");
             console.log("=========================================");
         });
     </script>

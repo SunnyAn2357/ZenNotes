@@ -1910,6 +1910,67 @@ body.light-theme .ql-editor li[data-list="checked"] {
     margin: 4px 0;
 }
 
+/* 🖼️ [V1.1.0] 이미지 전용 Zen 우클릭 컨텍스트 메뉴 확장 스타일 */
+.image-context-menu {
+    min-width: 215px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+body.dark-theme .image-context-menu {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+.table-menu-item.accent-item {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.table-menu-item.accent-item i {
+    color: var(--accent);
+}
+
+.menu-shortcut-hint {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.78;
+    font-family: inherit;
+}
+
+.image-menu-size-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px 6px;
+}
+
+.image-menu-size-btn {
+    flex: 1;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+
+.image-menu-size-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.image-menu-size-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+    font-weight: 600;
+}
+
 /* 문단(P) 및 제목(H1 ~ H6) 하단 여백 일괄 설정(문단간격) */
 .ql-editor p,
 .ql-editor h1,
