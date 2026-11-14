@@ -1099,8 +1099,11 @@ function closeSecurityModal(fromPopstate = false) {
   }
 }
 
+let isSecSubmitting = false;
+
 // 🎯 비밀번호 제출 및 검증 로직
 async function submitSecurityPassword() {
+  if (isSecSubmitting) return;
   const input = document.getElementById("sec-password-input");
   const desc = document.getElementById("sec-modal-desc");
   const btn = document.getElementById("sec-confirm-btn");
@@ -1111,6 +1114,10 @@ async function submitSecurityPassword() {
     return;
   }
 
+  isSecSubmitting = true;
+  if (btn) btn.disabled = true;
+
+  try {
   const savedHash = localStorage.getItem("zen_sec_hash");
   const step = input.dataset.step;
 
@@ -1235,6 +1242,10 @@ async function submitSecurityPassword() {
         setTimeout(() => { input.focus(); }, 60);
       }
     }
+  }
+  } finally {
+    isSecSubmitting = false;
+    if (btn) btn.disabled = false;
   }
 }
 

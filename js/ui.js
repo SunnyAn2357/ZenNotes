@@ -605,6 +605,14 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('blur', () => {
+  // 🎯 모바일 가상 키보드/자동완성 시트 호출 시 발생하는 blur 오탐 방지
+  const isTouchMobile = (window.innerWidth <= 768) || (navigator.maxTouchPoints > 0 && !(window.chrome && window.chrome.webview));
+  if (isTouchMobile) return;
+
+  // 🎯 비밀번호 입력 모달이 열려 있는 동안에는 blur로 모달을 강제 닫지 않음 (visibilitychange가 백그라운드 전환 방어)
+  const secModal = document.getElementById('fm-security-modal');
+  if (secModal && secModal.style.display === 'flex') return;
+
   triggerBankAutoLock();
 });
 

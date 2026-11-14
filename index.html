@@ -196,6 +196,7 @@
                         style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
                         비밀번호를 입력하세요.</div>
                     <input type="password" id="sec-password-input" class="sec-input" placeholder="••••••••" autocomplete="off"
+                        enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false"
                         onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitSecurityPassword();}"
                         onclick="event.stopPropagation()">
                 </div>
@@ -436,19 +437,24 @@
     <!-- 🎯 [V3.3.3] 마크다운 문법 안내 모달 (Markdown Cheat Sheet Modal) -->
     <div id="markdown-help-modal" class="fm-modal-overlay" onclick="if(event.target === this) closeMarkdownHelpModal();">
         <div class="fm-modal" style="max-width: 480px;">
-            <div class="fm-modal-header" style="padding: 16px 20px;">
-                <span style="font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-brands fa-markdown" style="color: var(--accent); font-size: 19px;"></i> 마크다운 단축키 안내
-                </span>
+            <div class="fm-modal-header md-help-header">
+                <div class="md-help-title-wrap">
+                    <span class="md-help-title">
+                        <i class="fa-brands fa-markdown" style="color: var(--accent); font-size: 19px;"></i> 마크다운 단축키 안내
+                    </span>
+                    <div class="md-help-subtitle">
+                        <i class="fa-solid fa-lightbulb" style="color: #f59e0b; margin-right: 4px;"></i>입력 후 <b>Space</b>를 누르면 서식이 즉시 적용됩니다.
+                    </div>
+                </div>
                 <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeMarkdownHelpModal()"></i>
             </div>
-            <div class="fm-modal-body" style="padding: 14px 18px; max-height: 65vh; overflow-y: auto;">
+            <div class="fm-modal-body md-help-body">
                 <table class="md-help-table">
                     <thead>
                         <tr>
-                            <th style="width: 14%;">툴바</th>
-                            <th style="width: 52%;">키보드 입력</th>
-                            <th style="width: 34%;">변환 결과</th>
+                            <th style="width: 12%;">툴바</th>
+                            <th style="width: 56%;">키보드 입력</th>
+                            <th style="width: 32%;">변환 결과</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -514,7 +520,12 @@
                         </tr>
                         <tr>
                             <td><i class="fa-solid fa-table-cells-large" style="font-size: 12px; color: var(--text-muted);"></i></td>
-                            <td><code class="md-key">Alt+↓ </code>(행+), <code class="md-key">Alt+↑ </code>(행-), <code class="md-key">Alt+→ </code>(열+), <code class="md-key">Alt+← </code>(열-)</td>
+                            <td>
+                                <div class="md-key-lines">
+                                    <div><code class="md-key">Alt+↓</code>(행+), <code class="md-key">Alt+↑</code>(행-)</div>
+                                    <div><code class="md-key">Alt+→</code>(열+), <code class="md-key">Alt+←</code>(열-)</div>
+                                </div>
+                            </td>
                             <td>행/열 편집</td>
                         </tr>
                         <tr>
@@ -544,9 +555,6 @@
                         </tr>
                     </tbody>
                 </table>
-                <div class="md-help-tip">
-                    <i class="fa-solid fa-lightbulb" style="color: #f59e0b; margin-right: 6px;"></i>키보드 입력 후 <b>스페이스바(Space)</b>를 누르면 서식이 즉시 적용됩니다.
-                </div>
             </div>
             <div class="fm-modal-footer" style="padding: 12px 18px; justify-content: flex-end; display: flex;">
                 <button type="button" style="max-width: 80px; height: 38px; background: var(--accent); color: var(--accent-contrast); font-weight: 700; font-size: 13.5px; border-radius: 8px; cursor: pointer;" onclick="closeMarkdownHelpModal()">
