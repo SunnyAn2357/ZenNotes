@@ -1507,6 +1507,32 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     margin-left: 8px !important;
 }
 
+.ql-snow .ql-tooltip .ql-link-pick-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    margin-right: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.ql-snow .ql-tooltip .ql-link-pick-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent);
+}
+
+.ql-snow .ql-tooltip:not(.ql-editing) .ql-link-pick-btn {
+    display: none !important;
+}
+
 /* 헤더 선택창 높이 반듯하게 맞춤 */
 .ql-toolbar.ql-snow .ql-picker {
     height: 28px !important;

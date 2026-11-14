@@ -3,10 +3,35 @@ let lastAutoConvertedList = null;
 
 hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
 
+function isLocalFileOrFolderPath(val) {
+    if (!val || typeof val !== 'string') return false;
+    const cleaned = val.trim().replace(/^["']|["']$/g, '');
+    return /^[a-zA-Z]:[\\/]/.test(cleaned) ||
+        /^\\\\/.test(cleaned) ||
+        /^%[^%]+%[\\/]/.test(cleaned) ||
+        /^file:\/\//i.test(cleaned);
+}
+
+function normalizeLinkInput(v) {
+    if (!v || typeof v !== 'string') return v;
+    const cleaned = v.trim().replace(/^["']|["']$/g, '');
+    if (!cleaned) return '';
+    if (isLocalFileOrFolderPath(cleaned) || /^(https?:\/\/|mailto:|tel:)/i.test(cleaned)) {
+        return cleaned;
+    }
+    return 'http://' + cleaned;
+}
+
 const Link = Quill.import('formats/link');
 class CustomLink extends Link {
     static create(v) {
-        return super.create(v && !/^https?:\/\//i.test(v) && !/^mailto:/i.test(v) ? 'http://' + v : v);
+        return super.create(normalizeLinkInput(v));
+    }
+    static sanitize(url) {
+        if (isLocalFileOrFolderPath(url)) {
+            return normalizeLinkInput(url);
+        }
+        return super.sanitize(url);
     }
 }
 Quill.register(CustomLink, true);
@@ -779,7 +804,23 @@ function removeLinkSelectionHighlight() {
 }
 window.removeLinkSelectionHighlight = removeLinkSelectionHighlight;
 
-// 🎯 툴팁 닫힘 시 하이라이트 자동 해제 및 모바일 히스토리 정리 훅
+function openLocalOrExternalLink(href) {
+    if (!href) return false;
+    const cleaned = href.trim().replace(/^["']|["']$/g, '');
+    const isLocal = isLocalFileOrFolderPath(cleaned);
+
+    if (isLocal) {
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage(JSON.stringify({ type: 'openExternal', url: cleaned }));
+        } else if (typeof showToast === 'function') {
+            showToast('데스크톱 앱(MY 노트)에서 열 수 있는 로컬 파일/폴더 경로입니다.');
+        }
+        return true;
+    }
+    return false;
+}
+
+// 🎯 툴팁 닫힘 시 하이라이트 자동 해제 및 모바일 히스토리 정리 훅 + 파일/폴더 링크 브릿지
 if (quill && quill.theme && quill.theme.tooltip) {
     const tooltipRoot = quill.theme.tooltip.root;
     if (tooltipRoot) {
@@ -788,6 +829,69 @@ if (quill && quill.theme && quill.theme.tooltip) {
             tooltipRoot.addEventListener(evt, (e) => {
                 e.stopPropagation();
             });
+        });
+
+        // 🎯 데스크톱 WebView2 환경: 하이퍼링크 입력창에 [파일] / [폴더] 찾아보기 버튼 장착
+        if (window.chrome && window.chrome.webview && !tooltipRoot.querySelector('.ql-link-pick-btn')) {
+            const actionBtn = tooltipRoot.querySelector('a.ql-action');
+            if (actionBtn) {
+                const fileBtn = document.createElement('button');
+                fileBtn.type = 'button';
+                fileBtn.className = 'ql-link-pick-btn';
+                fileBtn.title = '내 PC에서 파일 선택';
+                fileBtn.innerHTML = '<i class="fa-regular fa-file"></i> 파일';
+                fileBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'pickLinkFile' }));
+                });
+
+                const folderBtn = document.createElement('button');
+                folderBtn.type = 'button';
+                folderBtn.className = 'ql-link-pick-btn';
+                folderBtn.title = '내 PC에서 폴더 선택';
+                folderBtn.innerHTML = '<i class="fa-regular fa-folder"></i> 폴더';
+                folderBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'pickLinkFolder' }));
+                });
+
+                actionBtn.parentNode.insertBefore(fileBtn, actionBtn);
+                actionBtn.parentNode.insertBefore(folderBtn, actionBtn);
+            }
+        }
+
+        // 🎯 툴팁 미리보기 링크(a.ql-preview) 클릭 시 로컬 경로 직통 열기
+        const previewEl = tooltipRoot.querySelector('a.ql-preview');
+        if (previewEl) {
+            previewEl.addEventListener('click', (e) => {
+                const rawHref = previewEl.getAttribute('href') || previewEl.textContent || '';
+                if (openLocalOrExternalLink(rawHref)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+        }
+    }
+
+    // 🎯 데스크톱 C# 네이티브 응답 수신 (찾아보기 결과 및 오류 토스트)
+    if (window.chrome && window.chrome.webview && !window._zenLinkMsgBound) {
+        window._zenLinkMsgBound = true;
+        window.chrome.webview.addEventListener('message', (event) => {
+            try {
+                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                if (!data || !data.type) return;
+                if (data.type === 'pickedLinkPath' && data.path) {
+                    const tb = quill.theme.tooltip && quill.theme.tooltip.textbox;
+                    if (tb) {
+                        tb.value = data.path;
+                        tb.focus();
+                    }
+                } else if (data.type === 'openExternalError' && data.message && typeof showToast === 'function') {
+                    showToast(data.message);
+                }
+            } catch { }
         });
     }
 
@@ -816,8 +920,23 @@ if (quill && quill.theme && quill.theme.tooltip) {
     };
 }
 
-// 🎯 [V3.3.2] 편집기 스크롤 감지 및 플로팅 버튼 동기화 / 하이라이트 박스 해제
+// 🎯 [V3.3.2] 편집기 스크롤 감지 및 플로팅 버튼 동기화 / 하이라이트 박스 해제 + Ctrl+클릭 로컬 링크 즉시 열기
 if (quill && quill.root) {
+    quill.root.addEventListener('click', (e) => {
+        const anchor = e.target.closest('a');
+        if (!anchor) return;
+        const rawHref = anchor.getAttribute('href') || '';
+        if (e.ctrlKey || e.metaKey) {
+            if (openLocalOrExternalLink(rawHref)) {
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (/^(https?:\/\/|mailto:)/i.test(rawHref)) {
+                e.preventDefault();
+                window.open(rawHref, '_blank', 'noopener');
+            }
+        }
+    });
+
     quill.root.addEventListener("scroll", () => {
         removeLinkSelectionHighlight();
         if (typeof window.updateScrollToTopBtn === "function") {
