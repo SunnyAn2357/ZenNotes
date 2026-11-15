@@ -1954,6 +1954,8 @@ body.dark-theme .image-context-menu {
     font-size: 11.5px;
     font-weight: 500;
     cursor: pointer;
+    justify-content: center;
+    text-align: center;
     transition: all 0.15s;
     user-select: none;
 }
