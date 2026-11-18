@@ -526,6 +526,9 @@ function forceCleanFmUI() {
   if (itemMenu) itemMenu.classList.remove("is-active");
   if (moveModal) moveModal.style.display = "none";
   if (securityModal) securityModal.style.display = "none";
+  if (typeof closeFmTextInputModal === "function") {
+    closeFmTextInputModal(null, false);
+  }
   movingItemIds = [];
 }
 
@@ -870,16 +873,178 @@ function ensureActiveMemoNotDeleted() {
   };
 }
 
-// 1. 새 폴더 생성 (🎯 [V4.2.4] syncId 및 parentSyncId 족보 완벽 부여)
+// 🎯 [V1.1.5] 인앱 텍스트 입력 모달 (OS prompt() 포커스 이탈/오토-락 오작동 원천 차단)
+let pendingFmTextPromptResolve = null;
+
+function ensureFmTextInputModal() {
+  let modal = document.getElementById("fm-name-prompt-modal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "fm-name-prompt-modal";
+  modal.className = "fm-modal-overlay";
+  modal.style.zIndex = "3500";
+  modal.innerHTML = `
+    <div class="fm-modal" style="max-width: 380px; width: 90vw;" onclick="event.stopPropagation()">
+      <div class="fm-modal-header" style="padding: 15px 20px;">
+        <span id="fm-name-prompt-title" style="font-size: 15.5px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-folder-plus" style="color: var(--accent);"></i>
+          <span>새 폴더</span>
+        </span>
+        <i id="fm-name-prompt-x" class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);"></i>
+      </div>
+      <div class="fm-modal-body" style="padding: 16px 20px;" onclick="event.stopPropagation()">
+        <div id="fm-name-prompt-desc" style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.45;"></div>
+        <input type="text" id="fm-name-prompt-input" class="link-field-input" autocomplete="off" />
+      </div>
+      <div class="fm-modal-footer" style="padding: 12px 18px;" onclick="event.stopPropagation()">
+        <button type="button" id="fm-name-prompt-cancel-btn" style="background: var(--surface-hover); color: var(--text-main);">취소</button>
+        <button type="button" id="fm-name-prompt-confirm-btn" style="background: var(--accent); color: var(--accent-contrast); font-weight: 700;">확인</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const input = modal.querySelector("#fm-name-prompt-input");
+  const cancelBtn = modal.querySelector("#fm-name-prompt-cancel-btn");
+  const confirmBtn = modal.querySelector("#fm-name-prompt-confirm-btn");
+  const xBtn = modal.querySelector("#fm-name-prompt-x");
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeFmTextInputModal(null, false);
+  });
+  if (xBtn) xBtn.addEventListener("click", () => closeFmTextInputModal(null, false));
+  if (cancelBtn) cancelBtn.addEventListener("click", () => closeFmTextInputModal(null, false));
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", () => {
+      closeFmTextInputModal(input ? input.value : "", false);
+    });
+  }
+  if (input) {
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        setTimeout(() => closeFmTextInputModal(input.value, false), 0);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeFmTextInputModal(null, false);
+      }
+    });
+  }
+
+  return modal;
+}
+
+function closeFmTextInputModal(resultValue = null, fromPopstate = false) {
+  const modal = document.getElementById("fm-name-prompt-modal");
+  const resolveFn = pendingFmTextPromptResolve;
+  pendingFmTextPromptResolve = null;
+
+  if (modal && modal.style.display === "flex") {
+    modal.style.display = "none";
+  }
+
+  const finish = () => {
+    if (resolveFn) resolveFn(resultValue);
+  };
+
+  if (!fromPopstate && window.history.state && window.history.state.modal === "fm-name-prompt") {
+    if (typeof programmaticBackCount !== "undefined") programmaticBackCount++;
+    let settled = false;
+    const onPop = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("popstate", onPop);
+      finish();
+    };
+    window.addEventListener("popstate", onPop);
+    history.back();
+    setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        window.removeEventListener("popstate", onPop);
+        finish();
+      }
+    }, 60);
+    return;
+  }
+
+  finish();
+}
+window.closeFmTextInputModal = closeFmTextInputModal;
+
+function requestFmTextInput({
+  title = "새 폴더",
+  desc = "이름을 입력하세요.",
+  defaultValue = "",
+  confirmText = "확인",
+  iconClass = "fa-solid fa-folder-plus",
+} = {}) {
+  if (pendingFmTextPromptResolve) {
+    closeFmTextInputModal(null, false);
+  }
+
+  const modal = ensureFmTextInputModal();
+  const titleEl = modal.querySelector("#fm-name-prompt-title");
+  const descEl = modal.querySelector("#fm-name-prompt-desc");
+  const input = modal.querySelector("#fm-name-prompt-input");
+  const confirmBtn = modal.querySelector("#fm-name-prompt-confirm-btn");
+
+  if (titleEl) {
+    titleEl.innerHTML = `<i class="${iconClass}" style="color: var(--accent);"></i><span>${title}</span>`;
+  }
+  if (descEl) descEl.textContent = desc;
+  if (confirmBtn) confirmBtn.textContent = confirmText;
+  if (input) input.value = defaultValue;
+
+  modal.style.display = "flex";
+  history.pushState({ modal: "fm-name-prompt" }, "");
+
+  setTimeout(() => {
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 40);
+
+  return new Promise((resolve) => {
+    pendingFmTextPromptResolve = resolve;
+  });
+}
+
+// 1. 새 폴더 생성 (🎯 [V4.2.4 / V1.1.5] 인앱 입력 모달 + 생성 즉시 새 하위 폴더 진입)
 async function createNewFolder() {
   const globalMenu = document.getElementById("fm-global-menu");
   if (globalMenu) globalMenu.classList.remove("is-active");
 
-  const name = prompt("새 폴더 이름을 입력하세요:", "새 폴더");
+  // 모달 오픈 전 현재 폴더 ID와 경로 스냅샷 선확보
+  const parent = currentFmFolderId;
+  const basePath = Array.isArray(fmPath) && fmPath.length > 0
+    ? fmPath.map((p) => ({ ...p }))
+    : [{ id: null, title: "Home" }];
+
+  const isUnderSec = parent !== null && typeof checkIsUnderSecurity === "function"
+    ? await checkIsUnderSecurity(parent)
+    : false;
+  if (isUnderSec && !isSecurityUnlocked) {
+    showToast("보안 폴더 잠금을 먼저 해제해주세요.");
+    return;
+  }
+
+  const name = await requestFmTextInput({
+    title: "새 폴더",
+    desc: "새 폴더 이름을 입력하세요.",
+    defaultValue: "새 폴더",
+    confirmText: "만들기",
+    iconClass: "fa-solid fa-folder-plus",
+  });
   if (!name || name.trim() === "") return;
 
-  // 🎯 현재 위치(Home이면 null)에 그대로 생성됨 + 부모의 syncId 조회
-  const parent = currentFmFolderId;
+  // 입력 대기 중 오토-락으로 보안 폴더가 잠긴 경우 생성 차단
+  if (isUnderSec && !isSecurityUnlocked) return;
+
+  const trimmedName = name.trim();
   let parentSyncId = null;
   if (parent !== null && db) {
     const parentObj = await new Promise((resolve) => {
@@ -892,35 +1057,84 @@ async function createNewFolder() {
   }
 
   const tx = db.transaction(["memos"], "readwrite");
+  let createdFolderId = null;
   tx.objectStore("memos").add({
-    title: name.trim(),
+    title: trimmedName,
     type: "folder",
     parentId: parent,
     parentSyncId: parentSyncId,
     syncId: typeof generateSyncId === "function" ? generateSyncId() : Date.now().toString(36),
     updatedAt: Date.now(),
     isDeleted: false,
-  });
-  // 🎯 확실히 DB 저장이 끝난 뒤(oncomplete) 화면 새로고침
+  }).onsuccess = (e) => {
+    createdFolderId = e.target.result;
+  };
+
+  // 🎯 DB 저장이 끝난 뒤 방금 생성된 새 폴더 내부로 즉시 진입
   tx.oncomplete = () => {
-    loadFileManager(currentFmFolderId);
+    if (createdFolderId !== null && createdFolderId !== undefined) {
+      const searchInput = document.getElementById("fm-search-input");
+      if (searchInput && searchInput.value !== "") {
+        searchInput.value = "";
+      }
+
+      if (!Array.isArray(fmPath) || fmPath.length === 0 || fmPath[fmPath.length - 1].id !== parent) {
+        fmPath = basePath.map((p) => ({ ...p }));
+      }
+      fmPath.push({ id: createdFolderId, title: trimmedName });
+      history.pushState(
+        { fmOpen: true, fmFolderId: createdFolderId, fmPath: fmPath.map((p) => ({ ...p })) },
+        "",
+      );
+      loadFileManager(createdFolderId);
+    } else {
+      loadFileManager(currentFmFolderId);
+    }
     updateUnsyncedCount();
     if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
 }
 
 // 2. 이름 바꾸기
-function fmRename(id) {
+async function fmRename(id) {
+  const itemMenu = document.getElementById("fm-item-menu");
+  if (itemMenu) itemMenu.classList.remove("is-active");
+  if (!db) return;
+
+  const target = await new Promise((resolve) => {
+    db
+      .transaction(["memos"], "readonly")
+      .objectStore("memos")
+      .get(id).onsuccess = (e) => resolve(e.target.result);
+  });
+  if (!target) return;
+
+  const isUnderSec = target.parentId !== null && typeof checkIsUnderSecurity === "function"
+    ? await checkIsUnderSecurity(target.parentId)
+    : false;
+  if (isUnderSec && !isSecurityUnlocked) {
+    showToast("보안 폴더 잠금을 먼저 해제해주세요.");
+    return;
+  }
+
+  const newName = await requestFmTextInput({
+    title: "이름 바꾸기",
+    desc: "새 이름을 입력하세요.",
+    defaultValue: target.title || "",
+    confirmText: "변경",
+    iconClass: "fa-solid fa-pen",
+  });
+  if (!newName || newName.trim() === "" || newName.trim() === target.title) return;
+  if (isUnderSec && !isSecurityUnlocked) return;
+
+  const trimmedTitle = newName.trim();
   let renamedTitle = null;
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
   store.get(id).onsuccess = (e) => {
     const m = e.target.result;
     if (!m) return;
-    const newName = prompt("새 이름을 입력하세요:", m.title);
-    if (!newName || newName.trim() === "" || newName === m.title) return;
-
-    renamedTitle = newName.trim();
+    renamedTitle = trimmedTitle;
     m.title = renamedTitle;
     m.updatedAt = Date.now();
     store.put(m);
@@ -1848,11 +2062,15 @@ async function createFolderInMoveModal() {
     }
   }
 
-  const folderName = prompt(
-    `[${parentTitle}] 안에 생성할 새 폴더 이름을 입력하세요:`,
-    "새 폴더",
-  );
+  const folderName = await requestFmTextInput({
+    title: "새 폴더",
+    desc: `[${parentTitle}] 안에 생성할 새 폴더 이름을 입력하세요.`,
+    defaultValue: "새 폴더",
+    confirmText: "만들기",
+    iconClass: "fa-solid fa-folder-plus",
+  });
   if (!folderName || folderName.trim() === "") return;
+  if (isParentUnderSec && !isSecurityUnlocked) return;
 
   const trimmedName = folderName.trim();
   const tx = db.transaction(["memos"], "readwrite");

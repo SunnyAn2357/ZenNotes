@@ -577,11 +577,17 @@ function triggerBankAutoLock() {
   // 비동기 history.go가 아닌 동기식으로 즉시 안전한 바탕화면(Home) 0층으로 강제 퇴거 및 재렌더링
   const fmPane = document.getElementById('file-manager-pane');
   if (fmPane && fmPane.style.display === 'flex') {
-    if (typeof forceCleanFmUI === 'function') forceCleanFmUI();
-    fmPath = [{ id: null, title: "Home" }];
-    currentFmFolderId = null;
-    if (typeof loadFileManager === 'function') {
-      loadFileManager(null);
+    const isInsideSecurityFm =
+      wasUnlocked ||
+      currentFmFolderId === globalSecurityFolderId ||
+      (Array.isArray(fmPath) && fmPath.some((p) => p && p.id === globalSecurityFolderId));
+    if (isInsideSecurityFm) {
+      if (typeof forceCleanFmUI === 'function') forceCleanFmUI();
+      fmPath = [{ id: null, title: "Home" }];
+      currentFmFolderId = null;
+      if (typeof loadFileManager === 'function') {
+        loadFileManager(null);
+      }
     }
   }
 

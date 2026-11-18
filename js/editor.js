@@ -1927,6 +1927,12 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        const fmNamePromptModal = document.getElementById("fm-name-prompt-modal");
+        if (fmNamePromptModal && fmNamePromptModal.style.display === "flex") {
+            if (typeof closeFmTextInputModal === "function") closeFmTextInputModal(null, false);
+            return;
+        }
+
         const specModal = document.getElementById("special-char-modal");
         if (specModal && (specModal.style.display === "flex" || specModal.classList.contains("is-open"))) {
             closeSpecialCharModal();
@@ -2110,6 +2116,12 @@ window.addEventListener("popstate", (e) => {
     const linkInsertModal = document.getElementById("link-insert-modal");
     if (linkInsertModal && linkInsertModal.style.display === "flex") {
         closeLinkInsertModal(true);
+        return;
+    }
+
+    const fmNamePromptModal = document.getElementById("fm-name-prompt-modal");
+    if (fmNamePromptModal && fmNamePromptModal.style.display === "flex") {
+        if (typeof closeFmTextInputModal === "function") closeFmTextInputModal(null, true);
         return;
     }
 
