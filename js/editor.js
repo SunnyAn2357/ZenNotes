@@ -1288,34 +1288,74 @@ quill.root.addEventListener('paste', function (e) {
     const imageFiles = files.filter(f => f.type && f.type.startsWith('image/'));
     const pdfFiles = files.filter(f => f.type === 'application/pdf' || (f.name && f.name.toLowerCase().endsWith('.pdf')));
 
-    if (imageFiles.length > 0 || pdfFiles.length > 0) {
+    // 1. PDF 파일 붙여넣기
+    if (pdfFiles.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
 
         if (imageFiles.length > 0) {
             handleImageFiles(imageFiles);
         }
-        if (pdfFiles.length > 0 && typeof insertPdfIntoCurrentMemo === 'function') {
+        if (typeof insertPdfIntoCurrentMemo === 'function') {
             insertPdfIntoCurrentMemo(pdfFiles[0]);
         }
         return;
     }
 
-    // 💡 파일 목록이 비어 있을 때, HTML 클립보드 안의 data:image/* <img> 태그 추출
+    // 2. HTML 클립보드 검사: 텍스트·문서 구조·에디터 내부 이미지 복사본은 Quill 순정 붙여넣기로 통과
     const htmlData = clipboard.getData ? clipboard.getData('text/html') : '';
-    if (htmlData && htmlData.includes('data:image/')) {
+    if (htmlData) {
         const doc = new DOMParser().parseFromString(htmlData, 'text/html');
-        const imgEls = Array.from(doc.querySelectorAll('img[src^="data:image/"]'));
-        const extracted = imgEls
-            .map((img, idx) => dataUrlToImageFile(img.getAttribute('src'), idx))
-            .filter(Boolean);
+        const body = doc.body;
+        const cleanedText = (body ? body.textContent : '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+        const hasTextContent = cleanedText.length > 0;
+        const hasStructure = Boolean(body && body.querySelector('table, ul, ol, blockquote, pre, hr, h1, h2, h3, h4, h5, h6'));
+        const dataImgEls = body ? Array.from(body.querySelectorAll('img[src^="data:image/"]')) : [];
+        const isEditorImageCopy = dataImgEls.length > 0 && (
+            dataImgEls.length > 1 ||
+            dataImgEls.some(img => img.hasAttribute('data-size') || img.hasAttribute('style'))
+        );
 
-        if (extracted.length > 0) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            handleImageFiles(extracted);
+        if (hasTextContent || hasStructure || isEditorImageCopy) {
+            // 단일 에디터 이미지(크기 비율 포함) 복사 시 imageFiles가 동반되면 Quill uploader가 크기를 초기화하므로 직접 HTML 붙여넣기
+            if (isEditorImageCopy && imageFiles.length > 0 && body && body.childElementCount === 1 && body.firstElementChild && body.firstElementChild.tagName === 'IMG') {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                const range = quill.getSelection(true);
+                if (range) {
+                    quill.clipboard.onPaste(range, {
+                        html: htmlData,
+                        text: clipboard.getData ? clipboard.getData('text/plain') : ''
+                    });
+                }
+            }
+            setTimeout(() => {
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            }, 30);
             return;
         }
+
+        // 텍스트/구조 없는 순수 단일 data:image/* HTML 폴백
+        if (imageFiles.length === 0 && dataImgEls.length > 0) {
+            const extracted = dataImgEls
+                .map((img, idx) => dataUrlToImageFile(img.getAttribute('src'), idx))
+                .filter(Boolean);
+
+            if (extracted.length > 0) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                handleImageFiles(extracted);
+                return;
+            }
+        }
+    }
+
+    // 3. 순수 외부 이미지 파일(캡처 도구, 탐색기, 웹 이미지 복사 등) 붙여넣기
+    if (imageFiles.length > 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        handleImageFiles(imageFiles);
+        return;
     }
     // 💡 일반 텍스트/서식 붙여넣기라면 Quill의 기본 텍스트 세탁 로직이 작동합니다.
 }, true);
@@ -1575,28 +1615,41 @@ quill.on('text-change', function (delta, oldDelta, source) {
 //     observer.observe(headerPicker, { attributes: true });
 // }
 
-// [3] 이미지 파일 처리 함수
-const handleImageFiles = (files) => {
-    Array.from(files).forEach(file => {
-        if (file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const range = quill.getSelection(true); // 현재 커서 위치 파악
+// [3] 이미지 파일 처리 함수 (복수 이미지 순차 삽입 보장)
+const handleImageFiles = async (files) => {
+    const imgFiles = Array.from(files || []).filter(file => file && file.type && file.type.startsWith('image/'));
+    if (imgFiles.length === 0) return;
 
-                // 1. 이미지 삽입 (1칸 차지)
-                quill.insertEmbed(range.index, 'image', e.target.result, Quill.sources.USER);
-
-                // 2. 🎯 추가됨: 이미지 바로 뒤에 엔터(\n) 강제 삽입 (1칸 차지)
-                quill.insertText(range.index + 1, '\n', Quill.sources.USER);
-
-                // 3. 🎯 수정됨: 커서를 이미지(1칸) + 엔터(1칸) = 총 1칸 뒤인 '새로운 줄'로 이동
-                quill.setSelection(range.index + 2, Quill.sources.SILENT); // 🎯 [V4.4.7] 이미지(1칸)+엔터(1칸) 다음 새 줄로 이동
-
-                triggerAutoSave(); // 자동 저장 강제 실행
-            };
-            reader.readAsDataURL(file);
-        }
+    const readAsDataUrl = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
     });
+
+    for (const file of imgFiles) {
+        try {
+            const dataUrl = await readAsDataUrl(file);
+            if (!dataUrl) continue;
+            const range = quill.getSelection(true) || { index: Math.max(0, quill.getLength() - 1), length: 0 };
+            const insertAt = range.index;
+            if (range.length > 0) {
+                quill.deleteText(insertAt, range.length, Quill.sources.USER);
+            }
+
+            // 1. 이미지 삽입 (1칸 차지)
+            quill.insertEmbed(insertAt, 'image', dataUrl, Quill.sources.USER);
+
+            // 2. 이미지 바로 뒤에 엔터(\n) 삽입 (1칸 차지)
+            quill.insertText(insertAt + 1, '\n', Quill.sources.USER);
+
+            // 3. 커서를 이미지(1칸)+엔터(1칸) 다음 새 줄로 이동
+            quill.setSelection(insertAt + 2, 0, Quill.sources.SILENT);
+        } catch (err) {
+            console.warn('이미지 삽입 실패:', err);
+        }
+    }
+    triggerAutoSave(); // 자동 저장 강제 실행
 };
 
 // 🎯 [V4.8.0] 파일 드래그 앤 드롭 지원 및 "새 노트 열기 vs 여기에 삽입" 모달 연동
@@ -1660,6 +1713,9 @@ window.quill = quill;
 quill.on("selection-change", function (range, oldRange, source) {
     if (range) {
         if (range.length > 0) {
+            // 텍스트/블록 범위 선택(드래그, Ctrl+A 등) 시 이미지 단독/다중 선택 해제하여 복사/잘라내기 충돌 방지
+            if (typeof hideZenImageResizer === 'function') hideZenImageResizer();
+
             // 1. 블록이 잡혔을 때 (드래그 했을 때)
             // 🎯 기존에 만들어둔 Visual Viewport 센서로 현재 키보드가 켜져 있는지 확인합니다.
             const isKeyboardUp =
@@ -1828,9 +1884,18 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
-        // 🎯 [V4.9.0] 이미지 크기 조절 핸들(Resizer) 선택 해제
+        // 🎯 [V1.1.4] 이미지 우클릭 메뉴 닫기 우선
+        const imgMenuEl = document.getElementById("image-context-menu");
+        if (imgMenuEl && imgMenuEl.style.display === "block") {
+            imgMenuEl.style.display = "none";
+            return;
+        }
+
+        // 🎯 [V4.9.0] 이미지 크기 조절 핸들(Resizer) 및 다중 이미지 선택 해제
         const imgResizer = document.getElementById("zen-image-resizer");
-        if (imgResizer && imgResizer.style.display === "block") {
+        const hasImgSel = (imgResizer && imgResizer.style.display === "block") ||
+            (typeof window.hasSelectedImages === "function" && window.hasSelectedImages());
+        if (hasImgSel) {
             if (typeof hideZenImageResizer === "function") hideZenImageResizer();
             return;
         }
@@ -3179,6 +3244,7 @@ window.addEventListener('keydown', function (e) {
 // ============================================================================
 (function initZenImageResizerAndLightbox() {
     let activeResizingImg = null;
+    const selectedImages = new Set();
     let isDraggingResize = false;
     let dragDir = 'se';
     let dragStartX = 0;
@@ -3305,8 +3371,72 @@ window.addEventListener('keydown', function (e) {
         });
     }
 
+    // 다중 선택 이미지 시각 클래스 동기화 및 본문 순서 정렬 헬퍼
+    function syncMultiSelectedClasses() {
+        if (!quill || !quill.root) return;
+        Array.from(selectedImages).forEach((img) => {
+            if (!img || !img.isConnected || !quill.root.contains(img)) {
+                selectedImages.delete(img);
+            }
+        });
+        quill.root.querySelectorAll('img.zen-img-multi-selected').forEach((img) => {
+            if (selectedImages.size < 2 || !selectedImages.has(img)) {
+                img.classList.remove('zen-img-multi-selected');
+                if (img.classList.length === 0) img.removeAttribute('class');
+            }
+        });
+        if (selectedImages.size >= 2) {
+            selectedImages.forEach((img) => {
+                img.classList.add('zen-img-multi-selected');
+            });
+        }
+    }
+
+    function getSelectedImagesOrdered() {
+        const imgs = [];
+        if (quill && quill.root) {
+            selectedImages.forEach((img) => {
+                if (img && img.isConnected && quill.root.contains(img)) {
+                    imgs.push(img);
+                } else {
+                    selectedImages.delete(img);
+                }
+            });
+            if (imgs.length === 0 && activeResizingImg && activeResizingImg.isConnected && quill.root.contains(activeResizingImg)) {
+                imgs.push(activeResizingImg);
+            }
+        }
+        imgs.sort((a, b) => {
+            try {
+                const blotA = Quill.find(a);
+                const blotB = Quill.find(b);
+                if (blotA && blotB) {
+                    return quill.getIndex(blotA) - quill.getIndex(blotB);
+                }
+            } catch (e) {}
+            const pos = a.compareDocumentPosition(b);
+            if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+            if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+            return 0;
+        });
+        return imgs;
+    }
+
+    function buildCleanImageHtml(img) {
+        const clone = img.cloneNode(false);
+        clone.classList.remove('zen-img-multi-selected');
+        if (clone.classList.length === 0) {
+            clone.removeAttribute('class');
+        }
+        return clone.outerHTML;
+    }
+
     // 리사이저 위치 및 클리핑 동기화
     function syncZenImageResizerPosition() {
+        if (selectedImages.size > 1) {
+            resizerEl.style.display = 'none';
+            return;
+        }
         if (!activeResizingImg || !activeResizingImg.isConnected || !quill.root.contains(activeResizingImg)) {
             hideZenImageResizer();
             return;
@@ -3369,7 +3499,7 @@ window.addEventListener('keydown', function (e) {
     }
 
     function requestSyncPosition() {
-        if (!activeResizingImg) return;
+        if (!activeResizingImg || selectedImages.size > 1) return;
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(syncZenImageResizerPosition);
     }
@@ -3377,6 +3507,10 @@ window.addEventListener('keydown', function (e) {
     // 이미지 선택 및 리사이저 표시
     function showZenImageResizer(img) {
         if (!img) return;
+        selectedImages.clear();
+        selectedImages.add(img);
+        syncMultiSelectedClasses();
+
         activeResizingImg = img;
         resizerEl.style.display = 'block';
 
@@ -3394,9 +3528,11 @@ window.addEventListener('keydown', function (e) {
         syncZenImageResizerPosition();
     }
 
-    // 리사이저 숨기기
+    // 리사이저 숨기기 (단일/다중 이미지 선택 모두 해제)
     function hideZenImageResizer() {
         activeResizingImg = null;
+        selectedImages.clear();
+        syncMultiSelectedClasses();
         isDraggingResize = false;
         resizerEl.classList.remove('is-dragging');
         resizerEl.style.display = 'none';
@@ -3406,138 +3542,217 @@ window.addEventListener('keydown', function (e) {
     window.hideZenImageResizer = hideZenImageResizer;
     window.syncZenImageResizerPosition = requestSyncPosition;
 
-    // 이미지 크기(퍼센트) 확정 적용 (Quill Blot & DOM 동시 반영 -> 저장/동기화/실행취소 100% 보장)
-    function applyImageWidthPercent(img, pct) {
-        if (!img) return;
+    // 이미지 크기(퍼센트) 확정 적용 (단일/다중 선택 지원, Quill Blot & DOM 동시 반영)
+    function applyImageWidthPercent(imgOrPct, maybePct) {
+        let pct = maybePct;
+        let explicitImg = imgOrPct;
+        if (typeof imgOrPct === 'number' && maybePct === undefined) {
+            pct = imgOrPct;
+            explicitImg = null;
+        }
+        if (typeof pct !== 'number' || isNaN(pct)) return;
+
         const clamped = Math.max(10, Math.min(100, Math.round(pct)));
         const styleVal = `width: ${clamped}%; height: auto;`;
         const sizeVal = `${clamped}%`;
 
-        img.setAttribute('style', styleVal);
-        img.setAttribute('data-size', sizeVal);
-        img.removeAttribute('width');
-        img.removeAttribute('height');
-
-        try {
-            const blot = Quill.find(img);
-            if (blot && typeof blot.format === 'function') {
-                blot.format('style', styleVal);
-                blot.format('data-size', sizeVal);
-                blot.format('width', false);
-                blot.format('height', false);
-            }
-        } catch (err) {
-            console.warn('Image blot format sync:', err);
+        let targets = getSelectedImagesOrdered();
+        if (explicitImg && (!targets.length || (targets.length === 1 && targets[0] !== explicitImg && selectedImages.size <= 1))) {
+            targets = [explicitImg];
         }
+        if (!targets.length) return;
 
-        updateToolbarActiveButtons(clamped);
-        badgeEl.textContent = sizeVal;
-        syncZenImageResizerPosition();
-        setTimeout(syncZenImageResizerPosition, 20);
+        targets.forEach((targetImg) => {
+            targetImg.setAttribute('style', styleVal);
+            targetImg.setAttribute('data-size', sizeVal);
+            targetImg.removeAttribute('width');
+            targetImg.removeAttribute('height');
+
+            try {
+                const blot = Quill.find(targetImg);
+                if (blot && typeof blot.format === 'function') {
+                    blot.format('style', styleVal);
+                    blot.format('data-size', sizeVal);
+                    blot.format('width', false);
+                    blot.format('height', false);
+                }
+            } catch (err) {
+                console.warn('Image blot format sync:', err);
+            }
+        });
+
+        if (targets.length === 1 && resizerEl.style.display === 'block') {
+            updateToolbarActiveButtons(clamped);
+            badgeEl.textContent = sizeVal;
+            syncZenImageResizerPosition();
+            setTimeout(syncZenImageResizerPosition, 20);
+        }
 
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
     }
 
-    // 선택된 이미지 삭제 헬퍼
+    // 선택된 이미지 삭제 헬퍼 (단일/다중 선택 일괄 처리, Ctrl+Z 1회 복원)
     function deleteActiveImage() {
-        if (!activeResizingImg) return;
-        const targetImg = activeResizingImg;
+        const targets = getSelectedImagesOrdered();
+        if (!targets.length) return;
+
+        const items = targets.map((img) => {
+            let idx = -1;
+            try {
+                const blot = Quill.find(img);
+                if (blot) idx = quill.getIndex(blot);
+            } catch (e) {}
+            return { img, idx };
+        });
+
         hideZenImageResizer();
 
-        try {
-            const blot = Quill.find(targetImg);
-            if (blot) {
-                const idx = quill.getIndex(blot);
-                quill.deleteText(idx, 1, Quill.sources.USER);
-                quill.setSelection(idx, 0, Quill.sources.SILENT);
-            } else {
-                targetImg.remove();
+        const validItems = items.filter(it => it.idx >= 0).sort((a, b) => b.idx - a.idx);
+        const invalidItems = items.filter(it => it.idx < 0);
+
+        if (validItems.length > 0) {
+            const minIdx = validItems[validItems.length - 1].idx;
+            try {
+                if (quill.history && typeof quill.history.cutoff === 'function') {
+                    quill.history.cutoff();
+                }
+                validItems.forEach(({ idx }) => {
+                    quill.deleteText(idx, 1, Quill.sources.USER);
+                });
+                if (quill.history && typeof quill.history.cutoff === 'function') {
+                    quill.history.cutoff();
+                }
+                quill.setSelection(Math.min(minIdx, Math.max(0, quill.getLength() - 1)), 0, Quill.sources.SILENT);
+            } catch (e) {
+                validItems.forEach(({ img }) => {
+                    if (img && img.parentNode) img.remove();
+                });
             }
-        } catch (e) {
-            targetImg.remove();
         }
+        invalidItems.forEach(({ img }) => {
+            if (img && img.parentNode) img.remove();
+        });
+
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
     }
 
-    // 🎯 [V4.9.10] 이미지/PDF 조각 클립보드 복사 함수 (Ctrl+C 및 툴바 복사 버튼)
+    // 🎯 [V4.9.10 / V1.1.4] 이미지/PDF 조각 클립보드 복사 함수 (단일 및 다중 선택 통합 처리)
     async function copyActiveImage(showToastMsg = true) {
-        if (!activeResizingImg) return false;
-        const targetImg = activeResizingImg;
-        const src = targetImg.src;
-        if (!src) return false;
+        const targets = getSelectedImagesOrdered();
+        if (!targets.length) return false;
 
         let copied = false;
 
-        // 1. 표준 Clipboard API 시도 (Blob 복사)
-        if (navigator.clipboard && window.isSecureContext !== false) {
-            try {
-                let blob = null;
-                if (src.startsWith('data:image/')) {
-                    const res = await fetch(src);
-                    blob = await res.blob();
-                } else if (src.startsWith('blob:')) {
-                    const res = await fetch(src);
-                    blob = await res.blob();
-                } else {
-                    // 일반 이미지/외부 URL: 캔버스를 통해 깨끗한 PNG Blob 추출
-                    blob = await new Promise((resolve, reject) => {
-                        const tempImg = new Image();
-                        tempImg.crossOrigin = 'anonymous';
-                        tempImg.onload = () => {
-                            try {
-                                const cvs = document.createElement('canvas');
-                                cvs.width = tempImg.naturalWidth || tempImg.width || 300;
-                                cvs.height = tempImg.naturalHeight || tempImg.height || 150;
-                                const ctx = cvs.getContext('2d');
-                                ctx.drawImage(tempImg, 0, 0);
-                                cvs.toBlob((b) => b ? resolve(b) : reject(new Error('Canvas null')), 'image/png');
-                            } catch (err) {
-                                reject(err);
-                            }
-                        };
-                        tempImg.onerror = reject;
-                        tempImg.src = src;
-                    });
-                }
+        if (targets.length === 1) {
+            const targetImg = targets[0];
+            const src = targetImg.src;
+            if (!src) return false;
+            const cleanHtml = buildCleanImageHtml(targetImg);
 
-                if (blob && typeof ClipboardItem !== 'undefined') {
-                    const pngBlob = blob.type === 'image/png' ? blob : new Blob([await blob.arrayBuffer()], { type: 'image/png' });
+            // 1. 표준 Clipboard API 시도 (Blob 복사)
+            if (navigator.clipboard && window.isSecureContext !== false) {
+                try {
+                    let blob = null;
+                    if (src.startsWith('data:image/') || src.startsWith('blob:')) {
+                        const res = await fetch(src);
+                        blob = await res.blob();
+                    } else {
+                        blob = await new Promise((resolve, reject) => {
+                            const tempImg = new Image();
+                            tempImg.crossOrigin = 'anonymous';
+                            tempImg.onload = () => {
+                                try {
+                                    const cvs = document.createElement('canvas');
+                                    cvs.width = tempImg.naturalWidth || tempImg.width || 300;
+                                    cvs.height = tempImg.naturalHeight || tempImg.height || 150;
+                                    const ctx = cvs.getContext('2d');
+                                    ctx.drawImage(tempImg, 0, 0);
+                                    cvs.toBlob((b) => b ? resolve(b) : reject(new Error('Canvas null')), 'image/png');
+                                } catch (err) {
+                                    reject(err);
+                                }
+                            };
+                            tempImg.onerror = reject;
+                            tempImg.src = src;
+                        });
+                    }
+
+                    if (blob && typeof ClipboardItem !== 'undefined') {
+                        const pngBlob = blob.type === 'image/png' ? blob : new Blob([await blob.arrayBuffer()], { type: 'image/png' });
+                        const clipData = {
+                            'image/png': pngBlob,
+                            'text/html': new Blob([cleanHtml], { type: 'text/html' })
+                        };
+                        await navigator.clipboard.write([new ClipboardItem(clipData)]);
+                        copied = true;
+                    }
+                } catch (clipErr) {
+                    console.warn('ClipboardItem blob write failed, trying fallback:', clipErr);
+                }
+            }
+
+            // 2. Fallback: 텍스트/HTML 복사 시도
+            if (!copied) {
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(src);
+                        copied = true;
+                    }
+                } catch (textErr) {
+                    console.warn('writeText fallback failed:', textErr);
+                }
+            }
+
+            // 3. Fallback: DOM Range + execCommand('copy')
+            if (!copied) {
+                try {
+                    const range = document.createRange();
+                    range.selectNode(targetImg);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    copied = document.execCommand('copy');
+                    sel.removeAllRanges();
+                } catch (cmdErr) {
+                    console.warn('execCommand copy fallback failed:', cmdErr);
+                }
+            }
+        } else {
+            // 다중 선택(2개 이상) 이미지 HTML 결합 복사
+            const htmlPayload = targets.map(img => `<p>${buildCleanImageHtml(img)}</p>`).join('');
+
+            if (navigator.clipboard && window.isSecureContext !== false && typeof ClipboardItem !== 'undefined') {
+                try {
                     const clipData = {
-                        'image/png': pngBlob,
-                        'text/html': new Blob([targetImg.outerHTML], { type: 'text/html' })
+                        'text/html': new Blob([htmlPayload], { type: 'text/html' }),
+                        'text/plain': new Blob([''], { type: 'text/plain' })
                     };
                     await navigator.clipboard.write([new ClipboardItem(clipData)]);
                     copied = true;
+                } catch (clipErr) {
+                    console.warn('Multi-image ClipboardItem write failed, trying fallback:', clipErr);
                 }
-            } catch (clipErr) {
-                console.warn('ClipboardItem blob write failed, trying fallback:', clipErr);
             }
-        }
 
-        // 2. Fallback: 텍스트/HTML 복사 시도
-        if (!copied) {
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(src);
-                    copied = true;
+            if (!copied) {
+                const tempDiv = document.createElement('div');
+                tempDiv.setAttribute('contenteditable', 'true');
+                tempDiv.style.cssText = 'position:fixed;left:-99999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+                tempDiv.innerHTML = htmlPayload;
+                document.body.appendChild(tempDiv);
+                try {
+                    const range = document.createRange();
+                    range.selectNodeContents(tempDiv);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    copied = document.execCommand('copy');
+                    sel.removeAllRanges();
+                } catch (cmdErr) {
+                    console.warn('Multi-image execCommand copy fallback failed:', cmdErr);
+                } finally {
+                    tempDiv.remove();
                 }
-            } catch (textErr) {
-                console.warn('writeText fallback failed:', textErr);
-            }
-        }
-
-        // 3. Fallback: DOM Range + execCommand('copy')
-        if (!copied) {
-            try {
-                const range = document.createRange();
-                range.selectNode(targetImg);
-                const sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-                copied = document.execCommand('copy');
-                sel.removeAllRanges();
-            } catch (cmdErr) {
-                console.warn('execCommand copy fallback failed:', cmdErr);
             }
         }
 
@@ -3551,13 +3766,26 @@ window.addEventListener('keydown', function (e) {
         return copied;
     }
 
-    // 🎯 [V4.9.10] 이미지/PDF 조각 잘라내기 함수 (Ctrl+X 및 툴바 잘라내기 버튼)
+    // 🎯 [V4.9.10] 이미지/PDF 조각 잘라내기 함수 (Ctrl+X 및 우클릭 잘라내기)
     async function cutActiveImage() {
-        if (!activeResizingImg) return;
+        const targets = getSelectedImagesOrdered();
+        if (!targets.length) return;
         const success = await copyActiveImage(false);
+        if (!success) {
+            if (typeof showToast === 'function') showToast("클립보드 복사에 실패하여 잘라내기를 취소했습니다.");
+            return;
+        }
         deleteActiveImage();
         if (typeof showToast === 'function') showToast("이미지를 잘라냈습니다.");
     }
+
+    window.applyImageWidthPercent = applyImageWidthPercent;
+    window.deleteActiveImage = deleteActiveImage;
+    window.copyActiveImage = copyActiveImage;
+    window.cutActiveImage = cutActiveImage;
+    window.hasSelectedImages = () => Boolean(activeResizingImg || selectedImages.size > 0);
+    window.hasMultiSelectedImages = () => selectedImages.size > 1;
+    window.isImageSelected = (img) => Boolean(img && (selectedImages.has(img) || activeResizingImg === img));
 
     // 3. 미니 툴바 버튼 클릭 이벤트
     toolbarEl.addEventListener('click', (e) => {
@@ -3670,13 +3898,66 @@ window.addEventListener('keydown', function (e) {
     window.addEventListener('mouseup', endResizeDrag);
     window.addEventListener('touchend', endResizeDrag);
 
-    // 5. 에디터 내 이미지 클릭 / 터치 / 더블클릭 감지
+    // 5. 에디터 내 이미지 클릭 / Ctrl+좌클릭 다중 선택 / 터치 / 더블클릭 감지
+    quill.root.addEventListener('mousedown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.button === 0) {
+            const img = e.target.closest('img');
+            if (img && quill.root.contains(img)) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }
+    }, true);
+
     quill.root.addEventListener('click', (e) => {
         const img = e.target.closest('img');
+        const isCtrl = e.ctrlKey || e.metaKey;
+
+        // 드래그로 텍스트+이미지 범위가 선택된 상태의 일반 클릭은 범위 선택 보존
+        if (!isCtrl) {
+            const qSel = quill.getSelection();
+            const domSel = window.getSelection();
+            const hasDomRange = domSel && domSel.rangeCount > 0 && !domSel.isCollapsed && quill.root.contains(domSel.anchorNode);
+            if ((qSel && qSel.length > 0) || hasDomRange) {
+                return;
+            }
+        }
+
         if (img && quill.root.contains(img)) {
             e.stopPropagation();
-            showZenImageResizer(img);
-        } else if (activeResizingImg) {
+            if (isCtrl) {
+                e.preventDefault();
+                const domSel = window.getSelection();
+                if (domSel && !domSel.isCollapsed) {
+                    domSel.removeAllRanges();
+                }
+
+                if (activeResizingImg && activeResizingImg.isConnected && quill.root.contains(activeResizingImg) && !selectedImages.has(activeResizingImg)) {
+                    selectedImages.add(activeResizingImg);
+                }
+
+                if (selectedImages.has(img)) {
+                    selectedImages.delete(img);
+                } else {
+                    selectedImages.add(img);
+                }
+
+                if (selectedImages.size === 0) {
+                    hideZenImageResizer();
+                } else if (selectedImages.size === 1) {
+                    const remaining = Array.from(selectedImages)[0];
+                    showZenImageResizer(remaining);
+                } else {
+                    activeResizingImg = img;
+                    isDraggingResize = false;
+                    resizerEl.classList.remove('is-dragging');
+                    resizerEl.style.display = 'none';
+                    syncMultiSelectedClasses();
+                }
+            } else {
+                showZenImageResizer(img);
+            }
+        } else if (activeResizingImg || selectedImages.size > 0) {
             hideZenImageResizer();
         }
     });
@@ -3691,13 +3972,16 @@ window.addEventListener('keydown', function (e) {
         }
     });
 
-    // 에디터 바깥 클릭 시 리사이저 해제
+    // 에디터 바깥 클릭 시 리사이저 및 다중 선택 해제
     document.addEventListener('mousedown', (e) => {
-        if (!activeResizingImg) return;
+        if (!activeResizingImg && selectedImages.size === 0) return;
+        const clickedImg = e.target.closest ? e.target.closest('img') : null;
         if (
-            e.target === activeResizingImg ||
+            (clickedImg && (clickedImg === activeResizingImg || selectedImages.has(clickedImg))) ||
+            ((e.ctrlKey || e.metaKey) && clickedImg && quill.root.contains(clickedImg)) ||
             e.target.closest('#zen-image-resizer') ||
-            e.target.closest('#zen-image-lightbox')
+            e.target.closest('#zen-image-lightbox') ||
+            e.target.closest('#image-context-menu')
         ) {
             return;
         }
@@ -3705,22 +3989,31 @@ window.addEventListener('keydown', function (e) {
     });
 
     document.addEventListener('touchstart', (e) => {
-        if (!activeResizingImg) return;
+        if (!activeResizingImg && selectedImages.size === 0) return;
+        const touchedImg = e.target.closest ? e.target.closest('img') : null;
         if (
-            e.target === activeResizingImg ||
+            (touchedImg && (touchedImg === activeResizingImg || selectedImages.has(touchedImg))) ||
             e.target.closest('#zen-image-resizer') ||
-            e.target.closest('#zen-image-lightbox')
+            e.target.closest('#zen-image-lightbox') ||
+            e.target.closest('#image-context-menu')
         ) {
             return;
         }
         hideZenImageResizer();
     }, { passive: true });
 
-    // 🎯 [V4.9.10] 이미지가 선택된 상태에서 단축키 (Ctrl+C, Ctrl+X, Ctrl+Z, Ctrl+Y, Delete, Backspace, Enter) 처리
+    // 🎯 [V4.9.10 / V1.1.4] 이미지가 선택된 상태에서 단축키 (Ctrl+C, Ctrl+X, Ctrl+Z, Ctrl+Y, Delete, Backspace, Enter) 처리
     window.addEventListener('keydown', (e) => {
-        if (!activeResizingImg) return;
+        if (!activeResizingImg && selectedImages.size === 0) return;
         const lbOpen = lightboxEl.classList.contains('is-open');
         if (lbOpen) return;
+
+        // 에디터 본문에 텍스트/블록 범위 선택(Ctrl+A, 드래그 등)이 잡혀 있으면 Quill 기본 단축키 우선
+        const qSel = quill.getSelection();
+        const domSel = window.getSelection();
+        if ((qSel && qSel.length > 0) || (domSel && domSel.rangeCount > 0 && !domSel.isCollapsed && quill.root.contains(domSel.anchorNode))) {
+            return;
+        }
 
         const isCtrl = e.ctrlKey || e.metaKey;
         const keyLower = e.key ? e.key.toLowerCase() : '';
@@ -3798,10 +4091,36 @@ window.addEventListener('keydown', function (e) {
 
     // 에디터 텍스트 변경 시 리사이저 위치 재조정 또는 해제
     quill.on('text-change', () => {
+        if (selectedImages.size > 0) {
+            let changed = false;
+            Array.from(selectedImages).forEach((img) => {
+                if (!img.isConnected || !quill.root.contains(img)) {
+                    selectedImages.delete(img);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                if (selectedImages.size === 0) {
+                    hideZenImageResizer();
+                    return;
+                } else if (selectedImages.size === 1) {
+                    const remaining = Array.from(selectedImages)[0];
+                    showZenImageResizer(remaining);
+                    return;
+                } else {
+                    syncMultiSelectedClasses();
+                }
+            }
+        }
+        syncMultiSelectedClasses();
         if (activeResizingImg) {
             if (!activeResizingImg.isConnected || !quill.root.contains(activeResizingImg)) {
-                hideZenImageResizer();
-            } else {
+                if (selectedImages.size > 1) {
+                    activeResizingImg = Array.from(selectedImages)[0];
+                } else {
+                    hideZenImageResizer();
+                }
+            } else if (selectedImages.size <= 1) {
                 requestSyncPosition();
             }
         }
@@ -4014,7 +4333,13 @@ window.addEventListener('keydown', function (e) {
         const tableMenu = document.getElementById('table-context-menu');
         if (tableMenu) tableMenu.style.display = 'none';
 
-        if (typeof showZenImageResizer === 'function') {
+        const keepMulti = Boolean(
+            window.hasMultiSelectedImages &&
+            window.hasMultiSelectedImages() &&
+            window.isImageSelected &&
+            window.isImageSelected(imgEl)
+        );
+        if (!keepMulti && typeof showZenImageResizer === 'function') {
             showZenImageResizer(imgEl);
         }
 
@@ -4023,7 +4348,12 @@ window.addEventListener('keydown', function (e) {
             el.style.display = isDesktop ? '' : 'none';
         });
 
-        const curW = (imgEl.style.width || '').trim();
+        let curW = (imgEl.style.width || '').trim();
+        if (keepMulti) {
+            const multiImgs = Array.from(quill.root.querySelectorAll('img.zen-img-multi-selected'));
+            const widths = new Set(multiImgs.map(el => (el.style.width || '').trim()));
+            curW = widths.size === 1 ? Array.from(widths)[0] : '';
+        }
         imgMenu.querySelectorAll('.image-menu-size-btn').forEach((btn) => {
             btn.classList.toggle('active', curW === btn.dataset.size);
         });
@@ -4101,7 +4431,14 @@ window.addEventListener('keydown', function (e) {
             e.stopPropagation();
             const pct = parseInt(btn.dataset.size, 10);
             hideImageContextMenu();
-            if (contextTargetImg && typeof showZenImageResizer === 'function') {
+            const keepMulti = Boolean(
+                contextTargetImg &&
+                window.hasMultiSelectedImages &&
+                window.hasMultiSelectedImages() &&
+                window.isImageSelected &&
+                window.isImageSelected(contextTargetImg)
+            );
+            if (!keepMulti && contextTargetImg && typeof showZenImageResizer === 'function') {
                 showZenImageResizer(contextTargetImg);
             }
             if (typeof applyImageWidthPercent === 'function' && !isNaN(pct)) {
@@ -4118,7 +4455,13 @@ window.addEventListener('keydown', function (e) {
             hideImageContextMenu();
             if (!targetImg) return;
 
-            if (typeof showZenImageResizer === 'function') {
+            const keepMulti = Boolean(
+                window.hasMultiSelectedImages &&
+                window.hasMultiSelectedImages() &&
+                window.isImageSelected &&
+                window.isImageSelected(targetImg)
+            );
+            if (!keepMulti && typeof showZenImageResizer === 'function') {
                 showZenImageResizer(targetImg);
             }
 

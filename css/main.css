@@ -5385,6 +5385,18 @@ body:not(.light-theme) #zen-image-resizer {
     box-shadow: 0 0 0 3px rgba(120, 169, 255, 0.16);
 }
 
+/* 다중 선택(Ctrl+클릭) 이미지 시각 표시 */
+.ql-editor img.zen-img-multi-selected {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: -2px;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18) !important;
+    border-radius: 2px;
+}
+
+body:not(.light-theme) .ql-editor img.zen-img-multi-selected {
+    box-shadow: 0 0 0 3px rgba(120, 169, 255, 0.24) !important;
+}
+
 /* 2. 모서리 4점 드래그 핸들 (시각적으로는 단정한 12px 스퀘어, 터치 영역은 28px 확보) */
 .zen-resize-handle {
     position: absolute;
@@ -5698,5 +5710,9 @@ body:not(.light-theme) .zen-lightbox-controls {
     #zen-image-resizer,
     #zen-image-lightbox {
         display: none !important;
+    }
+    .ql-editor img.zen-img-multi-selected {
+        outline: none !important;
+        box-shadow: none !important;
     }
 }
