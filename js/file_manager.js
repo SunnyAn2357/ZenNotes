@@ -1302,6 +1302,7 @@ function openSecurityModal(mode) {
 // 🎯 [완벽 교정]
 function closeSecurityModal(fromPopstate = false) {
   pendingRecentSecureMemoId = null;
+  window.__zenPendingSidebarSecurityExpand = false;
   if (document.getElementById("fm-security-modal").style.display === "none")
     return;
   document.getElementById("fm-security-modal").style.display = "none";
@@ -1359,6 +1360,17 @@ async function submitSecurityPassword() {
           currentMemoId = null;
         }
         loadMemo(targetId);
+      } else if (window.__zenPendingSidebarSecurityExpand) {
+        window.__zenPendingSidebarSecurityExpand = false;
+        programmaticBackCount++;
+        history.back();
+        if (globalSecurityFolderId !== null && typeof expandSidebarFolderInMemory === "function") {
+          expandSidebarFolderInMemory(globalSecurityFolderId);
+        }
+        loadMemoList(true);
+        if (typeof showToast === "function") {
+          showToast("보안 폴더 잠금이 해제되었습니다.");
+        }
       } else {
         enterSecurityFolder(); // 이 안에서 replaceState가 작동!
       }
@@ -1402,6 +1414,17 @@ async function submitSecurityPassword() {
             currentMemoId = null;
           }
           loadMemo(targetId);
+        } else if (window.__zenPendingSidebarSecurityExpand) {
+          window.__zenPendingSidebarSecurityExpand = false;
+          programmaticBackCount++;
+          history.back();
+          if (globalSecurityFolderId !== null && typeof expandSidebarFolderInMemory === "function") {
+            expandSidebarFolderInMemory(globalSecurityFolderId);
+          }
+          loadMemoList(true);
+          if (typeof showToast === "function") {
+            showToast("보안 폴더 잠금이 해제되었습니다.");
+          }
         } else {
           enterSecurityFolder();
         }
@@ -2118,44 +2141,87 @@ async function moveItemsToFolder(itemIds, targetFolderId) {
   // 1. 목적지가 보안 폴더 구역인지 확인
   const isDestSecure = await checkIsUnderSecurity(targetFolderId);
 
-  // 2. 비동기 처리를 위해 이동할 데이터를 먼저 모두 RAM으로 끌어올립니다.
-  const itemsToMove = [];
-  await new Promise((resolve) => {
-    const getTx = db.transaction(["memos"], "readonly");
-    const getStore = getTx.objectStore("memos");
-    let processed = 0;
-
-    itemIds.forEach((id) => {
-      getStore.get(id).onsuccess = (e) => {
-        const m = e.target.result;
-        if (
-          m &&
-          m.isSystem !== "desktop" &&
-          m.isSystem !== "security" &&
-          m.isSystem !== "trash" &&
-          m.isSystem !== "backup"
-        ) {
-          // 🚀 [버그 척결] 휴지통에 갇힌 유령(isDeleted)이라면 제자리(같은 폴더)로 이동하더라도 무조건 배열에 넣어서 부활 의식을 치러야 합니다!
-          if (m.parentId !== targetFolderId || m.isDeleted) {
-            itemsToMove.push(m);
-          }
-        }
-        processed++;
-        if (processed === itemIds.length) resolve();
-      };
-    });
+  // 2. 사이클 검사 및 하위 항목 암호화 처리를 위해 전체 데이터 로드
+  const allData = await new Promise((resolve) => {
+    const tx = db.transaction(["memos"], "readonly");
+    tx.objectStore("memos").getAll().onsuccess = (e) => resolve(e.target.result || []);
   });
+  const byIdMap = new Map();
+  const folderMap = new Map();
+  allData.forEach((entry) => {
+    byIdMap.set(entry.id, entry);
+    if (entry.type === "folder") folderMap.set(entry.id, entry);
+  });
+
+  function isDescendantFolderCycle(movedFolderId, candidateTargetId) {
+    if (candidateTargetId === null || candidateTargetId === undefined) return false;
+    if (Number(movedFolderId) === Number(candidateTargetId)) return true;
+    let curr = candidateTargetId;
+    const seen = new Set();
+    while (curr !== null && curr !== undefined) {
+      if (seen.has(curr)) break;
+      seen.add(curr);
+      if (Number(curr) === Number(movedFolderId)) return true;
+      const pf = folderMap.get(curr);
+      if (!pf) break;
+      curr = pf.parentId;
+    }
+    return false;
+  }
+
+  const itemsToMove = [];
+  for (const id of itemIds) {
+    const m = byIdMap.get(id);
+    if (
+      m &&
+      m.isSystem !== "desktop" &&
+      m.isSystem !== "security" &&
+      m.isSystem !== "trash" &&
+      m.isSystem !== "backup"
+    ) {
+      if (m.type === "folder" && isDescendantFolderCycle(m.id, targetFolderId)) {
+        if (typeof showToast === "function") {
+          showToast("폴더를 자기 자신이나 하위 폴더로 이동할 수 없습니다.");
+        }
+        return;
+      }
+      if (m.parentId !== targetFolderId || m.isDeleted) {
+        itemsToMove.push(m);
+      }
+    }
+  }
 
   if (itemsToMove.length === 0) {
     showToast("이미 해당 위치에 있는 항목입니다.");
     return;
   }
 
-  // 3. 국경(일반<->보안)을 넘는 파일이 있는지 검사하고, 열쇠가 있는지 확인합니다.
+  // 이동 대상 폴더의 모든 자손 노트도 경계 이동 시 암·복호화 대상에 포함
+  function collectDescendantMemos(folderId, outList, visitedFolders = new Set()) {
+    if (visitedFolders.has(folderId)) return;
+    visitedFolders.add(folderId);
+    allData.forEach((child) => {
+      if (child.isPermanentlyDeleted) return;
+      if (child.parentId === folderId) {
+        if (child.type === "folder") {
+          collectDescendantMemos(child.id, outList, visitedFolders);
+        } else {
+          outList.push(child);
+        }
+      }
+    });
+  }
+
+  const extraCryptoDescendantMemos = [];
   let needsCrypto = false;
   for (const m of itemsToMove) {
     const isItemSecure = await checkIsUnderSecurity(m.parentId);
-    if (isItemSecure !== isDestSecure) needsCrypto = true;
+    if (isItemSecure !== isDestSecure) {
+      needsCrypto = true;
+      if (m.type === "folder") {
+        collectDescendantMemos(m.id, extraCryptoDescendantMemos);
+      }
+    }
   }
 
   if (needsCrypto && !currentSecKey) {
@@ -2168,29 +2234,35 @@ async function moveItemsToFolder(itemIds, targetFolderId) {
   // 🎯 [V3.4.4] 대상 폴더의 syncId 확보 (글로벌 족보 동기화용)
   let destSyncId = null;
   if (targetFolderId !== null) {
-    const destFolder = await new Promise((res) => {
-      db.transaction(["memos"], "readonly").objectStore("memos").get(targetFolderId).onsuccess = (e) => res(e.target.result);
-    });
+    const destFolder = byIdMap.get(targetFolderId);
     if (destFolder) destSyncId = destFolder.syncId || null;
   }
 
-  showToast("데이터를 변환하며 이동 중입니다...\n(잠시만 기다려주세요)");
+  if (typeof showToast === "function") {
+    showToast("항목을 이동하고 있습니다...");
+  }
 
   let actualMoveCount = 0;
   const undoPayload = [];
+  const putRecords = [];
+  const seenPutIds = new Set();
 
   for (const m of itemsToMove) {
     const isItemSecure = await checkIsUnderSecurity(m.parentId);
     undoPayload.push({ id: m.id, action: "moveBack", oldParentId: m.parentId });
 
-    if (!isItemSecure && isDestSecure) {
-      // 일반 -> 보안 (암호화)
-      m.content = await encryptData(m.content, currentSecKey);
-      m.plainText = await encryptData(m.plainText, currentSecKey);
-    } else if (isItemSecure && !isDestSecure) {
-      // 보안 -> 일반 (복호화)
-      m.content = await decryptData(m.content, currentSecKey);
-      m.plainText = await decryptData(m.plainText, currentSecKey);
+    if (m.type !== "folder") {
+      if (!isItemSecure && isDestSecure && !String(m.content || "").startsWith("ZENENC::")) {
+        m.content = await encryptData(m.content || "", currentSecKey);
+        m.plainText = await encryptData(m.plainText || "", currentSecKey);
+      } else if (isItemSecure && !isDestSecure) {
+        if (String(m.content || "").startsWith("ZENENC::")) {
+          m.content = await decryptData(m.content, currentSecKey);
+        }
+        if (String(m.plainText || "").startsWith("ZENENC::")) {
+          m.plainText = await decryptData(m.plainText, currentSecKey);
+        }
+      }
     }
 
     m.parentId = targetFolderId;
@@ -2201,13 +2273,39 @@ async function moveItemsToFolder(itemIds, targetFolderId) {
       delete m.deletedAt;
       delete m.isPermanentlyDeleted;
     }
+    if (!seenPutIds.has(m.id)) {
+      seenPutIds.add(m.id);
+      putRecords.push(m);
+    }
     actualMoveCount++;
+  }
+
+  for (const descMemo of extraCryptoDescendantMemos) {
+    if (seenPutIds.has(descMemo.id)) continue;
+    if (isDestSecure) {
+      if (!String(descMemo.content || "").startsWith("ZENENC::")) {
+        descMemo.content = await encryptData(descMemo.content || "", currentSecKey);
+      }
+      if (!String(descMemo.plainText || "").startsWith("ZENENC::")) {
+        descMemo.plainText = await encryptData(descMemo.plainText || "", currentSecKey);
+      }
+    } else {
+      if (String(descMemo.content || "").startsWith("ZENENC::")) {
+        descMemo.content = await decryptData(descMemo.content, currentSecKey);
+      }
+      if (String(descMemo.plainText || "").startsWith("ZENENC::")) {
+        descMemo.plainText = await decryptData(descMemo.plainText, currentSecKey);
+      }
+    }
+    descMemo.updatedAt = Date.now();
+    seenPutIds.add(descMemo.id);
+    putRecords.push(descMemo);
   }
 
   // 5. 변환이 끝난 데이터를 다시 DB에 꽂아 넣습니다.
   const putTx = db.transaction(["memos"], "readwrite");
   const putStore = putTx.objectStore("memos");
-  itemsToMove.forEach((m) => putStore.put(m));
+  putRecords.forEach((m) => putStore.put(m));
 
   return new Promise((resolve) => {
     putTx.oncomplete = () => {
@@ -2463,174 +2561,1400 @@ function createNewMemo(folderId = null) {
   }, 10);
 }
 
-function loadMemoList(queryDB = true) {
-  const query = document
-    .getElementById("list-search-input")
-    .value.toLowerCase();
-  const list = document.getElementById("memo-list");
-  const savedScroll = list.scrollTop;
+// ============================================================================
+// [V1.3.0] 좌측 사이드바 콤팩트 폴더 트리 탐색기 엔진
+// ============================================================================
+const SIDEBAR_EXPANDED_KEY = "zen_sidebar_expanded_folders";
+const SIDEBAR_PINNED_COLLAPSED_KEY = "zen_sidebar_pinned_collapsed";
 
-  if (queryDB) {
-    const tx = db.transaction(["memos"], "readonly");
+let sidebarExpandedSet = new Set();
+let sidebarExpandedLoaded = false;
+let sidebarPinnedCollapsed = localStorage.getItem(SIDEBAR_PINNED_COLLAPSED_KEY) === "true";
+let sidebarSelectedFolderId = null;
+let __zenDraggedTreeIds = [];
+let __zenSpringLoadTimer = null;
+let __zenSpringLoadFolderId = null;
 
-    tx.objectStore("memos").getAll().onsuccess = (e) => {
-      const allData = e.target.result;
-      let pinnedMemos = [],
-        normalMemos = [];
+window.__zenTreeDataCache = null;
+window.__zenPendingSidebarSecurityExpand = false;
+window.__zenInternalTreeDragging = false;
 
-      // 🎯 폴더 가계도 파악 (바탕화면 아래에 있는 모든 하위 폴더 찾기)
-      const folderMap = new Map();
-      allData.forEach((m) => {
-        if (m.type === "folder") folderMap.set(m.id, m);
-      });
+function compareNaturalKorean(a, b) {
+  return String(a || "").localeCompare(String(b || ""), "ko", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
 
-      // 🎯 유령 파일 퇴마: 조상 폴더가 휴지통에 가 있는지 꼼꼼히 확인
-      function isUnderDesktop(parentId) {
-        // 🚀 [버그 척결] Home(null) 소속은 메인 목록(바탕화면)에 절대 뜨지 못하게 원천 차단!
-        if (!parentId) return false;
-        if (parentId === globalDesktopFolderId) return true;
+function escapeTreeHtml(str) {
+  if (typeof escapeHtmlSafe === "function") return escapeHtmlSafe(str);
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-        let curr = parentId;
-        while (curr) {
-          if (curr === globalDesktopFolderId) return true;
-          const parentFolder = folderMap.get(curr);
-          // 🎯 조상 폴더가 없거나, 지워졌거나, 휴지통이면 바탕화면 출입 금지!
-          if (
-            !parentFolder ||
-            parentFolder.isDeleted ||
-            parentFolder.isSystem === "trash"
-          )
-            return false;
-          curr = parentFolder.parentId;
-        }
-        return false;
+function clearSpringLoadTimer() {
+  if (__zenSpringLoadTimer) {
+    clearTimeout(__zenSpringLoadTimer);
+    __zenSpringLoadTimer = null;
+  }
+  __zenSpringLoadFolderId = null;
+}
+
+function buildSidebarTreeCache(allData) {
+  const list = Array.isArray(allData) ? allData : [];
+  const byId = new Map();
+  const folderMap = new Map();
+  const childrenFoldersByParent = new Map();
+  const childrenNotesByParent = new Map();
+
+  list.forEach((m) => {
+    if (!m) return;
+    byId.set(m.id, m);
+    if (m.type === "folder") folderMap.set(m.id, m);
+  });
+
+  function isUnderTrashSync(parentId) {
+    if (parentId === null || parentId === undefined) return false;
+    if (typeof globalTrashFolderId !== "undefined" && globalTrashFolderId !== null && parentId === globalTrashFolderId) {
+      return true;
+    }
+    let curr = parentId;
+    const visited = new Set();
+    while (curr !== null && curr !== undefined) {
+      if (visited.has(curr)) return true;
+      visited.add(curr);
+      if (typeof globalTrashFolderId !== "undefined" && globalTrashFolderId !== null && curr === globalTrashFolderId) {
+        return true;
       }
+      const pf = folderMap.get(curr);
+      if (!pf) return false;
+      if (pf.isDeleted || pf.isPermanentlyDeleted || pf.isSystem === "trash") return true;
+      curr = pf.parentId;
+    }
+    return false;
+  }
 
-      // 🎯 [V4.5.0] 조상 폴더 중 휴지통이 있는지 확인하는 헬퍼
-      function isUnderTrash(parentId) {
-        if (!parentId) return false;
-        if (parentId === globalTrashFolderId) return true;
-        let curr = parentId;
-        while (curr) {
-          if (curr === globalTrashFolderId) return true;
-          const parentFolder = folderMap.get(curr);
-          if (!parentFolder) break;
-          if (parentFolder.isDeleted || parentFolder.isSystem === "trash") return true;
-          curr = parentFolder.parentId;
-        }
-        return false;
+  function isUnderSecuritySync(parentId) {
+    if (parentId === null || parentId === undefined) return false;
+    if (typeof globalSecurityFolderId !== "undefined" && globalSecurityFolderId !== null && parentId === globalSecurityFolderId) {
+      return true;
+    }
+    let curr = parentId;
+    const visited = new Set();
+    while (curr !== null && curr !== undefined) {
+      if (visited.has(curr)) return false;
+      visited.add(curr);
+      if (typeof globalSecurityFolderId !== "undefined" && globalSecurityFolderId !== null && curr === globalSecurityFolderId) {
+        return true;
       }
+      const pf = folderMap.get(curr);
+      if (!pf) return false;
+      if (pf.isSystem === "security") return true;
+      curr = pf.parentId;
+    }
+    return false;
+  }
 
-      allData.forEach((m) => {
-        // 🎯 삭제된 항목 또는 폴더는 제외
-        if (m.type === "folder" || m.isDeleted || m.isPermanentlyDeleted)
-          return;
+  function isUnderBackupSync(parentId) {
+    if (parentId === null || parentId === undefined) return false;
+    if (typeof globalBackupFolderId !== "undefined" && globalBackupFolderId !== null && parentId === globalBackupFolderId) {
+      return true;
+    }
+    let curr = parentId;
+    const visited = new Set();
+    while (curr !== null && curr !== undefined) {
+      if (visited.has(curr)) return false;
+      visited.add(curr);
+      if (typeof globalBackupFolderId !== "undefined" && globalBackupFolderId !== null && curr === globalBackupFolderId) {
+        return true;
+      }
+      const pf = folderMap.get(curr);
+      if (!pf) return false;
+      if (pf.isSystem === "backup") return true;
+      curr = pf.parentId;
+    }
+    return false;
+  }
 
-        // 🎯 휴지통 소속 파일은 고정 여부와 상관없이 메인 목록 출입 금지
-        if (isUnderTrash(m.parentId)) return;
+  function isDescendantFolderSync(ancestorId, targetId) {
+    if (ancestorId === null || ancestorId === undefined || targetId === null || targetId === undefined) {
+      return false;
+    }
+    if (ancestorId === targetId) return true;
+    let curr = targetId;
+    const visited = new Set();
+    while (curr !== null && curr !== undefined) {
+      if (visited.has(curr)) return false;
+      visited.add(curr);
+      if (curr === ancestorId) return true;
+      const pf = folderMap.get(curr);
+      if (!pf) return false;
+      curr = pf.parentId;
+    }
+    return false;
+  }
 
-        const isDesktop = isUnderDesktop(m.parentId);
-        const isPinned = !!m.pinnedAt;
+  function getFolderPathString(folderId) {
+    if (folderId === null || folderId === undefined) return "Home";
+    const parts = [];
+    let curr = folderId;
+    const visited = new Set();
+    while (curr !== null && curr !== undefined) {
+      if (visited.has(curr)) break;
+      visited.add(curr);
+      const pf = folderMap.get(curr);
+      if (!pf) break;
+      parts.unshift(pf.title || "폴더");
+      curr = pf.parentId;
+    }
+    return parts.length > 0 ? parts.join(" > ") : "Home";
+  }
 
-        // 🎯 [V4.5.0] 바탕화면 소속이거나, 타 폴더(Home, 임시 저장 등) 소속이라도 핀 고정된 파일이면 왼쪽 창에 노출!
-        if (!isDesktop && !isPinned) return;
+  list.forEach((m) => {
+    if (!m || m.isDeleted || m.isPermanentlyDeleted) return;
+    if (m.type === "folder" && m.isSystem === "trash") return;
+    if (isUnderTrashSync(m.parentId)) return;
 
-        // 🚀 [핵심 수정 2] 간혹 제목이 비어있는 파일이 에러를 일으켜 화면 전체가 백지가 되는 현상 방어
-        const safeTitle = (m.title || "제목 없는 노트").toLowerCase();
+    const pKey = (m.parentId === undefined || m.parentId === null) ? null : m.parentId;
+    if (m.type === "folder") {
+      if (!childrenFoldersByParent.has(pKey)) childrenFoldersByParent.set(pKey, []);
+      childrenFoldersByParent.get(pKey).push(m);
+    } else {
+      if (!childrenNotesByParent.has(pKey)) childrenNotesByParent.set(pKey, []);
+      childrenNotesByParent.get(pKey).push(m);
+    }
+  });
 
-        // 🚀 [보안 폴더 검색 차단] 암호화된 외계어 텍스트는 검색에서 제외시킵니다.
-        const safePlainText =
-          m.plainText && !m.plainText.startsWith("ZENENC::")
-            ? m.plainText.toLowerCase()
-            : "";
-        const matchQuery =
-          m.title.toLowerCase().includes(query) ||
-          safePlainText.includes(query);
+  function countActiveDescendants(folderId) {
+    let count = 0;
+    const visited = new Set();
+    function walk(fid) {
+      if (visited.has(fid)) return;
+      visited.add(fid);
+      const subN = childrenNotesByParent.get(fid) || [];
+      const subF = childrenFoldersByParent.get(fid) || [];
+      count += subN.length + subF.length;
+      subF.forEach((sf) => walk(sf.id));
+    }
+    walk(folderId);
+    return count;
+  }
 
-        if (matchQuery) {
-          if (m.pinnedAt) pinnedMemos.push(m);
-          else normalMemos.push(m);
+  return {
+    rawAll: list,
+    byId,
+    folderMap,
+    childrenFoldersByParent,
+    childrenNotesByParent,
+    isUnderTrashSync,
+    isUnderSecuritySync,
+    isUnderBackupSync,
+    isDescendantFolderSync,
+    getFolderPathString,
+    countActiveDescendants,
+  };
+}
+
+function ensureSidebarExpandedInitialized() {
+  if (!sidebarExpandedLoaded) {
+    sidebarExpandedLoaded = true;
+    const raw = localStorage.getItem(SIDEBAR_EXPANDED_KEY);
+    if (raw === null) {
+      if (typeof globalDesktopFolderId !== "undefined" && globalDesktopFolderId !== null) {
+        sidebarExpandedSet.add(globalDesktopFolderId);
+      }
+    } else {
+      try {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach((id) => {
+            if (id !== null && id !== undefined && id !== globalSecurityFolderId) {
+              sidebarExpandedSet.add(id);
+            }
+          });
         }
-      });
-
-      // 🎯 최신순 정렬
-      pinnedMemos.sort((a, b) => a.pinnedAt - b.pinnedAt);
-      normalMemos.sort((a, b) => b.updatedAt - a.updatedAt);
-
-      displayedMemos = [...pinnedMemos, ...normalMemos];
-      list.innerHTML = "";
-      displayedMemos.forEach((m) => list.appendChild(createMemoElement(m)));
-      list.scrollTop = savedScroll;
-    };
-  } else {
-    // 🎯 [버그 복구] DB 조회 없이 UI(체크박스)만 즉시 새로고침하는 기능 부활!
-    list.innerHTML = "";
-    displayedMemos.forEach((m) => list.appendChild(createMemoElement(m)));
-    list.scrollTop = savedScroll;
+      } catch {}
+    }
+  }
+  const cache = window.__zenTreeDataCache;
+  if (!isSecurityUnlocked || !currentSecKey) {
+    Array.from(sidebarExpandedSet).forEach((id) => {
+      if (id === globalSecurityFolderId || (cache && cache.isUnderSecuritySync(id))) {
+        sidebarExpandedSet.delete(id);
+      }
+    });
   }
 }
 
+function saveSidebarExpandedState() {
+  const cache = window.__zenTreeDataCache;
+  const persistable = Array.from(sidebarExpandedSet).filter((id) => {
+    if (id === null || id === undefined) return false;
+    if (id === globalSecurityFolderId) return false;
+    if (cache && cache.isUnderSecuritySync(id)) return false;
+    return true;
+  });
+  try {
+    localStorage.setItem(SIDEBAR_EXPANDED_KEY, JSON.stringify(persistable));
+  } catch {}
+}
+
+function expandSidebarFolderInMemory(folderId) {
+  if (folderId === null || folderId === undefined) return;
+  ensureSidebarExpandedInitialized();
+  sidebarExpandedSet.add(folderId);
+}
+
+function collapseSidebarSecurityTree() {
+  const cache = window.__zenTreeDataCache;
+  window.__zenPendingSidebarSecurityExpand = false;
+  Array.from(sidebarExpandedSet).forEach((id) => {
+    if (id === globalSecurityFolderId || (cache && cache.isUnderSecuritySync(id))) {
+      sidebarExpandedSet.delete(id);
+    }
+  });
+  if (
+    sidebarSelectedFolderId !== null &&
+    (sidebarSelectedFolderId === globalSecurityFolderId || (cache && cache.isUnderSecuritySync(sidebarSelectedFolderId)))
+  ) {
+    sidebarSelectedFolderId = null;
+  }
+  document.querySelectorAll("#memo-list .tree-under-security").forEach((el) => el.remove());
+  loadMemoList(false);
+}
+
+function lockSecurityFolderOnly() {
+  closeSidebarContextMenu();
+  if (typeof triggerBankAutoLock === "function") {
+    triggerBankAutoLock("securityOnly");
+  }
+  if (typeof showToast === "function") {
+    showToast("보안 폴더가 잠겼습니다.");
+  }
+}
+
+function updateCollapseAllButtonState(cache) {
+  const btn = document.getElementById("btn-sidebar-collapse-all");
+  if (!btn) return;
+  const icon = btn.querySelector("i");
+  const hasAnyNonSecurityExpanded = Array.from(sidebarExpandedSet).some((id) => {
+    if (id === globalSecurityFolderId) return false;
+    if (cache && cache.isUnderSecuritySync(id)) return false;
+    return !cache || cache.folderMap.has(id);
+  });
+  if (icon) {
+    icon.className = hasAnyNonSecurityExpanded ? "fa-solid fa-angles-up" : "fa-solid fa-angles-down";
+  }
+  const label = hasAnyNonSecurityExpanded ? "모든 폴더 접기" : "폴더 펼치기";
+  btn.setAttribute("title", label);
+  btn.setAttribute("aria-label", label);
+}
+
+function toggleAllSidebarFolders() {
+  closeSidebarContextMenu();
+  const cache = window.__zenTreeDataCache;
+  if (!cache) return;
+  ensureSidebarExpandedInitialized();
+
+  const hasAnyNonSecurityExpanded = Array.from(sidebarExpandedSet).some((id) => {
+    if (id === globalSecurityFolderId) return false;
+    if (cache.isUnderSecuritySync(id)) return false;
+    return cache.folderMap.has(id);
+  });
+
+  if (hasAnyNonSecurityExpanded) {
+    Array.from(sidebarExpandedSet).forEach((id) => {
+      if (id !== globalSecurityFolderId && !cache.isUnderSecuritySync(id)) {
+        sidebarExpandedSet.delete(id);
+      }
+    });
+  } else {
+    if (globalDesktopFolderId !== null) sidebarExpandedSet.add(globalDesktopFolderId);
+    const rootFolders = cache.childrenFoldersByParent.get(null) || [];
+    rootFolders.forEach((f) => {
+      if (!f.isSystem) sidebarExpandedSet.add(f.id);
+    });
+  }
+
+  saveSidebarExpandedState();
+  renderSidebarTreeFromCache();
+}
+
+function clearMainSearch() {
+  const inp = document.getElementById("list-search-input");
+  if (inp) {
+    inp.value = "";
+    inp.focus();
+  }
+  if (typeof syncMainSearchClearBtn === "function") syncMainSearchClearBtn();
+  loadMemoList(false);
+}
+
+function createNewMemoSmart() {
+  closeSidebarContextMenu();
+  const cache = window.__zenTreeDataCache;
+  let candidate = sidebarSelectedFolderId;
+
+  if ((candidate === null || candidate === undefined) && currentMemoId && cache) {
+    const curMemo = cache.byId.get(currentMemoId);
+    if (curMemo && curMemo.parentId !== undefined) {
+      candidate = curMemo.parentId;
+    }
+  }
+
+  let targetFolderId = typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null;
+  if (candidate !== null && candidate !== undefined && cache) {
+    const pf = cache.folderMap.get(candidate);
+    if (pf && !pf.isDeleted && !pf.isPermanentlyDeleted && !cache.isUnderTrashSync(candidate)) {
+      const isUnderBackup = candidate === globalBackupFolderId || cache.isUnderBackupSync(candidate);
+      const isUnderSec = candidate === globalSecurityFolderId || cache.isUnderSecuritySync(candidate);
+      if (isUnderSec) {
+        if (isSecurityUnlocked && currentSecKey) {
+          targetFolderId = candidate;
+          expandSidebarFolderInMemory(candidate);
+        }
+      } else if (!isUnderBackup) {
+        targetFolderId = candidate;
+        sidebarExpandedSet.add(candidate);
+        saveSidebarExpandedState();
+      }
+    }
+  }
+
+  createNewMemo(targetFolderId);
+}
+
+async function createSidebarFolder(parentFolderId = null) {
+  closeSidebarContextMenu();
+  if (!db) return null;
+
+  const isUnderSec = parentFolderId !== null && typeof checkIsUnderSecurity === "function"
+    ? await checkIsUnderSecurity(parentFolderId)
+    : false;
+  if (isUnderSec && (!isSecurityUnlocked || !currentSecKey)) {
+    showToast("보안 폴더 잠금을 먼저 해제해주세요.");
+    return null;
+  }
+
+  const name = await requestFmTextInput({
+    title: "새 폴더",
+    desc: parentFolderId !== null ? "선택한 폴더 아래에 새 폴더를 만듭니다." : "최상위 새 폴더 이름을 입력하세요.",
+    defaultValue: "새 폴더",
+    confirmText: "만들기",
+    iconClass: "fa-solid fa-folder-plus",
+  });
+  if (!name || name.trim() === "") return null;
+  if (isUnderSec && (!isSecurityUnlocked || !currentSecKey)) return null;
+
+  const trimmedName = name.trim();
+  let parentSyncId = null;
+  if (parentFolderId !== null) {
+    const parentObj = await new Promise((resolve) => {
+      db.transaction(["memos"], "readonly").objectStore("memos").get(parentFolderId).onsuccess = (e) => resolve(e.target.result);
+    });
+    if (parentObj) parentSyncId = parentObj.syncId || null;
+  }
+
+  let createdId = null;
+  const tx = db.transaction(["memos"], "readwrite");
+  tx.objectStore("memos").add({
+    title: trimmedName,
+    type: "folder",
+    parentId: parentFolderId,
+    parentSyncId: parentSyncId,
+    syncId: typeof generateSyncId === "function" ? generateSyncId() : Date.now().toString(36),
+    updatedAt: Date.now(),
+    isDeleted: false,
+  }).onsuccess = (e) => {
+    createdId = e.target.result;
+  };
+
+  return new Promise((resolve) => {
+    tx.oncomplete = () => {
+      ensureSidebarExpandedInitialized();
+      if (parentFolderId !== null) {
+        if (isUnderSec) expandSidebarFolderInMemory(parentFolderId);
+        else sidebarExpandedSet.add(parentFolderId);
+      }
+      if (createdId !== null && createdId !== undefined) {
+        sidebarSelectedFolderId = createdId;
+        if (isUnderSec) expandSidebarFolderInMemory(createdId);
+        else sidebarExpandedSet.add(createdId);
+      }
+      saveSidebarExpandedState();
+      loadMemoList(true);
+      updateUnsyncedCount();
+      if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+      resolve(createdId);
+    };
+  });
+}
+
+function createSidebarFolderFromHeader() {
+  let parentId = null;
+  const cache = window.__zenTreeDataCache;
+  if (sidebarSelectedFolderId !== null && cache && cache.folderMap.has(sidebarSelectedFolderId)) {
+    const selFolder = cache.folderMap.get(sidebarSelectedFolderId);
+    if (selFolder && !selFolder.isSystem && !cache.isUnderTrashSync(selFolder.id)) {
+      if (!cache.isUnderSecuritySync(selFolder.id) || (isSecurityUnlocked && currentSecKey)) {
+        parentId = selFolder.id;
+      }
+    }
+  }
+  return createSidebarFolder(parentId);
+}
+
+function revealMemoInSidebarTree(memoId) {
+  const cache = window.__zenTreeDataCache;
+  if (!cache || !memoId) return;
+  const m = cache.byId.get(memoId);
+  if (!m) return;
+
+  ensureSidebarExpandedInitialized();
+  const isSec = cache.isUnderSecuritySync(m.parentId);
+  if (isSec && (!isSecurityUnlocked || !currentSecKey)) return;
+
+  let changed = false;
+  let curr = m.parentId;
+  const visited = new Set();
+  while (curr !== null && curr !== undefined) {
+    if (visited.has(curr)) break;
+    visited.add(curr);
+    if (!sidebarExpandedSet.has(curr)) {
+      sidebarExpandedSet.add(curr);
+      changed = true;
+    }
+    const pf = cache.folderMap.get(curr);
+    if (!pf) break;
+    curr = pf.parentId;
+  }
+
+  if (changed) saveSidebarExpandedState();
+
+  const searchInp = document.getElementById("list-search-input");
+  const hasSearch = searchInp && searchInp.value.trim().length > 0;
+  if (changed && !hasSearch) {
+    renderSidebarTreeFromCache();
+  }
+
+  setTimeout(() => {
+    const activeRow = document.querySelector(`#memo-list .tree-row-note[data-memo-id="${memoId}"]`);
+    if (activeRow && typeof activeRow.scrollIntoView === "function") {
+      activeRow.scrollIntoView({ block: "nearest" });
+    }
+  }, 15);
+}
+
+function closeSidebarContextMenu() {
+  const menu = document.getElementById("sidebar-context-menu");
+  if (menu) {
+    menu.style.display = "none";
+    menu.innerHTML = "";
+  }
+}
+
+function deleteSidebarFolderWithConfirm(folderId) {
+  closeSidebarContextMenu();
+  const cache = window.__zenTreeDataCache;
+  const folder = cache ? cache.folderMap.get(folderId) : null;
+  const folderTitle = folder ? (folder.title || "폴더") : "폴더";
+  const childCount = cache ? cache.countActiveDescendants(folderId) : 0;
+  const msg = childCount > 0
+    ? `'${folderTitle}' 폴더와 내부 항목 ${childCount}개를 휴지통으로 보내시겠습니까?`
+    : `'${folderTitle}' 폴더를 휴지통으로 보내시겠습니까?`;
+  if (!confirm(msg)) return;
+  if (sidebarSelectedFolderId === folderId) sidebarSelectedFolderId = null;
+  fmDelete(folderId);
+}
+
+function deleteSidebarNoteWithConfirm(noteId) {
+  closeSidebarContextMenu();
+  const targets =
+    selectedMemos.has(noteId) && selectedMemos.size > 1
+      ? Array.from(selectedMemos)
+      : [noteId];
+  const msg = targets.length > 1
+    ? `선택한 ${targets.length}개의 노트를 휴지통으로 보냅니다.`
+    : "이 노트를 휴지통으로 보내시겠습니까?";
+  if (!confirm(msg)) return;
+
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  targets.forEach((tid) => {
+    store.get(tid).onsuccess = (ev) => {
+      const m = ev.target.result;
+      if (m) {
+        m.isDeleted = true;
+        m.deletedAt = Date.now();
+        m.updatedAt = Date.now();
+        store.put(m);
+      }
+    };
+  });
+  tx.oncomplete = () => {
+    isMultiSelectMode = false;
+    targets.forEach((tid) => selectedMemos.delete(tid));
+    ensureActiveMemoNotDeleted();
+    loadMemoList(true);
+    updateUnsyncedCount();
+    if (typeof showToast === "function") {
+      showToast("휴지통으로 이동되었습니다.", targets.map((tid) => ({ id: tid, action: "restore" })));
+    }
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+  };
+}
+
+function toggleNotePinFromSidebar(noteId) {
+  closeSidebarContextMenu();
+  if (!db) return;
+  let isNowPinned = false;
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  store.get(noteId).onsuccess = (ev) => {
+    const m = ev.target.result;
+    if (!m || m.type === "folder") return;
+    if (m.pinnedAt) {
+      delete m.pinnedAt;
+      isNowPinned = false;
+    } else {
+      m.pinnedAt = Date.now();
+      isNowPinned = true;
+    }
+    store.put(m);
+  };
+  tx.oncomplete = () => {
+    loadMemoList(true);
+    updateUnsyncedCount();
+    if (typeof showToast === "function") {
+      showToast(isNowPinned ? "상단에 고정되었습니다." : "핀 고정이 해제되었습니다.");
+    }
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+  };
+}
+
+function duplicateNoteFromSidebar(noteId) {
+  closeSidebarContextMenu();
+  if (!db) return;
+  let clonedId = null;
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  store.get(noteId).onsuccess = (ev) => {
+    const m = ev.target.result;
+    if (!m || m.type === "folder") return;
+    const clone = {
+      ...m,
+      syncId: typeof generateSyncId === "function" ? generateSyncId() : Date.now().toString(36),
+      title: `(사본) ${m.title || "제목 없는 노트"}`,
+      updatedAt: Date.now(),
+    };
+    delete clone.pinnedAt;
+    delete clone.id;
+    store.add(clone).onsuccess = (addEv) => {
+      clonedId = addEv.target.result;
+    };
+  };
+  tx.oncomplete = () => {
+    loadMemoList(true);
+    updateUnsyncedCount();
+    if (clonedId && typeof loadMemo === "function") loadMemo(clonedId);
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+  };
+}
+
+function openSidebarContextMenu(e, meta) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const menu = document.getElementById("sidebar-context-menu");
+  if (!menu) return;
+
+  const cache = window.__zenTreeDataCache;
+  const items = [];
+
+  if (meta.kind === "folder") {
+    const f = cache ? cache.folderMap.get(meta.id) : null;
+    const sysType = meta.sysType || (f ? f.isSystem : "");
+    if (sysType === "desktop") {
+      items.push({ label: "여기에 새 노트", icon: "fa-solid fa-pen-to-square", fn: () => { sidebarExpandedSet.add(meta.id); saveSidebarExpandedState(); createNewMemo(meta.id); } });
+      items.push({ label: "하위 폴더 만들기", icon: "fa-solid fa-folder-plus", fn: () => createSidebarFolder(meta.id) });
+      items.push({ divider: true });
+      items.push({ label: "임시 저장으로", icon: "fa-solid fa-box-archive", fn: () => backupDesktop() });
+    } else if (sysType === "backup") {
+      items.push({ label: "하위 폴더 만들기", icon: "fa-solid fa-folder-plus", fn: () => createSidebarFolder(meta.id) });
+      items.push({ label: "전체 폴더관리에서 열기", icon: "fa-solid fa-folder-open", fn: () => openFileManager() });
+    } else if (sysType === "security") {
+      const unlocked = Boolean(isSecurityUnlocked && currentSecKey);
+      if (!unlocked) {
+        items.push({ label: "잠금 해제", icon: "fa-solid fa-lock-open", fn: () => {
+          window.__zenPendingSidebarSecurityExpand = true;
+          const hasPw = localStorage.getItem("zen_sec_hash");
+          openSecurityModal(hasPw ? "enter" : "setup");
+        }});
+      } else {
+        items.push({ label: "보안 노트 작성", icon: "fa-solid fa-pen-to-square", fn: () => { expandSidebarFolderInMemory(meta.id); createNewMemo(meta.id); } });
+        items.push({ label: "하위 폴더 만들기", icon: "fa-solid fa-folder-plus", fn: () => createSidebarFolder(meta.id) });
+        items.push({ label: "지금 잠그기", icon: "fa-solid fa-lock", fn: () => lockSecurityFolderOnly() });
+      }
+      items.push({ divider: true });
+      items.push({ label: "비밀번호 변경", icon: "fa-solid fa-key", fn: () => handleSecurityMenuChange() });
+      items.push({ label: "비상 삭제", icon: "fa-solid fa-triangle-exclamation", danger: true, fn: () => emergencyDeleteSecurity() });
+    } else {
+      const isSecSub = cache ? cache.isUnderSecuritySync(meta.id) : false;
+      items.push({ label: "이 폴더에 새 노트", icon: "fa-solid fa-pen-to-square", fn: () => {
+        if (isSecSub) expandSidebarFolderInMemory(meta.id);
+        else { sidebarExpandedSet.add(meta.id); saveSidebarExpandedState(); }
+        createNewMemo(meta.id);
+      }});
+      items.push({ label: "하위 폴더 만들기", icon: "fa-solid fa-folder-plus", fn: () => createSidebarFolder(meta.id) });
+      items.push({ divider: true });
+      items.push({ label: "이름 바꾸기", icon: "fa-solid fa-pen", fn: () => fmRename(meta.id) });
+      items.push({ label: "이동하기", icon: "fa-solid fa-arrows-up-down-left-right", fn: () => openMoveModal(meta.id) });
+      items.push({ label: "휴지통으로", icon: "fa-solid fa-trash-can", danger: true, fn: () => deleteSidebarFolderWithConfirm(meta.id) });
+    }
+  } else if (meta.kind === "note") {
+    if (!meta.isUnderSecurity) {
+      items.push({
+        label: meta.isPinned ? "핀 고정 해제" : "상단 고정",
+        icon: "fa-solid fa-thumbtack",
+        fn: () => toggleNotePinFromSidebar(meta.id),
+      });
+    }
+    items.push({ label: "이름 바꾸기", icon: "fa-solid fa-pen", fn: () => fmRename(meta.id) });
+    items.push({ label: "복사본 만들기", icon: "fa-solid fa-copy", fn: () => duplicateNoteFromSidebar(meta.id) });
+    items.push({ label: "이동하기", icon: "fa-solid fa-arrows-up-down-left-right", fn: () => openMoveModal(meta.id) });
+    items.push({ label: "공유하기 (.myns)", icon: "fa-solid fa-share-nodes", fn: () => {
+      if (typeof exportMemoByIdAsMYNS === "function") exportMemoByIdAsMYNS(meta.id);
+    }});
+    items.push({ divider: true });
+    items.push({ label: "휴지통으로", icon: "fa-solid fa-trash-can", danger: true, fn: () => deleteSidebarNoteWithConfirm(meta.id) });
+  } else {
+    items.push({ label: "최상위 새 폴더", icon: "fa-solid fa-folder-plus", fn: () => createSidebarFolder(null) });
+    items.push({ label: "바탕 화면에 새 노트", icon: "fa-solid fa-pen-to-square", fn: () => createNewMemo(globalDesktopFolderId) });
+    items.push({ label: "모든 폴더 접기", icon: "fa-solid fa-angles-up", fn: () => {
+      sidebarExpandedSet.clear();
+      saveSidebarExpandedState();
+      renderSidebarTreeFromCache();
+    }});
+  }
+
+  menu.innerHTML = "";
+  items.forEach((it) => {
+    if (it.divider) {
+      const div = document.createElement("div");
+      div.className = "sidebar-context-divider";
+      menu.appendChild(div);
+      return;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `sidebar-context-item${it.danger ? " is-danger" : ""}`;
+    btn.innerHTML = `<i class="${it.icon}"></i><span>${escapeTreeHtml(it.label)}</span>`;
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      closeSidebarContextMenu();
+      it.fn();
+    };
+    menu.appendChild(btn);
+  });
+
+  menu.style.display = "block";
+  const vw = window.innerWidth || 1024;
+  const vh = window.innerHeight || 768;
+  const mw = menu.offsetWidth || 184;
+  const mh = menu.offsetHeight || 200;
+  const clickX = e && typeof e.clientX === "number" ? e.clientX : 120;
+  const clickY = e && typeof e.clientY === "number" ? e.clientY : 120;
+  const left = Math.max(8, Math.min(vw - mw - 8, clickX));
+  const top = Math.max(8, Math.min(vh - mh - 8, clickY));
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
+
+(function bindGlobalSidebarContextClose() {
+  if (window.__zenSidebarContextCloseBound) return;
+  window.__zenSidebarContextCloseBound = true;
+  document.addEventListener("click", (e) => {
+    const menu = document.getElementById("sidebar-context-menu");
+    if (menu && menu.style.display === "block" && !menu.contains(e.target)) {
+      closeSidebarContextMenu();
+    }
+  });
+  const listEl = document.getElementById("memo-list");
+  if (listEl) {
+    listEl.addEventListener("scroll", closeSidebarContextMenu, { passive: true });
+    listEl.addEventListener("contextmenu", (e) => {
+      if (e.target && e.target.closest && e.target.closest(".tree-row")) return;
+      openSidebarContextMenu(e, { kind: "blank" });
+    });
+  }
+})();
+
+function handleSidebarNoteRowClick(e, memoId, parentId) {
+  if (e.target && e.target.closest && e.target.closest(".tree-row-actions")) return;
+  closeSidebarContextMenu();
+  if (isPressTriggered) {
+    isPressTriggered = false;
+    return;
+  }
+
+  const isCtrl = e.ctrlKey || e.metaKey;
+  const isShift = e.shiftKey;
+
+  if (isMultiSelectMode && !isCtrl && !isShift) {
+    if (selectedMemos.has(memoId)) {
+      selectedMemos.delete(memoId);
+      if (selectedMemos.size === 0) isMultiSelectMode = false;
+    } else {
+      selectedMemos.add(memoId);
+      lastSelectedId = memoId;
+    }
+    loadMemoList(false);
+    return;
+  }
+
+  forceSaveImmediate();
+
+  if (isShift && lastSelectedId !== null) {
+    const cIdx = displayedMemos.findIndex((m) => m.id === memoId);
+    const lIdx = displayedMemos.findIndex((m) => m.id === lastSelectedId);
+    if (cIdx !== -1 && lIdx !== -1) {
+      const start = Math.min(cIdx, lIdx);
+      const end = Math.max(cIdx, lIdx);
+      if (!isCtrl) selectedMemos.clear();
+      for (let i = start; i <= end; i++) {
+        selectedMemos.add(displayedMemos[i].id);
+      }
+    }
+    loadMemoList(false);
+  } else if (isCtrl) {
+    if (selectedMemos.has(memoId)) selectedMemos.delete(memoId);
+    else selectedMemos.add(memoId);
+    lastSelectedId = memoId;
+    loadMemoList(false);
+  } else {
+    if (window.getSelection) {
+      const sel = window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    }
+    selectedMemos.clear();
+    selectedMemos.add(memoId);
+    lastSelectedId = memoId;
+    isMultiSelectMode = false;
+    sidebarSelectedFolderId = (parentId === undefined) ? null : parentId;
+    loadMemo(memoId);
+  }
+}
+
+function attachSidebarDragSource(li, itemMeta, getRootDropZone) {
+  li.draggable = true;
+  li.addEventListener("dragstart", (e) => {
+    cancelPress();
+    closeSidebarContextMenu();
+    window.__zenInternalTreeDragging = true;
+    const ids = (itemMeta.kind === "note" && selectedMemos.has(itemMeta.id) && selectedMemos.size > 1)
+      ? Array.from(selectedMemos)
+      : [itemMeta.id];
+    __zenDraggedTreeIds = ids;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("application/zen-tree-ids", JSON.stringify(ids)); } catch {}
+      try { e.dataTransfer.setData("text/plain", String(ids[0])); } catch {}
+    }
+    li.classList.add("is-dragging");
+    const rdz = typeof getRootDropZone === "function" ? getRootDropZone() : document.getElementById("sidebar-root-drop-zone");
+    if (rdz) rdz.classList.add("is-visible");
+  });
+
+  li.addEventListener("dragend", () => {
+    window.__zenInternalTreeDragging = false;
+    __zenDraggedTreeIds = [];
+    clearSpringLoadTimer();
+    document.querySelectorAll("#memo-list .is-drop-target, #memo-list .is-dragging").forEach((el) => {
+      el.classList.remove("is-drop-target", "is-dragging");
+    });
+    const rdz = typeof getRootDropZone === "function" ? getRootDropZone() : document.getElementById("sidebar-root-drop-zone");
+    if (rdz) rdz.classList.remove("is-visible", "is-drop-target");
+  });
+}
+
+function parseDraggedTreeIds(e) {
+  if (Array.isArray(__zenDraggedTreeIds) && __zenDraggedTreeIds.length > 0) {
+    return __zenDraggedTreeIds.slice();
+  }
+  if (e && e.dataTransfer) {
+    try {
+      const raw = e.dataTransfer.getData("application/zen-tree-ids");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return [];
+}
+
+function attachSidebarFolderDropTarget(li, folderObj, isLockedSecurity) {
+  if (isLockedSecurity) return;
+  li.addEventListener("dragover", (e) => {
+    if (!window.__zenInternalTreeDragging) return;
+    const dragIds = parseDraggedTreeIds(e);
+    if (dragIds.length === 0 || (dragIds.length === 1 && dragIds[0] === folderObj.id)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    li.classList.add("is-drop-target");
+
+    if (!sidebarExpandedSet.has(folderObj.id) && __zenSpringLoadFolderId !== folderObj.id) {
+      clearSpringLoadTimer();
+      __zenSpringLoadFolderId = folderObj.id;
+      __zenSpringLoadTimer = setTimeout(() => {
+        if (!window.__zenInternalTreeDragging) return;
+        const cache = window.__zenTreeDataCache;
+        const isSec = cache && (folderObj.id === globalSecurityFolderId || cache.isUnderSecuritySync(folderObj.id));
+        if (isSec && (!isSecurityUnlocked || !currentSecKey)) return;
+        sidebarExpandedSet.add(folderObj.id);
+        if (!isSec) saveSidebarExpandedState();
+        renderSidebarTreeFromCache();
+      }, 600);
+    }
+  });
+
+  li.addEventListener("dragleave", (e) => {
+    if (e.relatedTarget && li.contains(e.relatedTarget)) return;
+    li.classList.remove("is-drop-target");
+    if (__zenSpringLoadFolderId === folderObj.id) clearSpringLoadTimer();
+  });
+
+  li.addEventListener("drop", async (e) => {
+    if (!window.__zenInternalTreeDragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    li.classList.remove("is-drop-target");
+    clearSpringLoadTimer();
+    const dragIds = parseDraggedTreeIds(e);
+    window.__zenInternalTreeDragging = false;
+    __zenDraggedTreeIds = [];
+    if (dragIds.length === 0) return;
+
+    const cache = window.__zenTreeDataCache;
+    const isSec = cache && (folderObj.id === globalSecurityFolderId || cache.isUnderSecuritySync(folderObj.id));
+    if (isSec) expandSidebarFolderInMemory(folderObj.id);
+    else {
+      sidebarExpandedSet.add(folderObj.id);
+      saveSidebarExpandedState();
+    }
+    await moveItemsToFolder(dragIds, folderObj.id);
+  });
+}
+
+function createTreeNoteElement(m, depth, cache, options, getRootDropZone) {
+  const opts = options || {};
+  const li = document.createElement("li");
+  const isActive = isMultiSelectMode
+    ? selectedMemos.has(m.id)
+    : Number(currentMemoId) === Number(m.id);
+  const isSelected = !isActive && selectedMemos.has(m.id);
+
+  li.className = [
+    "tree-row",
+    "tree-row-note",
+    isActive ? "active is-active" : "",
+    isSelected ? "is-selected" : "",
+    opts.inPinnedSection ? "is-pinned-entry" : "",
+    opts.searchPath ? "is-search-result" : "",
+    opts.isUnderSecurity ? "tree-under-security" : "",
+  ].filter(Boolean).join(" ");
+
+  li.dataset.memoId = String(m.id);
+  li.style.setProperty("--depth", String(Math.min(depth, 6)));
+
+  const titleText = (m.title && String(m.title).trim()) || "제목 없는 노트";
+  const pathText = opts.searchPath || cache.getFolderPathString(m.parentId);
+  li.title = `${titleText}\n위치: ${pathText}\n수정: ${formatDateTime(m.updatedAt || Date.now())}`;
+
+  let guidesHtml = "";
+  const clampedDepth = Math.min(depth, 6);
+  for (let i = 0; i < clampedDepth; i++) {
+    guidesHtml += '<span class="tree-guide" aria-hidden="true"></span>';
+  }
+
+  const iconClass = opts.inPinnedSection
+    ? "fa-solid fa-thumbtack tree-note-icon is-pinned-icon"
+    : "fa-regular fa-file-lines tree-note-icon";
+  const pinBadge = (!opts.inPinnedSection && m.pinnedAt)
+    ? '<i class="fa-solid fa-thumbtack tree-inline-pin" title="고정된 노트"></i>'
+    : "";
+  const pathBadge = opts.searchPath
+    ? `<span class="tree-search-path">${escapeTreeHtml(opts.searchPath)}</span>`
+    : "";
+
+  const quickPinHtml = opts.isUnderSecurity
+    ? ""
+    : `<button type="button" class="tree-act-btn ${m.pinnedAt ? "is-pinned" : ""}" title="${m.pinnedAt ? "핀 고정 해제" : "상단 고정"}" onclick="event.stopPropagation(); toggleNotePinFromSidebar(${m.id});"><i class="fa-solid fa-thumbtack"></i></button>`;
+
+  li.innerHTML = `
+    ${guidesHtml}
+    <i class="${iconClass}"></i>
+    <span class="tree-note-text">
+      <span class="tree-note-title">${escapeTreeHtml(titleText)}</span>
+      ${pathBadge}
+    </span>
+    ${pinBadge}
+    <span class="tree-row-actions">
+      ${quickPinHtml}
+      <button type="button" class="tree-act-btn tree-act-more" title="더보기 메뉴"><i class="fa-solid fa-ellipsis"></i></button>
+    </span>
+  `;
+
+  const moreBtn = li.querySelector(".tree-act-more");
+  if (moreBtn) {
+    moreBtn.onclick = (ev) => {
+      openSidebarContextMenu(ev, {
+        kind: "note",
+        id: m.id,
+        isPinned: !!m.pinnedAt,
+        isUnderSecurity: !!opts.isUnderSecurity,
+      });
+    };
+  }
+
+  li.addEventListener("mousedown", (e) => {
+    if (e.button === 0) startPress(e, m.id, false);
+  });
+  li.addEventListener("touchstart", (e) => startPress(e, m.id, false), { passive: true });
+  li.addEventListener("mouseup", cancelPress);
+  li.addEventListener("mouseleave", cancelPress);
+  li.addEventListener("touchend", cancelPress);
+  li.addEventListener("touchmove", cancelPress, { passive: true });
+
+  li.onclick = (e) => handleSidebarNoteRowClick(e, m.id, m.parentId);
+  li.oncontextmenu = (e) => {
+    openSidebarContextMenu(e, {
+      kind: "note",
+      id: m.id,
+      isPinned: !!m.pinnedAt,
+      isUnderSecurity: !!opts.isUnderSecurity,
+    });
+  };
+
+  attachSidebarDragSource(li, { kind: "note", id: m.id }, getRootDropZone);
+  return li;
+}
+
+function createTreeFolderElement(folderObj, depth, cache, options, getRootDropZone) {
+  const opts = options || {};
+  const isSecurityRoot = folderObj.id === globalSecurityFolderId || folderObj.isSystem === "security";
+  const isLockedSecurity = isSecurityRoot && (!isSecurityUnlocked || !currentSecKey);
+  const isExpanded = !isLockedSecurity && sidebarExpandedSet.has(folderObj.id);
+  const isSystemFolder = Boolean(folderObj.isSystem);
+  const isSelected = sidebarSelectedFolderId === folderObj.id;
+  const isUnderSec = Boolean(opts.isUnderSecurity) || isSecurityRoot;
+
+  const li = document.createElement("li");
+  li.className = [
+    "tree-row",
+    "tree-row-folder",
+    isExpanded ? "is-expanded" : "",
+    isSelected ? "is-active-folder" : "",
+    isSystemFolder ? "is-system-folder" : "",
+    isLockedSecurity ? "is-locked" : "",
+    isUnderSec ? "tree-under-security" : "",
+  ].filter(Boolean).join(" ");
+
+  li.dataset.folderId = String(folderObj.id);
+  li.style.setProperty("--depth", String(Math.min(depth, 6)));
+  li.title = folderObj.title || "폴더";
+
+  let guidesHtml = "";
+  const clampedDepth = Math.min(depth, 6);
+  for (let i = 0; i < clampedDepth; i++) {
+    guidesHtml += '<span class="tree-guide" aria-hidden="true"></span>';
+  }
+
+  let folderIconClass = isExpanded ? "fa-regular fa-folder-open" : "fa-regular fa-folder";
+  let extraIconClass = "";
+  if (folderObj.isSystem === "desktop") {
+    folderIconClass = "fa-solid fa-desktop";
+    extraIconClass = "is-desktop";
+  } else if (folderObj.isSystem === "backup") {
+    folderIconClass = "fa-solid fa-box-archive";
+    extraIconClass = "is-backup";
+  } else if (isSecurityRoot) {
+    folderIconClass = isLockedSecurity ? "fa-solid fa-lock" : "fa-solid fa-lock-open";
+    extraIconClass = isLockedSecurity ? "is-security" : "is-security-open";
+  }
+
+  const canQuickAddNote = folderObj.isSystem !== "backup" && !isLockedSecurity;
+  const lockBadgeHtml = isLockedSecurity ? '<span class="tree-lock-badge">잠금</span>' : "";
+  const addBtnHtml = canQuickAddNote
+    ? `<button type="button" class="tree-act-btn tree-act-add" title="이 폴더에 새 노트"><i class="fa-solid fa-plus"></i></button>`
+    : "";
+
+  li.innerHTML = `
+    ${guidesHtml}
+    <i class="fa-solid fa-chevron-right tree-chevron" aria-hidden="true"></i>
+    <i class="${folderIconClass} tree-folder-icon ${extraIconClass}" aria-hidden="true"></i>
+    <span class="tree-folder-title">${escapeTreeHtml(folderObj.title || "폴더")}</span>
+    ${lockBadgeHtml}
+    <span class="tree-row-actions">
+      ${addBtnHtml}
+      <button type="button" class="tree-act-btn tree-act-more" title="폴더 메뉴"><i class="fa-solid fa-ellipsis"></i></button>
+    </span>
+  `;
+
+  const addBtn = li.querySelector(".tree-act-add");
+  if (addBtn) {
+    addBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      closeSidebarContextMenu();
+      sidebarSelectedFolderId = folderObj.id;
+      if (isUnderSec) expandSidebarFolderInMemory(folderObj.id);
+      else {
+        sidebarExpandedSet.add(folderObj.id);
+        saveSidebarExpandedState();
+      }
+      createNewMemo(folderObj.id);
+    };
+  }
+
+  const moreBtn = li.querySelector(".tree-act-more");
+  if (moreBtn) {
+    moreBtn.onclick = (ev) => {
+      openSidebarContextMenu(ev, {
+        kind: "folder",
+        id: folderObj.id,
+        sysType: folderObj.isSystem || "",
+      });
+    };
+  }
+
+  li.onclick = (e) => {
+    if (e.target && e.target.closest && e.target.closest(".tree-row-actions")) return;
+    closeSidebarContextMenu();
+    sidebarSelectedFolderId = folderObj.id;
+
+    if (isLockedSecurity) {
+      window.__zenPendingSidebarSecurityExpand = true;
+      const hasPw = localStorage.getItem("zen_sec_hash");
+      openSecurityModal(hasPw ? "enter" : "setup");
+      return;
+    }
+
+    ensureSidebarExpandedInitialized();
+    if (sidebarExpandedSet.has(folderObj.id)) {
+      sidebarExpandedSet.delete(folderObj.id);
+    } else {
+      sidebarExpandedSet.add(folderObj.id);
+    }
+    if (!isUnderSec) saveSidebarExpandedState();
+    renderSidebarTreeFromCache();
+  };
+
+  li.oncontextmenu = (e) => {
+    openSidebarContextMenu(e, {
+      kind: "folder",
+      id: folderObj.id,
+      sysType: folderObj.isSystem || "",
+    });
+  };
+
+  if (!isSystemFolder) {
+    attachSidebarDragSource(li, { kind: "folder", id: folderObj.id }, getRootDropZone);
+  }
+  attachSidebarFolderDropTarget(li, folderObj, isLockedSecurity);
+  return li;
+}
+
+function renderSidebarTreeFromCache() {
+  const list = document.getElementById("memo-list");
+  if (!list) return;
+  const cache = window.__zenTreeDataCache;
+  if (!cache) {
+    list.innerHTML = "";
+    return;
+  }
+
+  ensureSidebarExpandedInitialized();
+  if (typeof syncMainSearchClearBtn === "function") syncMainSearchClearBtn();
+  updateCollapseAllButtonState(cache);
+
+  const searchEl = document.getElementById("list-search-input");
+  const query = searchEl ? searchEl.value.trim().toLowerCase() : "";
+  const savedScroll = list.scrollTop;
+
+  const frag = document.createDocumentFragment();
+  const visibleNotes = [];
+  let rootDropZoneEl = null;
+  const getRootDropZone = () => rootDropZoneEl;
+
+  if (query.length > 0) {
+    const matched = [];
+    cache.rawAll.forEach((m) => {
+      if (!m || m.type === "folder" || m.isDeleted || m.isPermanentlyDeleted) return;
+      if (cache.isUnderTrashSync(m.parentId) || cache.isUnderSecuritySync(m.parentId)) return;
+      if (String(m.plainText || "").startsWith("ZENENC::") || String(m.content || "").startsWith("ZENENC::")) return;
+
+      const safeTitle = (m.title || "제목 없는 노트").toLowerCase();
+      const safePlainText = m.plainText ? String(m.plainText).toLowerCase() : "";
+      const pathStr = cache.getFolderPathString(m.parentId);
+      if (safeTitle.includes(query) || safePlainText.includes(query) || pathStr.toLowerCase().includes(query)) {
+        matched.push({ memo: m, pathStr });
+      }
+    });
+
+    matched.sort((a, b) => (b.memo.updatedAt || 0) - (a.memo.updatedAt || 0));
+
+    const header = document.createElement("li");
+    header.className = "tree-section-header tree-search-status";
+    header.textContent = matched.length > 0 ? `검색 결과 ${matched.length}건` : "일치하는 노트가 없습니다.";
+    frag.appendChild(header);
+
+    matched.forEach(({ memo, pathStr }) => {
+      visibleNotes.push(memo);
+      frag.appendChild(createTreeNoteElement(memo, 0, cache, { searchPath: pathStr, isUnderSecurity: false }, getRootDropZone));
+    });
+
+    displayedMemos = visibleNotes;
+    list.innerHTML = "";
+    list.appendChild(frag);
+    list.scrollTop = savedScroll;
+    return;
+  }
+
+  // 1. 상단 고정된 노트 구역 (휴지통 및 보안 폴더 제외)
+  const pinnedNotes = cache.rawAll.filter((m) => {
+    if (!m || m.type === "folder" || m.isDeleted || m.isPermanentlyDeleted || !m.pinnedAt) return false;
+    if (cache.isUnderTrashSync(m.parentId) || cache.isUnderSecuritySync(m.parentId)) return false;
+    return true;
+  });
+  pinnedNotes.sort((a, b) => (a.pinnedAt || 0) - (b.pinnedAt || 0));
+
+  if (pinnedNotes.length > 0) {
+    const secHeader = document.createElement("li");
+    secHeader.className = `tree-section-header is-collapsible${sidebarPinnedCollapsed ? "" : " is-expanded"}`;
+    secHeader.innerHTML = `
+      <i class="fa-solid fa-chevron-right tree-section-chevron" aria-hidden="true"></i>
+      <span>고정됨</span>
+      <span class="tree-section-count">${pinnedNotes.length}</span>
+    `;
+    secHeader.onclick = () => {
+      sidebarPinnedCollapsed = !sidebarPinnedCollapsed;
+      localStorage.setItem(SIDEBAR_PINNED_COLLAPSED_KEY, sidebarPinnedCollapsed ? "true" : "false");
+      renderSidebarTreeFromCache();
+    };
+    frag.appendChild(secHeader);
+
+    if (!sidebarPinnedCollapsed) {
+      pinnedNotes.forEach((m) => {
+        visibleNotes.push(m);
+        frag.appendChild(createTreeNoteElement(m, 0, cache, { inPinnedSection: true, isUnderSecurity: false }, getRootDropZone));
+      });
+    }
+  }
+
+  // 2. 통합 폴더 및 노트 트리 (바탕 화면 -> 사용자 폴더 + Home 노트 -> 임시 저장 -> 보안 폴더)
+  function appendFolderSubtree(folderObj, depth, isUnderSecurityBranch, isInsideBackupBranch) {
+    const isSecRoot = folderObj.id === globalSecurityFolderId || folderObj.isSystem === "security";
+    const branchUnderSec = isUnderSecurityBranch || isSecRoot;
+    const isLockedSec = isSecRoot && (!isSecurityUnlocked || !currentSecKey);
+
+    frag.appendChild(createTreeFolderElement(folderObj, depth, cache, { isUnderSecurity: branchUnderSec }, getRootDropZone));
+
+    if (isLockedSec || !sidebarExpandedSet.has(folderObj.id)) return;
+
+    const rawSubFolders = (cache.childrenFoldersByParent.get(folderObj.id) || []).slice();
+    if (folderObj.id === globalBackupFolderId || folderObj.isSystem === "backup") {
+      rawSubFolders.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    } else {
+      rawSubFolders.sort((a, b) => compareNaturalKorean(a.title, b.title));
+    }
+
+    const rawSubNotes = (cache.childrenNotesByParent.get(folderObj.id) || []).slice();
+    rawSubNotes.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    rawSubFolders.forEach((sf) => {
+      appendFolderSubtree(sf, depth + 1, branchUnderSec, isInsideBackupBranch || folderObj.id === globalBackupFolderId);
+    });
+    rawSubNotes.forEach((sn) => {
+      visibleNotes.push(sn);
+      frag.appendChild(createTreeNoteElement(sn, depth + 1, cache, { isUnderSecurity: branchUnderSec }, getRootDropZone));
+    });
+
+    if (rawSubFolders.length === 0 && rawSubNotes.length === 0) {
+      const emptyLi = document.createElement("li");
+      emptyLi.className = `tree-empty-hint${branchUnderSec ? " tree-under-security" : ""}`;
+      emptyLi.style.setProperty("--depth", String(Math.min(depth + 1, 6)));
+      emptyLi.textContent = "비어 있음";
+      frag.appendChild(emptyLi);
+    }
+  }
+
+  const rootFolders = (cache.childrenFoldersByParent.get(null) || []).slice();
+  const desktopFolder = rootFolders.find((f) => f.id === globalDesktopFolderId || f.isSystem === "desktop");
+  const backupFolder = rootFolders.find((f) => f.id === globalBackupFolderId || f.isSystem === "backup");
+  const securityFolder = rootFolders.find((f) => f.id === globalSecurityFolderId || f.isSystem === "security");
+  const userRootFolders = rootFolders
+    .filter((f) => !f.isSystem && f.id !== globalDesktopFolderId && f.id !== globalBackupFolderId && f.id !== globalSecurityFolderId && f.id !== globalTrashFolderId)
+    .sort((a, b) => compareNaturalKorean(a.title, b.title));
+  const homeRootNotes = (cache.childrenNotesByParent.get(null) || [])
+    .slice()
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  if (desktopFolder) appendFolderSubtree(desktopFolder, 0, false, false);
+  userRootFolders.forEach((uf) => appendFolderSubtree(uf, 0, false, false));
+  homeRootNotes.forEach((hn) => {
+    visibleNotes.push(hn);
+    frag.appendChild(createTreeNoteElement(hn, 0, cache, { isUnderSecurity: false }, getRootDropZone));
+  });
+  if (backupFolder) appendFolderSubtree(backupFolder, 0, false, true);
+
+  if (securityFolder) {
+    const divLi = document.createElement("li");
+    divLi.className = "tree-divider";
+    divLi.setAttribute("aria-hidden", "true");
+    frag.appendChild(divLi);
+    appendFolderSubtree(securityFolder, 0, true, false);
+  }
+
+  // 드래그 중에만 활성화되는 최상위(Home) 드롭 영역
+  rootDropZoneEl = document.createElement("li");
+  rootDropZoneEl.id = "sidebar-root-drop-zone";
+  rootDropZoneEl.className = "tree-root-drop-zone";
+  rootDropZoneEl.textContent = "최상위(Home)로 이동";
+  rootDropZoneEl.addEventListener("dragover", (e) => {
+    if (!window.__zenInternalTreeDragging) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    rootDropZoneEl.classList.add("is-drop-target");
+  });
+  rootDropZoneEl.addEventListener("dragleave", () => {
+    rootDropZoneEl.classList.remove("is-drop-target");
+  });
+  rootDropZoneEl.addEventListener("drop", async (e) => {
+    if (!window.__zenInternalTreeDragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    rootDropZoneEl.classList.remove("is-drop-target", "is-visible");
+    const dragIds = parseDraggedTreeIds(e);
+    window.__zenInternalTreeDragging = false;
+    __zenDraggedTreeIds = [];
+    if (dragIds.length === 0) return;
+    await moveItemsToFolder(dragIds, null);
+  });
+  frag.appendChild(rootDropZoneEl);
+
+  displayedMemos = visibleNotes;
+  list.innerHTML = "";
+  list.appendChild(frag);
+  list.scrollTop = savedScroll;
+}
+
+function loadMemoList(queryDB = true) {
+  const list = document.getElementById("memo-list");
+  if (!list) return;
+
+  if (queryDB) {
+    if (!db) return;
+    const tx = db.transaction(["memos"], "readonly");
+    tx.objectStore("memos").getAll().onsuccess = (e) => {
+      const allData = e.target.result || [];
+      window.__zenTreeDataCache = buildSidebarTreeCache(allData);
+      renderSidebarTreeFromCache();
+    };
+  } else {
+    if (window.__zenTreeDataCache) {
+      renderSidebarTreeFromCache();
+    } else {
+      list.innerHTML = "";
+    }
+  }
+}
+
+window.compareNaturalKorean = compareNaturalKorean;
+window.buildSidebarTreeCache = buildSidebarTreeCache;
+window.saveSidebarExpandedState = saveSidebarExpandedState;
+window.expandSidebarFolderInMemory = expandSidebarFolderInMemory;
+window.collapseSidebarSecurityTree = collapseSidebarSecurityTree;
+window.lockSecurityFolderOnly = lockSecurityFolderOnly;
+window.toggleAllSidebarFolders = toggleAllSidebarFolders;
+window.clearMainSearch = clearMainSearch;
+window.createNewMemoSmart = createNewMemoSmart;
+window.createSidebarFolder = createSidebarFolder;
+window.createSidebarFolderFromHeader = createSidebarFolderFromHeader;
+window.revealMemoInSidebarTree = revealMemoInSidebarTree;
+window.openSidebarContextMenu = openSidebarContextMenu;
+window.closeSidebarContextMenu = closeSidebarContextMenu;
+window.toggleNotePinFromSidebar = toggleNotePinFromSidebar;
+window.duplicateNoteFromSidebar = duplicateNoteFromSidebar;
+window.deleteSidebarNoteWithConfirm = deleteSidebarNoteWithConfirm;
+window.deleteSidebarFolderWithConfirm = deleteSidebarFolderWithConfirm;
+window.getSidebarExpandedIds = () => Array.from(sidebarExpandedSet);
+
 function loadTrashList() {
-  const query = document
-    .getElementById("trash-search-input")
-    .value.toLowerCase();
+  const searchInp = document.getElementById("trash-search-input");
+  const query = searchInp ? searchInp.value.toLowerCase() : "";
   const list = document.getElementById("trash-list");
+  if (!list || !db) return;
   const savedScroll = list.scrollTop;
 
   const tx = db.transaction(["memos"], "readonly");
   displayedTrashMemos = [];
 
-  // 🎯 1. 전체 데이터를 가져와서 가계도(족보)를 파악합니다.
   tx.objectStore("memos").getAll().onsuccess = (e) => {
-    const allData = e.target.result;
+    const allData = e.target.result || [];
 
     const folderMap = new Map();
     allData.forEach((m) => {
       if (m.type === "folder") folderMap.set(m.id, m);
     });
 
-    // 🎯 2. 조상 중에 '바탕 화면'이 있는지 끝까지 추적하는 전용 함수
-    // (삭제된 폴더 안에 있던 파일이더라도 뿌리만 맞으면 통과시킵니다)
-    function isUnderDesktop(parentId) {
-      // 🚀 [핵심 수정] 휴지통에서도 소속이 없던(null) 옛날 파일들을 구출해 냅니다!
-      if (!parentId || parentId === globalDesktopFolderId) return true;
-
+    function getOriginPath(parentId) {
+      if (parentId === null || parentId === undefined) return "Home";
+      const parts = [];
       let curr = parentId;
-      while (curr) {
-        if (curr === globalDesktopFolderId) return true;
-        const parentFolder = folderMap.get(curr);
-        if (!parentFolder) return false;
-        curr = parentFolder.parentId;
+      const visited = new Set();
+      while (curr !== null && curr !== undefined) {
+        if (visited.has(curr)) break;
+        visited.add(curr);
+        const pf = folderMap.get(curr);
+        if (!pf) return parts.length > 0 ? parts.join(" > ") : "삭제된 폴더";
+        parts.unshift(pf.title || "폴더");
+        curr = pf.parentId;
       }
-      return false;
+      return parts.length > 0 ? parts.join(" > ") : "Home";
     }
 
-    // 🎯 3. 조건에 맞는 파일만 필터링
+    const trashEntries = [];
     allData.forEach((m) => {
       const isFile = m.type === "file" || m.type === undefined;
-      // 🚀 [보안 폴더 검색 차단] 암호화된 외계어 텍스트는 검색에서 제외시킵니다.
-      const safePlainText =
-        m.plainText && !m.plainText.startsWith("ZENENC::")
-          ? m.plainText.toLowerCase()
-          : "";
-      const matchQuery =
-        m.title.toLowerCase().includes(query) || safePlainText.includes(query);
+      if (!m.isDeleted || m.isPermanentlyDeleted || !isFile) return;
 
-      // 지워진 상태이면서, 영구삭제되지 않은 '파일'이고, 검색어에 맞을 때
-      if (m.isDeleted && !m.isPermanentlyDeleted && isFile && matchQuery) {
-        // 🎯 오직 '바탕 화면' 소속이었던 파일만 휴지통 창에 전시합니다!
-        if (isUnderDesktop(m.parentId)) {
-          displayedTrashMemos.push(m);
-        }
+      const isEncrypted = String(m.plainText || "").startsWith("ZENENC::") || String(m.content || "").startsWith("ZENENC::");
+      const safeTitle = (m.title || "제목 없는 노트").toLowerCase();
+      const safePlainText = (!isEncrypted && m.plainText) ? String(m.plainText).toLowerCase() : "";
+      const originPath = getOriginPath(m.parentId);
+      const matchQuery =
+        safeTitle.includes(query) ||
+        safePlainText.includes(query) ||
+        originPath.toLowerCase().includes(query);
+
+      if (matchQuery) {
+        displayedTrashMemos.push(m);
+        trashEntries.push({ memo: m, originPath });
       }
     });
 
-    // 🎯 4. 최신 삭제(업데이트) 순서대로 정렬
-    displayedTrashMemos.sort((a, b) => b.updatedAt - a.updatedAt);
+    displayedTrashMemos.sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
+    trashEntries.sort((a, b) => (b.memo.deletedAt || b.memo.updatedAt || 0) - (a.memo.deletedAt || a.memo.updatedAt || 0));
 
-    // 🎯 5. 화면에 그리기
     list.innerHTML = "";
-    displayedTrashMemos.forEach((m) => list.appendChild(createTrashElement(m)));
+    trashEntries.forEach(({ memo, originPath }) => {
+      list.appendChild(createTrashElement(memo, originPath));
+    });
     list.scrollTop = savedScroll;
   };
 }
@@ -2647,103 +3971,20 @@ function formatDateTime(timestamp) {
 }
 
 function createMemoElement(memo) {
-  const li = document.createElement("li");
-
-  const isActive = isMultiSelectMode
-    ? selectedMemos.has(memo.id)
-    : currentMemoId === memo.id || selectedMemos.has(memo.id);
-  li.className = `memo-item ${isActive ? "active" : ""}`;
-
-  li.innerHTML = `
-                <div class="memo-info">
-                    <span class="memo-title">${memo.title}</span>
-                    <span class="memo-date">${formatDateTime(memo.updatedAt)}</span>
-                </div>
-                <div class="memo-actions-wrap ${memo.pinnedAt ? "is-pinned-state" : ""}">
-                    <div class="memo-actions">
-                        <i class="fa-solid fa-thumbtack btn-pin ${memo.pinnedAt ? "is-pinned" : ""}" onclick="handlePinClick(${memo.id}, ${!!memo.pinnedAt}, event)"></i>
-                        <i class="fa-solid fa-trash-can btn-delete" onclick="deleteMemo(${memo.id}, event)"></i>
-                    </div>
-                    <i class="fa-solid fa-ellipsis-vertical btn-more mobile-only" onclick="toggleMemoMenu(event)"></i>
-                </div>`;
-
-  li.addEventListener("mousedown", (e) => startPress(e, memo.id, false));
-  li.addEventListener("touchstart", (e) => startPress(e, memo.id, false), {
-    passive: true,
-  });
-  li.addEventListener("mouseup", cancelPress);
-  li.addEventListener("mouseleave", cancelPress);
-  li.addEventListener("touchend", cancelPress);
-  li.addEventListener("touchmove", cancelPress, { passive: true });
-
-  li.onclick = (e) => {
-    if (document.querySelector(".memo-actions-wrap.is-menu-open")) {
-      closeAllMemoMenus();
-      return;
-    }
-    if (e.target.closest(".memo-actions-wrap")) return;
-
-    if (isPressTriggered) {
-      isPressTriggered = false;
-      return;
-    }
-
-    const isCtrl = e.ctrlKey || e.metaKey;
-    const isShift = e.shiftKey;
-
-    if (isMultiSelectMode && !isCtrl && !isShift) {
-      if (selectedMemos.has(memo.id)) {
-        selectedMemos.delete(memo.id);
-        if (selectedMemos.size === 0) isMultiSelectMode = false;
-      } else {
-        selectedMemos.add(memo.id);
-        lastSelectedId = memo.id;
-      }
-      loadMemoList(false);
-      return;
-    }
-
-    forceSaveImmediate();
-
-    if (isShift && lastSelectedId !== null) {
-      const cIdx = displayedMemos.findIndex((m) => m.id === memo.id);
-      const lIdx = displayedMemos.findIndex((m) => m.id === lastSelectedId);
-
-      if (cIdx !== -1 && lIdx !== -1) {
-        const start = Math.min(cIdx, lIdx);
-        const end = Math.max(cIdx, lIdx);
-        if (!isCtrl) selectedMemos.clear();
-        for (let i = start; i <= end; i++)
-          selectedMemos.add(displayedMemos[i].id);
-      }
-      loadMemoList(false);
-    } else if (isCtrl) {
-      if (selectedMemos.has(memo.id)) selectedMemos.delete(memo.id);
-      else selectedMemos.add(memo.id);
-      lastSelectedId = memo.id;
-      loadMemoList(false);
-    } else {
-      if (window.getSelection) {
-        const sel = window.getSelection();
-        if (sel.removeAllRanges) sel.removeAllRanges();
-      }
-      selectedMemos.clear();
-      selectedMemos.add(memo.id);
-      lastSelectedId = memo.id;
-      isMultiSelectMode = false;
-      loadMemo(memo.id);
-    }
-  };
-  return li;
+  const cache = window.__zenTreeDataCache || buildSidebarTreeCache([]);
+  return createTreeNoteElement(memo, 0, cache, { isUnderSecurity: false }, () => null);
 }
 
-function createTrashElement(memo) {
+function createTrashElement(memo, originPath = "") {
   const li = document.createElement("li");
   li.className = `memo-item ${selectedTrashMemos.has(memo.id) ? "active" : ""}`;
+  const dateStr = formatDateTime(memo.deletedAt || memo.updatedAt);
+  const subLabel = originPath ? `${dateStr} · ${originPath}` : dateStr;
+  li.title = `${memo.title || "제목 없는 노트"}\n원래 위치: ${originPath || "알 수 없음"}`;
   li.innerHTML = `
                 <div class="memo-info">
-                    <span class="memo-title">${memo.title}</span>
-                    <span class="memo-date">${formatDateTime(memo.deletedAt || memo.updatedAt)}</span>
+                    <span class="memo-title">${escapeTreeHtml(memo.title || "제목 없는 노트")}</span>
+                    <span class="memo-date">${escapeTreeHtml(subLabel)}</span>
                 </div>
                 <div class="memo-actions-wrap">
                     <div class="memo-actions">
@@ -2920,6 +4161,9 @@ async function loadMemo(id) {
         if (previousMemoId) purgeMemoIfEmpty(previousMemoId);
 
         loadMemoList(false); // 목록 하이라이트 변경용 (가볍게)
+        if (typeof revealMemoInSidebarTree === "function") {
+          revealMemoInSidebarTree(m.id);
+        }
 
         // 🎯 [추가] 다른 노트를 열 때 이전 노트의 Ctrl+Z 수정 기록을 완벽히 지움
         setTimeout(() => quill.history.clear(), 10);
@@ -2980,7 +4224,7 @@ function deleteMemo(id, e) {
 }
 
 function restoreMemo(id, e) {
-  e.stopPropagation();
+  if (e) e.stopPropagation();
   const targets =
     selectedTrashMemos.has(id) && selectedTrashMemos.size > 1
       ? Array.from(selectedTrashMemos)
@@ -2988,25 +4232,54 @@ function restoreMemo(id, e) {
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
 
-  targets.forEach((targetId) => {
-    store.get(targetId).onsuccess = (ev) => {
-      const memo = ev.target.result;
-      if (memo) {
-        memo.isDeleted = false;
-        delete memo.deletedAt;
-        memo.updatedAt = Date.now();
-        store.put(memo);
+  store.getAll().onsuccess = (allEv) => {
+    const allData = allEv.target.result || [];
+    const folderMap = new Map();
+    const byId = new Map();
+    allData.forEach((item) => {
+      byId.set(item.id, item);
+      if (item.type === "folder") folderMap.set(item.id, item);
+    });
+
+    function isParentAlive(parentId) {
+      if (parentId === null || parentId === undefined) return true;
+      let curr = parentId;
+      const visited = new Set();
+      while (curr !== null && curr !== undefined) {
+        if (visited.has(curr)) return false;
+        visited.add(curr);
+        if (typeof globalTrashFolderId !== "undefined" && globalTrashFolderId !== null && curr === globalTrashFolderId) {
+          return false;
+        }
+        const pf = folderMap.get(curr);
+        if (!pf || pf.isDeleted || pf.isPermanentlyDeleted || pf.isSystem === "trash") {
+          return false;
+        }
+        curr = pf.parentId;
       }
-    };
-  });
+      return true;
+    }
+
+    targets.forEach((targetId) => {
+      const memo = byId.get(targetId);
+      if (!memo) return;
+      memo.isDeleted = false;
+      delete memo.deletedAt;
+      if (!isParentAlive(memo.parentId) && typeof globalDesktopFolderId !== "undefined" && globalDesktopFolderId !== null) {
+        memo.parentId = globalDesktopFolderId;
+        memo.parentSyncId = "sys_desktop";
+      }
+      memo.updatedAt = Date.now();
+      store.put(memo);
+    });
+  };
 
   tx.oncomplete = () => {
-    // 🎯 버그 수정: 다중 선택 모드 확실히 끄기
     isTrashMultiSelectMode = false;
     targets.forEach((targetId) => selectedTrashMemos.delete(targetId));
 
     loadTrashList();
-    loadMemoList(true); // 🎯 버그 수정: 제가 함부로 지웠던 메인 목록 새로고침 부활!
+    loadMemoList(true);
     updateUnsyncedCount();
     if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };

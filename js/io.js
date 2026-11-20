@@ -943,6 +943,139 @@ function saveSharedNoteToDesktop(title, htmlContent, plainTextContent = "", upda
   });
 }
 
+function normalizeNoteContentForCompare(html) {
+  return String(html || "")
+    .replace(/<select\b[^>]*class="[^"]*ql-ui[^"]*"[^>]*>[\s\S]*?<\/select>/gi, "")
+    .replace(/<span\b[^>]*class="[^"]*ql-ui[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
+    .replace(/\s+$/g, "")
+    .trim();
+}
+
+function normalizeNotePlainTextForCompare(text) {
+  return String(text || "").replace(/\r\n/g, "\n").trim();
+}
+
+async function findDuplicateSharedNote(parsed) {
+  if (!parsed || !db) return null;
+  let allData = [];
+  try {
+    allData = await new Promise((resolve, reject) => {
+      const tx = db.transaction(["memos"], "readonly");
+      const req = tx.objectStore("memos").getAll();
+      req.onsuccess = (e) => resolve(e.target.result || []);
+      req.onerror = (e) => reject(e.target.error);
+    });
+  } catch (err) {
+    return null;
+  }
+  if (!Array.isArray(allData) || allData.length === 0) return null;
+
+  const folderMap = new Map();
+  allData.forEach((item) => {
+    if (item && item.type === "folder") folderMap.set(item.id, item);
+  });
+
+  function isExcludedAncestor(parentId) {
+    let curr = parentId;
+    const visited = new Set();
+    while (curr !== null && curr !== undefined) {
+      if (visited.has(curr)) return true;
+      visited.add(curr);
+      if (typeof globalTrashFolderId !== "undefined" && globalTrashFolderId !== null && curr === globalTrashFolderId) return true;
+      if (typeof globalSecurityFolderId !== "undefined" && globalSecurityFolderId !== null && curr === globalSecurityFolderId) return true;
+      const folder = folderMap.get(curr);
+      if (!folder) return true;
+      if (folder.isDeleted || folder.isPermanentlyDeleted || folder.isSystem === "trash" || folder.isSystem === "security") {
+        return true;
+      }
+      curr = folder.parentId;
+    }
+    return false;
+  }
+
+  const targetTitle = String(parsed.title || "").trim();
+  const targetHtml = normalizeNoteContentForCompare(parsed.content);
+  const targetText = normalizeNotePlainTextForCompare(parsed.plainText);
+
+  const matches = allData.filter((m) => {
+    if (!m || m.type === "folder" || m.isDeleted || m.isPermanentlyDeleted) return false;
+    if (String(m.content || "").startsWith("ZENENC::")) return false;
+    if (isExcludedAncestor(m.parentId)) return false;
+    if (String(m.title || "").trim() !== targetTitle) return false;
+
+    if (targetHtml !== "") {
+      return normalizeNoteContentForCompare(m.content) === targetHtml;
+    }
+    return normalizeNotePlainTextForCompare(m.plainText) === targetText;
+  });
+
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return matches[0];
+}
+
+async function exportMemoByIdAsMYNS(memoId) {
+  if (typeof currentMemoId !== "undefined" && currentMemoId !== null && Number(memoId) === Number(currentMemoId)) {
+    return await exportMYNS();
+  }
+  if (!db) return false;
+
+  const m = await new Promise((resolve) => {
+    db.transaction(["memos"], "readonly").objectStore("memos").get(memoId).onsuccess = (e) => resolve(e.target.result || null);
+  });
+  if (!m || m.type === "folder") return false;
+
+  const isUnderSecurity = (m.parentId !== null && typeof checkIsUnderSecurity === "function")
+    ? await checkIsUnderSecurity(m.parentId)
+    : false;
+  const isEncrypted = isUnderSecurity || String(m.content || "").startsWith("ZENENC::") || String(m.plainText || "").startsWith("ZENENC::");
+
+  if (isEncrypted) {
+    if (typeof currentSecKey === "undefined" || !currentSecKey) {
+      if (typeof showToast === "function") showToast("보안 폴더 잠금을 먼저 해제해주세요.");
+      return false;
+    }
+    if (!confirm("보안 폴더의 노트를 일반 공유 파일(.myns)로 내보냅니다.\n계속하시겠습니까?")) {
+      return false;
+    }
+  }
+
+  let contentHtml = m.content || "";
+  let plainText = m.plainText || "";
+  if (String(contentHtml).startsWith("ZENENC::")) {
+    contentHtml = await decryptData(contentHtml, currentSecKey);
+  }
+  if (String(plainText).startsWith("ZENENC::")) {
+    plainText = await decryptData(plainText, currentSecKey);
+  }
+  if (!plainText && contentHtml) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = contentHtml;
+    plainText = tmp.textContent || tmp.innerText || "";
+  }
+
+  const tags = typeof extractHashTags === "function" ? extractHashTags(plainText) : [];
+  const titleStr = (m.title && String(m.title).trim()) || "제목 없는 노트";
+  const sharePayload = {
+    schemaVersion: 1,
+    type: "MYNoteShare",
+    app: "MY 노트",
+    title: titleStr,
+    tags: tags,
+    createdAt: m.createdAt || m.updatedAt || Date.now(),
+    updatedAt: m.updatedAt || Date.now(),
+    exportedAt: Date.now(),
+    content: contentHtml,
+    plainText: plainText
+  };
+
+  const jsonString = JSON.stringify(sharePayload, null, 2);
+  const safeTitle = sanitizeExportFileName(titleStr);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+  return await saveExportBlob(blob, `${safeTitle}.myns`, "application/json", "MY 노트 공유 문서 (*.myns)", ".myns");
+}
+
 window.__zenPendingSharedFiles = window.__zenPendingSharedFiles || [];
 window.__zenAppDbReady = window.__zenAppDbReady || false;
 let __zenFlushingSharedFiles = false;
@@ -968,11 +1101,29 @@ async function importSharedNotePayload(rawContent, fileName = "") {
   }
 
   try {
+    const duplicateMemo = await findDuplicateSharedNote(parsed);
+    if (duplicateMemo) {
+      if (typeof loadMemoList === "function") loadMemoList(true);
+      if (typeof loadMemo === "function") {
+        loadMemo(duplicateMemo.id);
+      }
+      if (typeof revealMemoInSidebarTree === "function") {
+        revealMemoInSidebarTree(duplicateMemo.id);
+      }
+      if (typeof showToast === "function") {
+        showToast(`이미 동일한 노트가 있어 기존 노트를 열었습니다. (${duplicateMemo.title || parsed.title})`);
+      }
+      return duplicateMemo.id;
+    }
+
     const newId = await saveSharedNoteToDesktop(parsed.title, parsed.content, parsed.plainText, Date.now());
     if (typeof loadMemoList === "function") loadMemoList(true);
     if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
     if (newId && typeof loadMemo === "function") {
       loadMemo(newId);
+    }
+    if (newId && typeof revealMemoInSidebarTree === "function") {
+      revealMemoInSidebarTree(newId);
     }
     if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
     if (typeof showToast === "function") {
@@ -1031,7 +1182,10 @@ async function flushPendingSharedFiles() {
 }
 
 window.exportMYNS = exportMYNS;
+window.exportMemoByIdAsMYNS = exportMemoByIdAsMYNS;
 window.sanitizeExportFileName = sanitizeExportFileName;
+window.normalizeNoteContentForCompare = normalizeNoteContentForCompare;
+window.findDuplicateSharedNote = findDuplicateSharedNote;
 window.parseSharedNoteJson = parseSharedNoteJson;
 window.importSharedNotePayload = importSharedNotePayload;
 window.handleIncomingSharedNoteFile = handleIncomingSharedNoteFile;
@@ -3096,6 +3250,7 @@ function initGlobalFileDragAndDrop() {
   let dragCounter = 0;
 
   function hasFiles(e) {
+    if (window.__zenInternalTreeDragging) return false;
     if (!e.dataTransfer) return false;
     const types = e.dataTransfer.types;
     if (!types) return false;

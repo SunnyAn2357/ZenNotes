@@ -11,8 +11,8 @@
 
     <title>ZenNotes</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.2.2">
-    <link rel="manifest" href="manifest.json?v=1.2.2">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.3.0">
+    <link rel="manifest" href="manifest.json?v=1.3.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -25,7 +25,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.2.2">
+    <link rel="stylesheet" href="css/main.css?v=1.3.0">
 
 </head>
 
@@ -159,18 +159,30 @@
                     </div>
                 </div>
             </div>
-            <div style="display: flex; width: 100%;">
-                <button class="new-note-btn" onclick="createNewMemo()"
+            <div class="nav-action-row">
+                <button class="new-note-btn" onclick="createNewMemoSmart()" title="현재 폴더에 새 노트 작성"
                     style="color: var(--text-main); font-weight: 600;">
                     <i class="fa-solid fa-pen-to-square"></i> <span class="btn-text">새 노트 작성</span>
                 </button>
+                <div class="nav-mini-actions">
+                    <button type="button" id="btn-sidebar-new-folder" class="nav-mini-btn" onclick="createSidebarFolderFromHeader()" title="새 폴더 만들기" aria-label="새 폴더 만들기">
+                        <i class="fa-solid fa-folder-plus"></i>
+                    </button>
+                    <button type="button" id="btn-sidebar-collapse-all" class="nav-mini-btn" onclick="toggleAllSidebarFolders()" title="모든 폴더 접기" aria-label="모든 폴더 접기">
+                        <i class="fa-solid fa-angles-up"></i>
+                    </button>
+                </div>
             </div>
             <div class="search-bar">
                 <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
-                <input type="text" id="list-search-input" placeholder="바탕 화면 검색..." oninput="triggerMainSearch()">
+                <input type="text" id="list-search-input" placeholder="전체 노트 검색..." oninput="triggerMainSearch()">
+                <button type="button" id="list-search-clear-btn" class="search-clear-btn" onclick="clearMainSearch()" title="검색어 지우기" aria-label="검색어 지우기" style="display: none;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
         </div>
-        <ul id="memo-list" class="memo-list"></ul>
+        <ul id="memo-list" class="memo-list sidebar-tree"></ul>
+        <div id="left-sidebar-resizer" class="sidebar-resizer" title="드래그하여 너비 조절 (더블클릭 초기화)"></div>
     </div>
 
     <div class="col-center">
@@ -958,24 +970,27 @@
     </div>
     <input type="file" id="image-replace-input" accept="image/*" style="display: none;" />
 
+    <!-- [V1.3.0] 좌측 사이드바 폴더/노트 우클릭·더보기 컨텍스트 메뉴 -->
+    <div id="sidebar-context-menu" class="sidebar-context-menu" style="display: none;" onclick="event.stopPropagation()"></div>
+
     <!-- 🔥 [V4.3.0] Firebase SDK (구글 드라이브 GAPI/GIS 대체) -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.2.2"></script>
-    <script src="js/db.js?v=1.2.2"></script>
-    <script src="js/ui.js?v=1.2.2"></script>
-    <script src="js/editor.js?v=1.2.2"></script>
-    <script src="js/file_manager.js?v=1.2.2"></script>
-    <script src="js/io.js?v=1.2.2"></script>
-    <script src="js/auth.js?v=1.2.2"></script>
+    <script src="js/globals.js?v=1.3.0"></script>
+    <script src="js/db.js?v=1.3.0"></script>
+    <script src="js/ui.js?v=1.3.0"></script>
+    <script src="js/editor.js?v=1.3.0"></script>
+    <script src="js/file_manager.js?v=1.3.0"></script>
+    <script src="js/io.js?v=1.3.0"></script>
+    <script src="js/auth.js?v=1.3.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.2.2");
+            console.log("[ZenNotes] 현재 버전: V1.3.0");
             console.log("=========================================");
         });
     </script>

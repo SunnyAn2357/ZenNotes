@@ -580,21 +580,43 @@ body.light-theme .drop-zone-overlay {
    04. 좌측 사이드바 및 메모 (Left Sidebar & Memos)
 ============================================================================ */
 .col-left {
-    width: 285px;
-    min-width: 285px;
+    position: relative;
+    width: var(--sidebar-width, 285px);
+    min-width: var(--sidebar-width, 285px);
     background: var(--surface);
     display: flex;
     flex-direction: column;
     transition: width 0.25s ease-in-out, min-width 0.25s ease-in-out, transform 0.25s ease-in-out;
 }
 
+.col-left.is-resizing {
+    transition: none !important;
+}
+
+.sidebar-resizer {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 30;
+    background: transparent;
+    transition: background-color 0.15s ease;
+}
+
+.sidebar-resizer:hover {
+    background: rgba(99, 102, 241, 0.28);
+}
+
 .nav-header {
-    padding: 24px 20px 16px;
+    padding: 20px 14px 12px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     user-select: none;
     -webkit-user-select: none;
+    caret-color: transparent;
 }
 
 /* 🎯 [V4.0.0 / V4.2.2] 삼선(노트 메뉴)과 같은 줄 우측에 사이드바 접기 버튼 나란히 배치 */
@@ -870,8 +892,8 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 }
 
 .col-left.collapsed {
-    width: 60px;
-    min-width: 60px;
+    width: 60px !important;
+    min-width: 60px !important;
 }
 
 .col-left.collapsed .nav-header {
@@ -899,14 +921,54 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 
 .col-left.collapsed .search-bar,
 .col-left.collapsed .memo-list,
+.col-left.collapsed .nav-mini-actions,
+.col-left.collapsed .sidebar-resizer,
 .col-left.collapsed .new-note-btn .btn-text {
     display: none !important;
 }
 
+.nav-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 6px;
+}
+
+.nav-mini-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.nav-mini-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-mini-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+}
+
 .col-left:not(.collapsed) .new-note-btn {
-    width: 100% !important;
+    flex: 1;
+    width: auto !important;
+    min-width: 0;
     justify-content: flex-start !important;
-    padding: 10px 4px !important;
+    padding: 7px 4px !important;
     gap: 8px !important;
 }
 
@@ -921,6 +983,10 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     justify-content: center !important;
     align-items: center !important;
     width: 100% !important;
+}
+
+.col-left.collapsed .nav-action-row {
+    justify-content: center;
 }
 
 .col-left.collapsed .new-note-btn {
@@ -944,16 +1010,39 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 
 .search-bar {
     background: var(--bg);
-    padding: 10px 12px;
+    padding: 8px 10px;
     border-radius: 8px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     border: 1px solid var(--border);
 }
 
 .search-bar input {
     width: 100%;
+    min-width: 0;
+    font-size: 13px;
+}
+
+.search-clear-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.22);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.search-clear-btn:hover {
+    background: rgba(148, 163, 184, 0.36);
+    color: var(--text-main);
 }
 
 /* 🎯 [제미나이 핏] 유틸, 네비게이션 아이콘 크기 통일 */
@@ -985,7 +1074,7 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     /* 폰트 특성상 붕 떠 보이는 것을 1px 묵직하게 눌러줌 */
 }
 
-/* 🎯 [No.004_터치영역_확장_V01] 새 노트 작성 터치/클릭 영역 확장 */
+/* 🎯 [No.004_터치영역_확장_V01] 새 노트 작성 터치/클릭 영역 (우측 미니 버튼 침범 차단) */
 .col-left .new-note-btn {
     position: relative;
 }
@@ -993,12 +1082,11 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 .col-left .new-note-btn::after {
     content: '';
     position: absolute;
-    top: -8px;
-    bottom: -8px;
-    left: -10px;
-    right: -65px;
-    /* 🎯 왼쪽으로 10px, 오른쪽으로 65px 넓게 터치 인식 */
-    z-index: 10;
+    top: -6px;
+    bottom: -6px;
+    left: -6px;
+    right: 0;
+    z-index: 1;
 }
 
 .memo-list {
@@ -3722,6 +3810,20 @@ body.light-theme {
         box-shadow: 2px 0 12px rgba(0, 0, 0, 0.5);
     }
 
+    .sidebar-resizer {
+        display: none !important;
+    }
+
+    .tree-row {
+        height: 36px !important;
+        min-height: 36px !important;
+        font-size: 13.5px !important;
+    }
+
+    .tree-row-actions {
+        display: flex !important;
+    }
+
     .col-left.is-mobile-open {
         transform: translateX(0) !important;
     }
@@ -6092,4 +6194,442 @@ body:not(.light-theme) .app-lock-hint-box {
 .app-lock-card,
 .app-lock-setup-card {
     cursor: default;
+}
+
+/* [V1.3.0] 코드블록 언어 선택 / 복사 버튼 부유 Zen 툴팁 */
+.zen-codeblock-tooltip {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    z-index: 9999;
+    padding: 5px 9px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: nowrap;
+    pointer-events: none;
+    background: rgba(24, 27, 34, 0.94);
+    color: #f3f4f6;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    caret-color: transparent !important;
+}
+
+.zen-codeblock-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+body.light-theme .zen-codeblock-tooltip {
+    background: rgba(30, 41, 59, 0.94);
+    color: #ffffff;
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+}
+
+@media (hover: none), print {
+    .zen-codeblock-tooltip {
+        display: none !important;
+    }
+}
+
+/* ============================================================================
+   [V1.3.0] 좌측 사이드바 콤팩트 폴더 트리 탐색기 & 인라인 컨텍스트 메뉴
+============================================================================ */
+#memo-list.sidebar-tree {
+    padding: 0 6px 24px 6px;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+#memo-list.sidebar-tree::-webkit-scrollbar {
+    display: block !important;
+    width: 5px;
+}
+
+#memo-list.sidebar-tree::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#memo-list.sidebar-tree::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 4px;
+}
+
+#memo-list.sidebar-tree::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.6);
+}
+
+#memo-list.sidebar-tree,
+#memo-list.sidebar-tree *,
+#sidebar-context-menu,
+#sidebar-context-menu * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    caret-color: transparent !important;
+}
+
+.tree-section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.2px;
+}
+
+.tree-section-header.is-collapsible {
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.tree-section-header.is-collapsible:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+}
+
+.tree-section-chevron {
+    font-size: 9px;
+    transition: transform 0.15s ease;
+}
+
+.tree-section-header.is-expanded .tree-section-chevron {
+    transform: rotate(90deg);
+}
+
+.tree-section-count {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-left: auto;
+}
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    min-height: 30px;
+    padding: 0 6px;
+    margin-bottom: 1px;
+    border-radius: 6px;
+    border-left: 3px solid transparent;
+    font-size: 12.8px;
+    color: var(--text-main);
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.tree-row:hover {
+    background: var(--surface-hover);
+}
+
+.tree-row-folder {
+    font-weight: 500;
+}
+
+.tree-row-folder.is-active-folder {
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.tree-row-note.is-active {
+    background: rgba(99, 102, 241, 0.16);
+    border-left-color: var(--accent);
+    border-radius: 3px 6px 6px 3px;
+    color: #f8fafc;
+    font-weight: 500;
+}
+
+.tree-row-note.is-selected {
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.tree-row.is-drop-target,
+.tree-root-drop-zone.is-drop-target {
+    outline: 1.5px dashed var(--accent);
+    outline-offset: -2px;
+    background: rgba(59, 130, 246, 0.14) !important;
+}
+
+.tree-row.is-dragging {
+    opacity: 0.45;
+}
+
+.tree-guide {
+    width: 14px;
+    height: 100%;
+    flex-shrink: 0;
+    position: relative;
+    pointer-events: none;
+}
+
+.tree-guide::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.18);
+}
+
+.tree-chevron {
+    width: 12px;
+    font-size: 9.5px;
+    color: var(--text-muted);
+    text-align: center;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.tree-row-folder.is-expanded > .tree-chevron {
+    transform: rotate(90deg);
+    color: var(--text-main);
+}
+
+.tree-folder-icon {
+    width: 15px;
+    font-size: 13px;
+    text-align: center;
+    flex-shrink: 0;
+    color: #94a3b8;
+}
+
+.tree-folder-icon.is-desktop {
+    color: #60a5fa;
+}
+
+.tree-folder-icon.is-backup {
+    color: #a78bfa;
+}
+
+.tree-folder-icon.is-security {
+    color: #f59e0b;
+}
+
+.tree-folder-icon.is-security-open {
+    color: #34d399;
+}
+
+.tree-note-icon {
+    width: 14px;
+    font-size: 12px;
+    text-align: center;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    opacity: 0.85;
+}
+
+.tree-note-icon.is-pinned-icon {
+    color: var(--accent);
+    opacity: 0.95;
+}
+
+.tree-folder-title,
+.tree-note-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-note-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.tree-row-note.is-search-result {
+    height: auto;
+    min-height: 36px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.tree-search-path {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-inline-pin {
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0.75;
+    flex-shrink: 0;
+}
+
+.tree-lock-badge {
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.14);
+    color: #f59e0b;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.tree-row-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.tree-row:hover .tree-row-actions {
+    display: flex;
+}
+
+.tree-act-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.tree-act-btn:hover {
+    background: rgba(148, 163, 184, 0.2);
+    color: var(--text-main);
+}
+
+.tree-act-btn.is-pinned {
+    color: var(--accent);
+}
+
+.tree-divider {
+    height: 1px;
+    margin: 6px 8px;
+    background: var(--border);
+    opacity: 0.7;
+}
+
+.tree-empty-hint {
+    height: 24px;
+    line-height: 24px;
+    padding-left: calc(28px + var(--depth, 0) * 14px);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    opacity: 0.65;
+}
+
+.tree-root-drop-zone {
+    display: none;
+    margin: 8px 6px 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1.5px dashed var(--border);
+    font-size: 12px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.tree-root-drop-zone.is-visible {
+    display: block;
+}
+
+/* 라이트 테마 트리 보정 */
+body.light-theme .tree-row-folder.is-active-folder {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+body.light-theme .tree-row-note.is-active {
+    background-color: #dbeafe !important;
+    border-left-color: var(--accent) !important;
+    color: #1d4ed8 !important;
+    font-weight: 600 !important;
+}
+
+body.light-theme .tree-row-note.is-active .tree-note-icon {
+    color: #2563eb;
+    opacity: 1;
+}
+
+body.light-theme .tree-row-note.is-selected {
+    background-color: #eff6ff;
+}
+
+body.light-theme .tree-guide::before {
+    background: rgba(100, 116, 139, 0.22);
+}
+
+/* 사이드바 인라인 컨텍스트 메뉴 */
+.sidebar-context-menu {
+    position: fixed;
+    z-index: 10500;
+    min-width: 176px;
+    padding: 6px;
+    border-radius: 10px;
+    background: rgba(24, 27, 34, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+body.light-theme .sidebar-context-menu {
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+}
+
+.sidebar-context-item {
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 12.5px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sidebar-context-item i {
+    width: 14px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-muted);
+}
+
+.sidebar-context-item:hover {
+    background: var(--surface-hover);
+}
+
+.sidebar-context-item.is-danger,
+.sidebar-context-item.is-danger i {
+    color: #ef4444;
+}
+
+.sidebar-context-divider {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--border);
+    opacity: 0.7;
 }

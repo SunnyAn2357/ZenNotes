@@ -538,9 +538,18 @@ function cancelPress() {
 }
 
 // 🎯 [성능 최적화] 검색창 3종 디바운스(Debounce) 타이머
+function syncMainSearchClearBtn() {
+  const inp = document.getElementById("list-search-input");
+  const clearBtn = document.getElementById("list-search-clear-btn");
+  if (clearBtn) {
+    clearBtn.style.display = inp && inp.value.length > 0 ? "flex" : "none";
+  }
+}
+
 function triggerMainSearch() {
+  syncMainSearchClearBtn();
   if (mainSearchTimer) clearTimeout(mainSearchTimer);
-  mainSearchTimer = setTimeout(() => loadMemoList(true), 300);
+  mainSearchTimer = setTimeout(() => loadMemoList(true), 220);
 }
 
 function triggerTrashSearch() {
@@ -1055,8 +1064,8 @@ function triggerBankAutoLock(reason = "auto") {
     window.__zenAutoLockInProgress = false;
   }, 400);
 
-  // [1중 잠금] 앱 화면 자동 잠금 (비밀번호 입력 + 화면 자동 잠금 활성화 시 0ms 화면 차단)
-  if (isAppLockEnabled() && isAppLockAutoEnabled()) {
+  // [1중 잠금] 앱 화면 자동 잠금 (비밀번호 입력 + 화면 자동 잠금 활성화 시 0ms 화면 차단; securityOnly 제외)
+  if (reason !== "securityOnly" && isAppLockEnabled() && isAppLockAutoEnabled()) {
     const setupModal = document.getElementById("app-lock-setup-modal");
     const isSetupModalOpen = setupModal && setupModal.style.display === "flex";
     if (isHardEvent || !isSetupModalOpen) {
@@ -1156,6 +1165,11 @@ function triggerBankAutoLock(reason = "auto") {
   const secModal = document.getElementById("fm-security-modal");
   if (secModal && secModal.style.display === "flex") {
     secModal.style.display = "none";
+  }
+
+  // 5. [V1.3.0] 좌측 사이드바 보안 폴더 즉시 접기 및 DOM 제거
+  if (typeof collapseSidebarSecurityTree === "function") {
+    collapseSidebarSecurityTree();
   }
 
   if (wasUnlocked && typeof updateLeftMenuCurrentFolderPath === "function") {
@@ -2090,10 +2104,69 @@ function initEditorZoomEngine() {
   });
 }
 
+// [V1.3.0] 좌측 사이드바 너비 드래그 리사이저 초기화
+const SIDEBAR_WIDTH_KEY = "zen_sidebar_width";
+function applySavedSidebarWidth() {
+  const colLeft = document.getElementById("col-left");
+  if (!colLeft) return;
+  const saved = parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || "", 10);
+  if (!isNaN(saved) && saved >= 220 && saved <= 480) {
+    colLeft.style.setProperty("--sidebar-width", `${saved}px`);
+  }
+}
+
+function initSidebarResizer() {
+  applySavedSidebarWidth();
+  const resizer = document.getElementById("left-sidebar-resizer");
+  const colLeft = document.getElementById("col-left");
+  if (!resizer || !colLeft || window.__zenSidebarResizerBound) return;
+  window.__zenSidebarResizerBound = true;
+
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 285;
+
+  resizer.addEventListener("mousedown", (e) => {
+    if (colLeft.classList.contains("collapsed") || window.innerWidth <= 768) return;
+    e.preventDefault();
+    isDragging = true;
+    startX = e.clientX;
+    startWidth = colLeft.getBoundingClientRect().width || 285;
+    colLeft.classList.add("is-resizing");
+    document.body.style.cursor = "col-resize";
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const rawW = startWidth + (e.clientX - startX);
+    const clampedW = Math.max(220, Math.min(480, Math.round(rawW)));
+    colLeft.style.setProperty("--sidebar-width", `${clampedW}px`);
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    colLeft.classList.remove("is-resizing");
+    document.body.style.cursor = "";
+    const curW = Math.round(colLeft.getBoundingClientRect().width || 285);
+    const clampedW = Math.max(220, Math.min(480, curW));
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampedW));
+  });
+
+  resizer.addEventListener("dblclick", () => {
+    if (colLeft.classList.contains("collapsed") || window.innerWidth <= 768) return;
+    colLeft.style.setProperty("--sidebar-width", "285px");
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, "285");
+  });
+}
+
 // 하위 호환성 글로벌 함수 노출
+window.syncMainSearchClearBtn = syncMainSearchClearBtn;
 window.showZoomResetToast = showZoomResetToast;
 window.hideZoomResetToast = hideZoomResetToast;
 window.resetAppZoomScale = resetEditorZoom;
 window.resetEditorZoom = resetEditorZoom;
 window.applyEditorZoom = applyEditorZoom;
+window.initSidebarResizer = initSidebarResizer;
 window.addEventListener("DOMContentLoaded", initEditorZoomEngine);
+window.addEventListener("DOMContentLoaded", initSidebarResizer);

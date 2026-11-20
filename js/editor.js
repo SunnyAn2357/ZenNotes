@@ -2093,6 +2093,14 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        // [V1.3.0] 좌측 사이드바 폴더 트리 컨텍스트 메뉴 닫기
+        const sidebarMenuEl = document.getElementById("sidebar-context-menu");
+        if (sidebarMenuEl && sidebarMenuEl.style.display === "block") {
+            if (typeof closeSidebarContextMenu === "function") closeSidebarContextMenu();
+            else sidebarMenuEl.style.display = "none";
+            return;
+        }
+
         // 🎯 [V4.9.0] 이미지 크기 조절 핸들(Resizer) 및 다중 이미지 선택 해제
         const imgResizer = document.getElementById("zen-image-resizer");
         const hasImgSel = (imgResizer && imgResizer.style.display === "block") ||
@@ -2302,6 +2310,15 @@ window.addEventListener("popstate", (e) => {
     const lbModal = document.getElementById("zen-image-lightbox");
     if (lbModal && lbModal.classList.contains("is-open")) {
         if (typeof closeZenImageLightbox === "function") closeZenImageLightbox(true);
+        return;
+    }
+
+    // [V1.3.0] 좌측 사이드바 컨텍스트 메뉴 닫기
+    const sidebarCtxMenu = document.getElementById("sidebar-context-menu");
+    if (sidebarCtxMenu && sidebarCtxMenu.style.display === "block") {
+        if (typeof closeSidebarContextMenu === "function") closeSidebarContextMenu();
+        else sidebarCtxMenu.style.display = "none";
+        history.pushState({ page: "main" }, "");
         return;
     }
 
@@ -2856,6 +2873,122 @@ document.querySelector('.ql-editor').addEventListener('change', function (e) {
     setTimeout(restoreScrollAndBlur, 0);
     setTimeout(restoreScrollAndBlur, 50);
 }, true);
+
+// [V1.3.0] 코드블록 언어 선택 / 복사 버튼 부유 Zen 툴팁
+window.getCodeBlockTooltipLabel = function (targetKind) {
+    if (targetKind === 'lang') return '코드 언어 선택';
+    if (targetKind === 'copy') return '코드 전체 복사';
+    return '';
+};
+
+function initCodeBlockFloatingTooltips() {
+    if (window.__zenCodeBlockTooltipsBound) return;
+    window.__zenCodeBlockTooltipsBound = true;
+
+    const editorEl = (typeof quill !== 'undefined' && quill && quill.root) ? quill.root : document.querySelector('.ql-editor');
+    if (!editorEl || !document.body) return;
+
+    let tooltipEl = document.getElementById('zen-codeblock-tooltip');
+    if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'zen-codeblock-tooltip';
+        tooltipEl.className = 'zen-codeblock-tooltip';
+        tooltipEl.setAttribute('role', 'tooltip');
+        tooltipEl.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(tooltipEl);
+    }
+
+    let currentKey = '';
+
+    function hideCodeBlockTooltip() {
+        currentKey = '';
+        tooltipEl.classList.remove('is-visible');
+        tooltipEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function showTooltipAtRect(text, anchorRect, key) {
+        if (!text || !anchorRect) {
+            hideCodeBlockTooltip();
+            return;
+        }
+        if (currentKey !== key || tooltipEl.textContent !== text) {
+            tooltipEl.textContent = text;
+            currentKey = key;
+        }
+        tooltipEl.classList.add('is-visible');
+        tooltipEl.setAttribute('aria-hidden', 'false');
+
+        const tipW = tooltipEl.offsetWidth || 104;
+        const tipH = tooltipEl.offsetHeight || 28;
+        const maxLeft = Math.max(8, (window.innerWidth || 1024) - tipW - 8);
+        const rawLeft = anchorRect.left + (anchorRect.width - tipW) / 2;
+        const left = Math.max(8, Math.min(maxLeft, rawLeft));
+        let top = anchorRect.top - tipH - 7;
+        if (top < 8) {
+            top = anchorRect.bottom + 7;
+        }
+        tooltipEl.style.left = `${Math.round(left)}px`;
+        tooltipEl.style.top = `${Math.round(top)}px`;
+    }
+
+    editorEl.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'touch') return;
+        const container = e.target && e.target.closest ? e.target.closest('.ql-code-block-container') : null;
+        if (!container) {
+            if (currentKey) hideCodeBlockTooltip();
+            return;
+        }
+
+        const selectEl = e.target && e.target.closest ? e.target.closest('select.ql-ui') : null;
+        if (selectEl) {
+            if (selectEl.hasAttribute('title')) selectEl.removeAttribute('title');
+            if (!selectEl.getAttribute('aria-label')) selectEl.setAttribute('aria-label', '코드 언어 선택');
+            if (document.activeElement === selectEl) {
+                hideCodeBlockTooltip();
+                return;
+            }
+            const sRect = selectEl.getBoundingClientRect();
+            showTooltipAtRect(window.getCodeBlockTooltipLabel('lang'), sRect, 'lang');
+            return;
+        }
+
+        const rect = container.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        const isCopyArea = (clickX >= rect.width - 44) && (clickX <= rect.width) && (clickY >= 0) && (clickY <= 40);
+        if (isCopyArea) {
+            const copyAnchorRect = {
+                left: rect.right - 40,
+                right: rect.right - 14,
+                top: rect.top + 8,
+                bottom: rect.top + 32,
+                width: 26,
+                height: 24
+            };
+            showTooltipAtRect(window.getCodeBlockTooltipLabel('copy'), copyAnchorRect, 'copy');
+            return;
+        }
+
+        if (currentKey) hideCodeBlockTooltip();
+    });
+
+    editorEl.addEventListener('mouseleave', hideCodeBlockTooltip);
+    editorEl.addEventListener('pointerdown', hideCodeBlockTooltip, true);
+    editorEl.addEventListener('focusin', (e) => {
+        if (e.target && e.target.matches && e.target.matches('select.ql-ui')) {
+            if (e.target.hasAttribute('title')) e.target.removeAttribute('title');
+            if (!e.target.getAttribute('aria-label')) e.target.setAttribute('aria-label', '코드 언어 선택');
+            hideCodeBlockTooltip();
+        }
+    });
+    editorEl.addEventListener('scroll', hideCodeBlockTooltip, { passive: true });
+    const centerEl = document.querySelector('.col-center');
+    if (centerEl) centerEl.addEventListener('scroll', hideCodeBlockTooltip, { passive: true });
+    window.addEventListener('scroll', hideCodeBlockTooltip, { passive: true });
+    window.addEventListener('keydown', hideCodeBlockTooltip, { passive: true });
+}
+
+initCodeBlockFloatingTooltips();
 
 // ============================================================================
 // 🎯 [V3.3.1] 표 셀 내부 줄바꿈(Shift+Enter) 엔진 (방향키/탈출/삭제는 100% Quill 순정 보장)
