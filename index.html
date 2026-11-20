@@ -11,8 +11,8 @@
 
     <title>ZenNotes</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.2.1">
-    <link rel="manifest" href="manifest.json?v=1.2.1">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.2.2">
+    <link rel="manifest" href="manifest.json?v=1.2.2">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -25,7 +25,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.2.1">
+    <link rel="stylesheet" href="css/main.css?v=1.2.2">
 
 </head>
 
@@ -322,6 +322,10 @@
 
         <div class="util-section">
             <div class="util-title">Export</div>
+            <button class="util-btn util-btn-share" onclick="exportMYNS();" title="공유용 노트 파일(.myns)로 내보내기">
+                <i class="fa-solid fa-share-nodes"></i> <span class="btn-text">공유하기</span>
+            </button>
+            <div class="util-divider"></div>
             <button class="util-btn" onclick="exportTXT();">
                 <i class="fa-regular fa-file-lines"></i> <span class="btn-text">TXT 저장</span>
             </button>
@@ -357,7 +361,7 @@
                     <i class="fa-solid fa-arrows-rotate"></i> <span class="btn-text">초기화</span>
                 </button>
             </div>
-            <input type="file" id="import-file" accept=".json, .txt, .html, .md, image/*, .pdf" style="display: none;"
+            <input type="file" id="import-file" accept=".myns, .json, .txt, .html, .md, image/*, .pdf" style="display: none;"
                 onchange="handleFileImport(event)">
         </div>
 
@@ -395,7 +399,7 @@
         <div class="drop-zone-content">
             <i class="fa-solid fa-cloud-arrow-up drop-zone-icon"></i>
             <div class="drop-zone-title">파일을 여기에 놓아주세요</div>
-            <div class="drop-zone-desc">현재 노트에 삽입하거나 새 노트로 열 수 있습니다 (.pdf, 이미지, .txt, .md, .html)</div>
+            <div class="drop-zone-desc">현재 노트에 삽입하거나 새 노트로 열 수 있습니다 (.myns, .pdf, 이미지, .txt, .md, .html)</div>
         </div>
     </div>
 
@@ -959,19 +963,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.2.1"></script>
-    <script src="js/db.js?v=1.2.1"></script>
-    <script src="js/ui.js?v=1.2.1"></script>
-    <script src="js/editor.js?v=1.2.1"></script>
-    <script src="js/file_manager.js?v=1.2.1"></script>
-    <script src="js/io.js?v=1.2.1"></script>
-    <script src="js/auth.js?v=1.2.1"></script>
+    <script src="js/globals.js?v=1.2.2"></script>
+    <script src="js/db.js?v=1.2.2"></script>
+    <script src="js/ui.js?v=1.2.2"></script>
+    <script src="js/editor.js?v=1.2.2"></script>
+    <script src="js/file_manager.js?v=1.2.2"></script>
+    <script src="js/io.js?v=1.2.2"></script>
+    <script src="js/auth.js?v=1.2.2"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
-            console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: V1.2.1");
+            console.log("[ZenNotes] 앱 로딩 완료!");
+            console.log("[ZenNotes] 현재 버전: V1.2.2");
             console.log("=========================================");
         });
     </script>

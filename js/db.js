@@ -78,10 +78,24 @@ request.onsuccess = async (e) => {
       }
 
       // 5. 최종 결정된 노트를 엽니다. (살아있는 노트가 아예 0개면 새 노트를 엽니다)
-      if (targetMemoToOpen) {
+      window.__zenAppDbReady = true;
+      const hasQueuedShared =
+        Array.isArray(window.__zenPendingSharedFiles) &&
+        window.__zenPendingSharedFiles.length > 0 &&
+        !(typeof isAppScreenLocked === "function" && isAppScreenLocked());
+
+      if (hasQueuedShared && typeof window.flushPendingSharedFiles === "function") {
+        window.flushPendingSharedFiles();
+      } else if (targetMemoToOpen) {
         if (typeof loadMemo === 'function') loadMemo(targetMemoToOpen.id);
       } else {
         if (typeof createNewMemo === 'function') createNewMemo();
+      }
+
+      if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+        try {
+          window.chrome.webview.postMessage(JSON.stringify({ type: 'appReady' }));
+        } catch (err) {}
       }
     };
   });

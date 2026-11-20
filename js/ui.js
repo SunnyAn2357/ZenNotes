@@ -608,7 +608,7 @@ function isAppLockEnabled() {
 
 function isAppLockAutoEnabled() {
   if (!isAppLockEnabled()) return false;
-  return localStorage.getItem(APP_LOCK_AUTO_KEY) !== "false";
+  return localStorage.getItem(APP_LOCK_AUTO_KEY) === "true";
 }
 
 function isAppScreenLocked() {
@@ -645,6 +645,9 @@ function unlockAppScreenSuccess() {
   if (overlay) overlay.style.display = "none";
   if (input) input.value = "";
   if (errorEl) errorEl.textContent = "";
+  if (typeof window.flushPendingSharedFiles === "function") {
+    window.flushPendingSharedFiles();
+  }
 }
 
 async function handleAppLockInputLive() {
@@ -797,7 +800,7 @@ async function submitAppLockUnlock() {
 
 function syncAppLockSettingsUI() {
   const enabled = isAppLockEnabled();
-  const autoEnabled = localStorage.getItem(APP_LOCK_AUTO_KEY) !== "false";
+  const autoEnabled = localStorage.getItem(APP_LOCK_AUTO_KEY) === "true";
   const hint = (localStorage.getItem(APP_LOCK_HINT_KEY) || "").trim();
 
   const toggleEl = document.getElementById("setting-app-lock-toggle");
@@ -987,8 +990,8 @@ async function submitAppLockSetupModal() {
   const newHash = await sha256Hex(newPw);
   localStorage.setItem(APP_LOCK_HASH_KEY, newHash);
   localStorage.setItem(APP_LOCK_ENABLED_KEY, "true");
-  if (localStorage.getItem(APP_LOCK_AUTO_KEY) === null) {
-    localStorage.setItem(APP_LOCK_AUTO_KEY, "true");
+  if (appLockSetupMode === "setup" || localStorage.getItem(APP_LOCK_AUTO_KEY) === null) {
+    localStorage.setItem(APP_LOCK_AUTO_KEY, "false");
   }
   if (hintText) {
     localStorage.setItem(APP_LOCK_HINT_KEY, hintText);
