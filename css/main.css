@@ -5989,6 +5989,7 @@ body:not(.light-theme) .app-lock-hint-box {
     user-select: text !important;
     -webkit-user-select: text !important;
     caret-color: auto !important;
+    cursor: text !important;
 }
 
 .app-lock-input:focus {
@@ -6071,6 +6072,7 @@ body:not(.light-theme) .app-lock-hint-box {
     user-select: text !important;
     -webkit-user-select: text !important;
     caret-color: auto !important;
+    cursor: text !important;
 }
 
 .app-lock-field-input:focus {
@@ -6096,4 +6098,30 @@ body:not(.light-theme) .app-lock-hint-box {
 
 .app-lock-setup-primary-btn:hover {
     opacity: 0.92;
+}
+
+/* [V1.2.1] 설정창 위 비밀번호 설정 모달 상단 배치 & 비입력 영역 캐럿/텍스트 선택 완전 차단 */
+#app-lock-setup-modal.fm-modal-overlay {
+    z-index: 11000 !important;
+    background: rgba(0, 0, 0, 0.48) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+}
+
+#settings-modal,
+#settings-modal *:not(input):not(textarea),
+#app-lock-overlay,
+#app-lock-overlay *:not(input):not(textarea),
+#app-lock-setup-modal,
+#app-lock-setup-modal *:not(input):not(textarea) {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    caret-color: transparent !important;
+}
+
+.zen-settings-card,
+.app-lock-overlay,
+.app-lock-card,
+.app-lock-setup-card {
+    cursor: default;
 }

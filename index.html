@@ -11,8 +11,8 @@
 
     <title>ZenNotes</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.2.0">
-    <link rel="manifest" href="manifest.json?v=1.2.0">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.2.1">
+    <link rel="manifest" href="manifest.json?v=1.2.1">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -25,7 +25,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.2.0">
+    <link rel="stylesheet" href="css/main.css?v=1.2.1">
 
 </head>
 
@@ -45,6 +45,7 @@
             </div>
             <input type="password" id="app-lock-input" class="app-lock-input"
                 placeholder="비밀번호를 입력하세요" autocomplete="current-password" enterkeyhint="done"
+                oninput="if(typeof handleAppLockInputLive==='function')handleAppLockInputLive();"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();if(typeof submitAppLockUnlock==='function')submitAppLockUnlock();}">
             <div id="app-lock-error" class="app-lock-error" role="alert"></div>
             <button type="button" id="app-lock-submit-btn" class="app-lock-submit-btn" onclick="if(typeof submitAppLockUnlock==='function')submitAppLockUnlock();">잠금 해제</button>
@@ -846,7 +847,7 @@
     </div>
 
     <!-- [V1.2.0] 비밀번호 입력 설정/변경/해제 모달 -->
-    <div id="app-lock-setup-modal" class="fm-modal-overlay" style="display: none; z-index: 10050;" onclick="if(event.target===this) closeAppLockSetupModal()">
+    <div id="app-lock-setup-modal" class="fm-modal-overlay" style="display: none; z-index: 11000;" onclick="if(event.target===this) closeAppLockSetupModal()">
         <div class="zen-settings-card app-lock-setup-card" role="dialog" aria-modal="true" aria-labelledby="app-lock-setup-title" onclick="event.stopPropagation()">
             <div class="zen-settings-header">
                 <div class="zen-settings-title-wrap">
@@ -958,19 +959,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.2.0"></script>
-    <script src="js/db.js?v=1.2.0"></script>
-    <script src="js/ui.js?v=1.2.0"></script>
-    <script src="js/editor.js?v=1.2.0"></script>
-    <script src="js/file_manager.js?v=1.2.0"></script>
-    <script src="js/io.js?v=1.2.0"></script>
-    <script src="js/auth.js?v=1.2.0"></script>
+    <script src="js/globals.js?v=1.2.1"></script>
+    <script src="js/db.js?v=1.2.1"></script>
+    <script src="js/ui.js?v=1.2.1"></script>
+    <script src="js/editor.js?v=1.2.1"></script>
+    <script src="js/file_manager.js?v=1.2.1"></script>
+    <script src="js/io.js?v=1.2.1"></script>
+    <script src="js/auth.js?v=1.2.1"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: V1.2.0");
+            console.log("✨ 현재 버전: V1.2.1");
             console.log("=========================================");
         });
     </script>

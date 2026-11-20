@@ -626,6 +626,87 @@ async function sha256Hex(text) {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+let appLockLiveCheckSeq = 0;
+
+function focusAppLockInputNow() {
+  if (!isAppScreenLocked()) return;
+  const input = document.getElementById("app-lock-input");
+  if (input && document.activeElement !== input) {
+    input.focus();
+  }
+}
+
+function unlockAppScreenSuccess() {
+  const overlay = document.getElementById("app-lock-overlay");
+  const input = document.getElementById("app-lock-input");
+  const errorEl = document.getElementById("app-lock-error");
+  appLockLiveCheckSeq++;
+  window.__zenAppScreenLocked = false;
+  if (overlay) overlay.style.display = "none";
+  if (input) input.value = "";
+  if (errorEl) errorEl.textContent = "";
+}
+
+async function handleAppLockInputLive() {
+  if (!isAppScreenLocked()) return;
+  const input = document.getElementById("app-lock-input");
+  const errorEl = document.getElementById("app-lock-error");
+  if (!input) return;
+
+  if (errorEl && errorEl.textContent) {
+    errorEl.textContent = "";
+  }
+
+  const pw = input.value.trim();
+  if (!pw) return;
+
+  const seq = ++appLockLiveCheckSeq;
+  const savedHash = localStorage.getItem(APP_LOCK_HASH_KEY) || "";
+  if (!savedHash) return;
+
+  const inputHash = await sha256Hex(pw);
+  if (seq !== appLockLiveCheckSeq || !isAppScreenLocked()) return;
+
+  if (inputHash === savedHash) {
+    unlockAppScreenSuccess();
+  }
+}
+
+function initAppLockFocusTrap() {
+  const overlay = document.getElementById("app-lock-overlay");
+  if (!overlay || overlay.dataset.focusTrapReady === "true") return;
+  overlay.dataset.focusTrapReady = "true";
+
+  const handleLockSurfaceMouseDown = (e) => {
+    if (!isAppScreenLocked()) return;
+    if (e.target && e.target.closest("#app-lock-input, #app-lock-submit-btn")) {
+      return;
+    }
+    e.preventDefault();
+    focusAppLockInputNow();
+  };
+
+  overlay.addEventListener("pointerdown", handleLockSurfaceMouseDown);
+  overlay.addEventListener("mousedown", handleLockSurfaceMouseDown);
+  overlay.addEventListener("click", (e) => {
+    if (!isAppScreenLocked()) return;
+    if (e.target && e.target.closest("#app-lock-submit-btn")) return;
+    focusAppLockInputNow();
+  });
+
+  window.addEventListener("focus", () => {
+    if (isAppScreenLocked()) {
+      setTimeout(focusAppLockInputNow, 20);
+    }
+  });
+
+  document.addEventListener("focusin", (e) => {
+    if (!isAppScreenLocked()) return;
+    if (e.target && e.target.closest("#app-lock-input, #app-lock-submit-btn")) return;
+    focusAppLockInputNow();
+  }, true);
+}
+
 function lockAppScreen(reason = "auto") {
   if (!isAppLockEnabled()) return;
   const overlay = document.getElementById("app-lock-overlay");
@@ -636,11 +717,8 @@ function lockAppScreen(reason = "auto") {
   window.__zenAppScreenLocked = true;
 
   if (alreadyOpen) {
-    if (input && document.activeElement !== input) {
-      setTimeout(() => {
-        if (isAppScreenLocked()) input.focus();
-      }, 40);
-    }
+    focusAppLockInputNow();
+    setTimeout(focusAppLockInputNow, 40);
     return;
   }
 
@@ -668,12 +746,14 @@ function lockAppScreen(reason = "auto") {
   const errorEl = document.getElementById("app-lock-error");
   if (errorEl) errorEl.textContent = "";
   if (input) input.value = "";
+  appLockLiveCheckSeq++;
 
   overlay.style.display = "flex";
+  initAppLockFocusTrap();
   if (input) {
-    setTimeout(() => {
-      if (isAppScreenLocked()) input.focus();
-    }, 50);
+    input.focus();
+    requestAnimationFrame(focusAppLockInputNow);
+    setTimeout(focusAppLockInputNow, 60);
   }
 }
 
@@ -698,10 +778,7 @@ async function submitAppLockUnlock() {
     const inputHash = await sha256Hex(pw);
 
     if (savedHash && inputHash === savedHash) {
-      window.__zenAppScreenLocked = false;
-      overlay.style.display = "none";
-      input.value = "";
-      if (errorEl) errorEl.textContent = "";
+      unlockAppScreenSuccess();
     } else {
       if (errorEl) errorEl.textContent = "비밀번호가 일치하지 않습니다.";
       if (card) {
@@ -936,6 +1013,8 @@ window.isAppLockAutoEnabled = isAppLockAutoEnabled;
 window.isAppScreenLocked = isAppScreenLocked;
 window.lockAppScreen = lockAppScreen;
 window.submitAppLockUnlock = submitAppLockUnlock;
+window.handleAppLockInputLive = handleAppLockInputLive;
+window.focusAppLockInputNow = focusAppLockInputNow;
 window.syncAppLockSettingsUI = syncAppLockSettingsUI;
 window.handleSettingAppLockToggle = handleSettingAppLockToggle;
 window.handleSettingAppLockAutoChange = handleSettingAppLockAutoChange;
@@ -944,13 +1023,10 @@ window.closeAppLockSetupModal = closeAppLockSetupModal;
 window.submitAppLockSetupModal = submitAppLockSetupModal;
 
 document.addEventListener("DOMContentLoaded", () => {
+  initAppLockFocusTrap();
   if (isAppLockEnabled() && isAppScreenLocked()) {
-    const input = document.getElementById("app-lock-input");
-    if (input) {
-      setTimeout(() => {
-        if (isAppScreenLocked()) input.focus();
-      }, 80);
-    }
+    focusAppLockInputNow();
+    setTimeout(focusAppLockInputNow, 80);
   }
 });
 
