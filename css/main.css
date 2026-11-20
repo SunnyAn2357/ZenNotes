@@ -5071,7 +5071,8 @@ body.light-theme .miryang-bi-btn:hover {
     border-radius: 14px;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
     width: 92vw;
-    max-width: 400px;
+    max-width: 460px;
+    max-height: 88vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -5142,15 +5143,43 @@ body:not(.light-theme) .zen-settings-header {
 }
 
 .zen-settings-body {
-    padding: 14px 16px;
+    padding: 16px 20px;
     display: flex;
     flex-direction: column;
     gap: 4px;
     background: #ffffff;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.zen-settings-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.zen-settings-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.zen-settings-body::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.28);
+    border-radius: 999px;
+}
+
+.zen-settings-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.45);
 }
 
 body:not(.light-theme) .zen-settings-body {
     background: #1e1e20;
+}
+
+body:not(.light-theme) .zen-settings-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+body:not(.light-theme) .zen-settings-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.32);
 }
 
 .zen-settings-item {
@@ -5177,12 +5206,16 @@ body:not(.light-theme) .zen-settings-body {
     font-weight: 600;
     color: var(--text-main);
     margin-bottom: 2px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
 }
 
 .zen-settings-item-desc {
     font-size: 12px;
     color: var(--text-muted);
-    line-height: 1.35;
+    line-height: 1.4;
+    word-break: keep-all;
+    overflow-wrap: break-word;
 }
 
 .zen-settings-divider {
@@ -5708,11 +5741,359 @@ body:not(.light-theme) .zen-lightbox-controls {
 
 @media print {
     #zen-image-resizer,
-    #zen-image-lightbox {
+    #zen-image-lightbox,
+    #app-lock-overlay,
+    #app-lock-setup-modal,
+    #settings-modal {
         display: none !important;
     }
     .ql-editor img.zen-img-multi-selected {
         outline: none !important;
         box-shadow: none !important;
     }
+}
+
+/* ==========================================================================
+   [V1.2.0] 비밀번호 입력 하위 설정 · 설정 모달 반응형 · 전체 화면 잠금 오버레이
+   ========================================================================== */
+
+.zen-settings-lock-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 2px 4px 4px 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body:not(.light-theme) .zen-settings-lock-details {
+    background: #232326;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.zen-settings-sub-item {
+    padding: 4px 2px;
+}
+
+.zen-settings-sub-item:hover {
+    background: transparent;
+}
+
+.zen-settings-lock-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 2px 2px;
+    border-top: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
+body:not(.light-theme) .zen-settings-lock-actions {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.zen-settings-lock-hint-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zen-settings-sub-btn {
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 7px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.zen-settings-sub-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+body:not(.light-theme) .zen-settings-sub-btn {
+    background: #2c2c31;
+    border-color: #3f3f46;
+    color: #e4e4e7;
+}
+
+body:not(.light-theme) .zen-settings-sub-btn:hover {
+    background: #35353b;
+    border-color: #52525b;
+    color: #ffffff;
+}
+
+/* 환경설정 모바일 최적화 */
+@media (max-width: 480px) {
+    .zen-settings-card {
+        width: 94vw;
+        max-height: 90vh;
+    }
+
+    .zen-settings-body {
+        padding: 12px 14px;
+    }
+
+    .zen-settings-item {
+        gap: 10px;
+        padding: 8px 6px;
+    }
+
+    .zen-settings-lock-details {
+        margin-left: 6px;
+        padding: 8px;
+    }
+}
+
+/* 전체 화면 잠금 오버레이 (비밀번호 입력) */
+.app-lock-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: #f4f6f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+body:not(.light-theme) .app-lock-overlay {
+    background: #131314;
+}
+
+.app-lock-card {
+    width: 100%;
+    max-width: 360px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12), 0 2px 10px rgba(15, 23, 42, 0.05);
+    padding: 28px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+body:not(.light-theme) .app-lock-card {
+    background: #1e1e20;
+    border-color: #333438;
+    box-shadow: 0 20px 52px rgba(0, 0, 0, 0.65);
+}
+
+.app-lock-card.shake {
+    animation: appLockShake 0.36s ease;
+}
+
+@keyframes appLockShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-7px); }
+    40% { transform: translateX(7px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+}
+
+.app-lock-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(59, 130, 246, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+}
+
+body:not(.light-theme) .app-lock-icon-wrap {
+    background: rgba(56, 189, 248, 0.12);
+}
+
+.app-lock-icon {
+    font-size: 20px;
+    color: var(--accent);
+}
+
+.app-lock-title {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.app-lock-subtitle {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.45;
+    word-break: keep-all;
+}
+
+.app-lock-hint-box {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    font-size: 12.5px;
+    color: #475569;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+body:not(.light-theme) .app-lock-hint-box {
+    background: #27272a;
+    border-color: #3f3f46;
+    color: #cbd5e1;
+}
+
+.app-lock-hint-label {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.app-lock-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px 14px;
+    font-size: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-main);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    caret-color: auto !important;
+}
+
+.app-lock-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.app-lock-error {
+    min-height: 18px;
+    margin-top: 8px;
+    margin-bottom: 10px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #ef4444;
+    line-height: 1.35;
+    word-break: keep-all;
+}
+
+.app-lock-submit-btn {
+    width: 100%;
+    padding: 11px 16px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--accent-contrast, #ffffff);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    justify-content: center;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.app-lock-submit-btn:hover {
+    opacity: 0.92;
+}
+
+.app-lock-submit-btn:active {
+    transform: scale(0.99);
+}
+
+/* 비밀번호 설정/변경/해제 모달 */
+.app-lock-setup-card {
+    max-width: 400px;
+}
+
+.app-lock-setup-body {
+    gap: 12px;
+}
+
+.app-lock-setup-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.45;
+    word-break: keep-all;
+}
+
+.app-lock-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.app-lock-field-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.app-lock-field-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 12px;
+    font-size: 13.5px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-main);
+    outline: none;
+    transition: border-color 0.15s ease;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    caret-color: auto !important;
+}
+
+.app-lock-field-input:focus {
+    border-color: var(--accent);
+}
+
+.app-lock-setup-footer {
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.app-lock-setup-primary-btn {
+    padding: 6px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 7px;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-contrast, #ffffff);
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.app-lock-setup-primary-btn:hover {
+    opacity: 0.92;
 }

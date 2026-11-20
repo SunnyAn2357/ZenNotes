@@ -2419,6 +2419,13 @@ function createNewMemo(folderId = null) {
   forceSaveImmediate();
   targetNewMemoFolderId = folderId; // 🎯 새 노트가 저장될 특정 폴더 위치 기억
   isEditingSecureMemo = false; // 🎯 새 노트 작성 시 보안 노트 편집 상태 해제
+  if (folderId !== null && typeof checkIsUnderSecurity === "function") {
+    checkIsUnderSecurity(folderId).then((sec) => {
+      if (!currentMemoId && targetNewMemoFolderId === folderId) {
+        isEditingSecureMemo = !!sec;
+      }
+    });
+  }
 
   const previousMemoId = currentMemoId;
   if (previousMemoId) purgeMemoIfEmpty(previousMemoId);
@@ -2441,6 +2448,7 @@ function createNewMemo(folderId = null) {
   setTimeout(() => quill.history.clear(), 10);
   setTimeout(() => {
     isLoading = false;
+    if (typeof window.isAppScreenLocked === 'function' && window.isAppScreenLocked()) return;
     // 🎯 [V4.6.0] 새 노트 작성 시작 커서 설정 반영 (제목 vs 본문)
     const cursorTarget = localStorage.getItem('zen_setting_cursor_target') || 'title';
     if (cursorTarget === 'body') {

@@ -11,8 +11,8 @@
 
     <title>ZenNotes</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.0.5">
-    <link rel="manifest" href="manifest.json?v=1.0.5">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.2.0">
+    <link rel="manifest" href="manifest.json?v=1.2.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -25,11 +25,54 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.0.5">
+    <link rel="stylesheet" href="css/main.css?v=1.2.0">
 
 </head>
 
 <body class="light-theme">
+
+    <!-- 앱 화면 잠금 오버레이 (0ms 초기 차단용 최상단 배치) -->
+    <div id="app-lock-overlay" class="app-lock-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="app-lock-title">
+        <div class="app-lock-card" id="app-lock-card">
+            <div class="app-lock-icon-wrap">
+                <i class="fa-solid fa-lock app-lock-icon"></i>
+            </div>
+            <h2 id="app-lock-title" class="app-lock-title">비밀번호 입력</h2>
+            <p class="app-lock-subtitle">계속하려면 비밀번호를 입력하세요.</p>
+            <div id="app-lock-hint-box" class="app-lock-hint-box" style="display: none;">
+                <span class="app-lock-hint-label">힌트</span>
+                <span id="app-lock-hint-text"></span>
+            </div>
+            <input type="password" id="app-lock-input" class="app-lock-input"
+                placeholder="비밀번호를 입력하세요" autocomplete="current-password" enterkeyhint="done"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();if(typeof submitAppLockUnlock==='function')submitAppLockUnlock();}">
+            <div id="app-lock-error" class="app-lock-error" role="alert"></div>
+            <button type="button" id="app-lock-submit-btn" class="app-lock-submit-btn" onclick="if(typeof submitAppLockUnlock==='function')submitAppLockUnlock();">잠금 해제</button>
+        </div>
+    </div>
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('zen_app_theme') === 'dark') {
+                    document.body.classList.remove('light-theme');
+                }
+                var enabled = localStorage.getItem('zen_app_lock_enabled') === 'true';
+                var hash = localStorage.getItem('zen_app_lock_hash');
+                if (enabled && hash) {
+                    window.__zenAppScreenLocked = true;
+                    var overlay = document.getElementById('app-lock-overlay');
+                    if (overlay) overlay.style.display = 'flex';
+                    var hint = (localStorage.getItem('zen_app_lock_hint') || '').trim();
+                    var hintBox = document.getElementById('app-lock-hint-box');
+                    var hintText = document.getElementById('app-lock-hint-text');
+                    if (hint && hintBox && hintText) {
+                        hintText.textContent = hint;
+                        hintBox.style.display = 'flex';
+                    }
+                }
+            } catch (e) {}
+        })();
+    </script>
 
     <button id="mobile-left-menu-btn" class="toggle-btn mobile-only"
         style="position: fixed; top: 24px; left: 10px; z-index: 1000;" onclick="toggleLeftPaneMobile()">
@@ -298,7 +341,7 @@
         <div class="util-section mt-auto">
             <div class="util-title">Data Management</div>
             <div style="display: flex; gap: 8px;">
-                <button class="util-btn" style="flex: 1;" onclick="document.getElementById('import-file').click(); closeAllPanelsMobile();">
+                <button class="util-btn" style="flex: 1;" onclick="if(typeof openFilePickerWithAutoLockPause==='function'){openFilePickerWithAutoLockPause(document.getElementById('import-file'));}else{document.getElementById('import-file').click();} closeAllPanelsMobile();">
                     <i class="fa-solid fa-file-import"></i> <span class="btn-text">불러오기</span>
                 </button>
                 <button class="util-btn" style="flex: 1;" onclick="toggleTrashPane();">
@@ -757,6 +800,37 @@
                         <button type="button" class="zen-segmented-btn" data-value="reset" onclick="resetExportDirectory()">초기화</button>
                     </div>
                 </div>
+
+                <div class="zen-settings-divider"></div>
+
+                <!-- 설정 7: [V1.2.0] 비밀번호 입력 및 화면 자동 잠금 -->
+                <div class="zen-settings-item">
+                    <div class="zen-settings-item-info">
+                        <div class="zen-settings-item-label">비밀번호 입력</div>
+                        <div class="zen-settings-item-desc">앱을 열 때 비밀번호로 화면을 가립니다 (보안 폴더와 별도)</div>
+                    </div>
+                    <label class="zen-switch" title="비밀번호 입력 켜기/끄기">
+                        <input type="checkbox" id="setting-app-lock-toggle" onchange="handleSettingAppLockToggle(this.checked)">
+                        <span class="zen-slider"></span>
+                    </label>
+                </div>
+
+                <div id="setting-app-lock-details" class="zen-settings-lock-details" style="display: none;">
+                    <div class="zen-settings-item zen-settings-sub-item">
+                        <div class="zen-settings-item-info">
+                            <div class="zen-settings-item-label">화면 자동 잠금</div>
+                            <div class="zen-settings-item-desc">창 이탈·최소화·화면 꺼짐 시 즉시 잠금</div>
+                        </div>
+                        <label class="zen-switch" title="화면 자동 잠금 켜기/끄기">
+                            <input type="checkbox" id="setting-app-lock-auto-toggle" onchange="handleSettingAppLockAutoChange(this.checked)">
+                            <span class="zen-slider"></span>
+                        </label>
+                    </div>
+                    <div class="zen-settings-lock-actions">
+                        <span id="setting-app-lock-hint-preview" class="zen-settings-lock-hint-preview">힌트 미설정</span>
+                        <button type="button" class="zen-settings-sub-btn" onclick="openAppLockSetupModal('change')">비밀번호 변경</button>
+                    </div>
+                </div>
             </div>
 
             <div class="zen-settings-footer">
@@ -767,6 +841,49 @@
                 <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
                     닫기
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [V1.2.0] 비밀번호 입력 설정/변경/해제 모달 -->
+    <div id="app-lock-setup-modal" class="fm-modal-overlay" style="display: none; z-index: 10050;" onclick="if(event.target===this) closeAppLockSetupModal()">
+        <div class="zen-settings-card app-lock-setup-card" role="dialog" aria-modal="true" aria-labelledby="app-lock-setup-title" onclick="event.stopPropagation()">
+            <div class="zen-settings-header">
+                <div class="zen-settings-title-wrap">
+                    <i class="fa-solid fa-key zen-settings-icon"></i>
+                    <span id="app-lock-setup-title">비밀번호 입력 설정</span>
+                </div>
+                <button type="button" class="zen-settings-close-btn" onclick="closeAppLockSetupModal()" aria-label="닫기">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="zen-settings-body app-lock-setup-body">
+                <div id="app-lock-setup-desc" class="app-lock-setup-desc">앱 화면 잠금에 사용할 비밀번호를 입력하세요.</div>
+                <div id="app-lock-current-row" class="app-lock-field-row" style="display: none;">
+                    <label for="app-lock-current-input" class="app-lock-field-label">현재 비밀번호</label>
+                    <input type="password" id="app-lock-current-input" class="app-lock-field-input" placeholder="현재 비밀번호 입력" autocomplete="current-password" enterkeyhint="next"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitAppLockSetupModal();}">
+                </div>
+                <div id="app-lock-new-row" class="app-lock-field-row">
+                    <label for="app-lock-new-input" class="app-lock-field-label">새 비밀번호</label>
+                    <input type="password" id="app-lock-new-input" class="app-lock-field-input" placeholder="새 비밀번호 입력" autocomplete="new-password" enterkeyhint="next"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitAppLockSetupModal();}">
+                </div>
+                <div id="app-lock-confirm-row" class="app-lock-field-row">
+                    <label for="app-lock-confirm-input" class="app-lock-field-label">새 비밀번호 확인</label>
+                    <input type="password" id="app-lock-confirm-input" class="app-lock-field-input" placeholder="새 비밀번호 다시 입력" autocomplete="new-password" enterkeyhint="next"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitAppLockSetupModal();}">
+                </div>
+                <div id="app-lock-hint-row" class="app-lock-field-row">
+                    <label for="app-lock-hint-input" class="app-lock-field-label">비밀번호 힌트 (선택)</label>
+                    <input type="text" id="app-lock-hint-input" class="app-lock-field-input" maxlength="60" placeholder="기억할 수 있는 짧은 힌트 입력 (미입력 시 표시 안 함)" autocomplete="off" enterkeyhint="done"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitAppLockSetupModal();}">
+                </div>
+                <div id="app-lock-setup-error" class="app-lock-error" role="alert"></div>
+            </div>
+            <div class="zen-settings-footer app-lock-setup-footer">
+                <button type="button" class="zen-settings-done-btn" onclick="closeAppLockSetupModal()">취소</button>
+                <button type="button" id="app-lock-setup-submit-btn" class="app-lock-setup-primary-btn" onclick="submitAppLockSetupModal()">확인</button>
             </div>
         </div>
     </div>
@@ -841,19 +958,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.1.1"></script>
-    <script src="js/db.js?v=1.1.1"></script>
-    <script src="js/ui.js?v=1.1.1"></script>
-    <script src="js/editor.js?v=1.1.1"></script>
-    <script src="js/file_manager.js?v=1.1.1"></script>
-    <script src="js/io.js?v=1.1.1"></script>
-    <script src="js/auth.js?v=1.1.1"></script>
+    <script src="js/globals.js?v=1.2.0"></script>
+    <script src="js/db.js?v=1.2.0"></script>
+    <script src="js/ui.js?v=1.2.0"></script>
+    <script src="js/editor.js?v=1.2.0"></script>
+    <script src="js/file_manager.js?v=1.2.0"></script>
+    <script src="js/io.js?v=1.2.0"></script>
+    <script src="js/auth.js?v=1.2.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("🚀 ZenNotes 앱 로딩 완료!");
-            console.log("✨ 현재 버전: V1.1.1");
+            console.log("✨ 현재 버전: V1.2.0");
             console.log("=========================================");
         });
     </script>

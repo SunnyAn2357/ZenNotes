@@ -85,6 +85,7 @@ async function chooseCustomExportDirectory() {
     return;
   }
   try {
+    if (typeof beginNativeDialogPause === 'function') beginNativeDialogPause();
     const handle = await window.showDirectoryPicker({
       mode: 'readwrite',
       startIn: 'documents'
@@ -102,6 +103,8 @@ async function chooseCustomExportDirectory() {
     if (err.name !== 'AbortError') {
       console.warn('폴더 선택 취소 또는 오류:', err);
     }
+  } finally {
+    if (typeof endNativeDialogPause === 'function') endNativeDialogPause();
   }
 }
 
@@ -158,6 +161,7 @@ async function saveExportBlob(blob, defaultFilename, mimeType, description, exte
   // 1. File System Access API 지원 시 -> 원하는 폴더 지정 대화상자 호출
   if (window.showSaveFilePicker) {
     try {
+      if (typeof beginNativeDialogPause === 'function') beginNativeDialogPause();
       const pickerOptions = {
         suggestedName: defaultFilename,
         types: [{
@@ -198,6 +202,8 @@ async function saveExportBlob(blob, defaultFilename, mimeType, description, exte
         return false;
       }
       console.warn('showSaveFilePicker 실패, 기본 다운로드로 전환:', err);
+    } finally {
+      if (typeof endNativeDialogPause === 'function') endNativeDialogPause();
     }
   }
 
@@ -1364,11 +1370,39 @@ function backupAllData() {
       .transaction(["memos"], "readonly")
       .objectStore("memos")
       .getAll().onsuccess = (e) => {
-        const activeMemos = e.target.result.filter((m) => !m.isDeleted);
+        const activeMemos = (e.target.result || []).filter(
+          (m) => !m.isDeleted && !m.isPermanentlyDeleted,
+        );
+        const itemById = new Map();
+        activeMemos.forEach((m) => {
+          if (m.id !== undefined && m.id !== null) itemById.set(m.id, m);
+        });
+
+        const enrichedMemos = activeMemos.map((m) => {
+          const clone = { ...m };
+          if (clone.parentId !== null && clone.parentId !== undefined) {
+            const p = itemById.get(clone.parentId);
+            if (p && p.syncId && !clone.parentSyncId) {
+              clone.parentSyncId = p.syncId;
+            }
+          }
+          return clone;
+        });
+
         saveAs(
-          new Blob([JSON.stringify({ type: "ZenBackup", timestamp: Date.now(), data: activeMemos })], {
-            type: "application/json",
-          }),
+          new Blob(
+            [
+              JSON.stringify({
+                type: "ZenBackup",
+                schemaVersion: 2,
+                timestamp: Date.now(),
+                data: enrichedMemos,
+              }),
+            ],
+            {
+              type: "application/json",
+            },
+          ),
           `MY_Notes_Backup_${Date.now()}.json`,
         );
         showToast("전체 백업 파일이 저장되었습니다.\n(기기 다운로드 폴더 확인)");
@@ -1537,6 +1571,10 @@ async function proceedResetAllData() {
   localStorage.removeItem("zen_last_sync_time");
   localStorage.removeItem("zen_sec_hash");
   localStorage.removeItem("zen_recent_notes");
+  localStorage.removeItem("zen_app_lock_enabled");
+  localStorage.removeItem("zen_app_lock_hash");
+  localStorage.removeItem("zen_app_lock_hint");
+  localStorage.removeItem("zen_app_lock_auto");
 
   // 5. 에디터 비우기 및 새로고침
   if (typeof quill !== "undefined" && quill) quill.setText("");
@@ -1902,52 +1940,412 @@ function extractBackupDate(parsed, file) {
   return "알 수 없는 날짜";
 }
 
-// 🎯 [V4.1.6] ZenBackup 전체 데이터를 IndexedDB에 복원하는 공용 엔진
+// 🎯 [V4.1.6 / V1.2.0] ZenBackup 전체 데이터를 IndexedDB에 복원하는 2-Pass 족보 매핑 공용 엔진
 function restoreZenBackupData(parsed, onCompleteCallback) {
+  const rawItems = Array.isArray(parsed && parsed.data)
+    ? parsed.data.filter((m) => m && !m.isDeleted && !m.isPermanentlyDeleted)
+    : [];
+
+  if (rawItems.length === 0) {
+    alert("복원할 노트 데이터가 없습니다.");
+    if (typeof onCompleteCallback === "function") onCompleteCallback();
+    return;
+  }
+
+  function detectBackupSystemType(item) {
+    if (!item || item.type !== "folder") return null;
+    if (
+      item.isSystem === "desktop" ||
+      item.isSystem === "backup" ||
+      item.isSystem === "security" ||
+      item.isSystem === "trash"
+    ) {
+      return item.isSystem;
+    }
+    if (item.syncId === "sys_desktop") return "desktop";
+    if (item.syncId === "sys_backup") return "backup";
+    if (item.syncId === "sys_security") return "security";
+    if (item.syncId === "sys_trash") return "trash";
+    return null;
+  }
+
+  const backupByOldId = new Map();
+  rawItems.forEach((m) => {
+    if (m.id !== undefined && m.id !== null) {
+      backupByOldId.set(m.id, m);
+    }
+  });
+
+  function getBackupParentSyncId(item) {
+    if (!item) return null;
+    if (item.parentSyncId) return item.parentSyncId;
+    if (item.parentId !== undefined && item.parentId !== null) {
+      const bParent = backupByOldId.get(item.parentId);
+      if (bParent) {
+        const bSys = detectBackupSystemType(bParent);
+        if (bSys) return "sys_" + bSys;
+        if (bParent.syncId) return bParent.syncId;
+      }
+    }
+    return null;
+  }
+
+  const backupFolders = rawItems.filter((m) => m.type === "folder");
+  const backupNotes = rawItems.filter((m) => m.type !== "folder");
+
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
   let restoredCount = 0;
+  let restoredFolderCount = 0;
+  let updatedCount = 0;
   let skippedCount = 0;
 
   store.getAll().onsuccess = (event) => {
-    const currentMemos = event.target.result;
-    const existingMap = new Map();
-    currentMemos.forEach((m) => {
-      if (m.syncId) existingMap.set(m.syncId, m);
+    const currentMemos = event.target.result || [];
+
+    const sysMasterByType = {
+      desktop: typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null,
+      backup: typeof globalBackupFolderId !== "undefined" ? globalBackupFolderId : null,
+      security: typeof globalSecurityFolderId !== "undefined" ? globalSecurityFolderId : null,
+      trash: typeof globalTrashFolderId !== "undefined" ? globalTrashFolderId : null,
+    };
+
+    const existingBySyncId = new Map();
+    const existingFoldersById = new Map();
+    const existingActiveFoldersByParentAndTitle = new Map();
+    const existingActiveNotesByParent = new Map();
+
+    const sortedExisting = [...currentMemos].sort((a, b) => (a.id || 0) - (b.id || 0));
+    sortedExisting.forEach((cm) => {
+      if (cm.isPermanentlyDeleted) return;
+
+      if (cm.type === "folder") {
+        existingFoldersById.set(cm.id, cm);
+        const sysType = detectBackupSystemType(cm);
+        if (sysType && !sysMasterByType[sysType]) {
+          sysMasterByType[sysType] = cm.id;
+        }
+        if (!cm.isDeleted && !sysType) {
+          const fKey = `${cm.parentId ?? "null"}::${cm.title || ""}`;
+          if (!existingActiveFoldersByParentAndTitle.has(fKey)) {
+            existingActiveFoldersByParentAndTitle.set(fKey, cm);
+          }
+        }
+      } else if (!cm.isDeleted) {
+        const nKey = String(cm.parentId ?? "null");
+        if (!existingActiveNotesByParent.has(nKey)) {
+          existingActiveNotesByParent.set(nKey, []);
+        }
+        existingActiveNotesByParent.get(nKey).push(cm);
+      }
+
+      if (cm.syncId) {
+        const prev = existingBySyncId.get(cm.syncId);
+        if (!prev || (prev.isDeleted && !cm.isDeleted)) {
+          existingBySyncId.set(cm.syncId, cm);
+        }
+      }
     });
 
-    parsed.data.forEach((m) => {
-      if (m.syncId && existingMap.has(m.syncId)) {
-        const localMemo = existingMap.get(m.syncId);
-        if (localMemo.isDeleted) {
-          localMemo.isDeleted = false;
-          delete localMemo.deletedAt;
-          localMemo.updatedAt = Date.now();
-          store.put(localMemo);
-          restoredCount++;
-        } else {
-          skippedCount++;
+    const oldIdToNewId = new Map();
+    const syncIdToNewId = new Map();
+    const newIdToSyncId = new Map();
+
+    existingFoldersById.forEach((f) => {
+      if (f.syncId) {
+        if (!syncIdToNewId.has(f.syncId) || !f.isDeleted) {
+          syncIdToNewId.set(f.syncId, f.id);
         }
-        return;
+        newIdToSyncId.set(f.id, f.syncId);
       }
-      const isDuplicateContent = currentMemos.some(
-        (existing) => existing.title === m.title && existing.content === m.content
-      );
-      if (isDuplicateContent) {
-        skippedCount++;
-        return;
-      }
-      delete m.id;
-      if (!m.syncId) m.syncId = generateSyncId();
-      store.add(m);
-      restoredCount++;
     });
+
+    if (sysMasterByType.desktop) {
+      syncIdToNewId.set("sys_desktop", sysMasterByType.desktop);
+      newIdToSyncId.set(sysMasterByType.desktop, "sys_desktop");
+    }
+    if (sysMasterByType.backup) {
+      syncIdToNewId.set("sys_backup", sysMasterByType.backup);
+      newIdToSyncId.set(sysMasterByType.backup, "sys_backup");
+    }
+    if (sysMasterByType.security) {
+      syncIdToNewId.set("sys_security", sysMasterByType.security);
+      newIdToSyncId.set(sysMasterByType.security, "sys_security");
+    }
+    if (sysMasterByType.trash) {
+      syncIdToNewId.set("sys_trash", sysMasterByType.trash);
+      newIdToSyncId.set(sysMasterByType.trash, "sys_trash");
+    }
+
+    function resolveParentId(item, isFolder) {
+      if (item.parentId !== undefined && item.parentId !== null) {
+        if (oldIdToNewId.has(item.parentId)) {
+          return oldIdToNewId.get(item.parentId);
+        }
+        const bParent = backupByOldId.get(item.parentId);
+        if (bParent) {
+          const bSys = detectBackupSystemType(bParent);
+          if (bSys && sysMasterByType[bSys]) return sysMasterByType[bSys];
+          if (bParent.syncId && syncIdToNewId.has(bParent.syncId)) {
+            return syncIdToNewId.get(bParent.syncId);
+          }
+        }
+      }
+
+      const pSyncId = getBackupParentSyncId(item);
+      if (pSyncId && syncIdToNewId.has(pSyncId)) {
+        return syncIdToNewId.get(pSyncId);
+      }
+      if (pSyncId === "sys_desktop" && sysMasterByType.desktop) return sysMasterByType.desktop;
+      if (pSyncId === "sys_backup" && sysMasterByType.backup) return sysMasterByType.backup;
+      if (pSyncId === "sys_security" && sysMasterByType.security) return sysMasterByType.security;
+      if (pSyncId === "sys_trash" && sysMasterByType.trash) return sysMasterByType.trash;
+
+      if (isFolder) return null;
+      if (item.parentId === null && !pSyncId) return null;
+      return sysMasterByType.desktop;
+    }
+
+    // Pass 1 준비: 시스템 폴더 즉시 매핑 + 사용자 폴더 부모-우선 위상 정렬
+    const userFolders = [];
+    backupFolders.forEach((f) => {
+      const sysType = detectBackupSystemType(f);
+      if (sysType && sysMasterByType[sysType]) {
+        if (f.id !== undefined && f.id !== null) {
+          oldIdToNewId.set(f.id, sysMasterByType[sysType]);
+        }
+        syncIdToNewId.set("sys_" + sysType, sysMasterByType[sysType]);
+      } else if (!sysType) {
+        userFolders.push(f);
+      }
+    });
+
+    function getBackupFolderDepth(f) {
+      let depth = 0;
+      const seen = new Set();
+      let curr = f;
+      while (curr && curr.parentId !== undefined && curr.parentId !== null) {
+        if (seen.has(curr.id)) break;
+        seen.add(curr.id);
+        const parent = backupByOldId.get(curr.parentId);
+        if (!parent || detectBackupSystemType(parent)) break;
+        depth++;
+        curr = parent;
+      }
+      return depth;
+    }
+
+    userFolders.sort((a, b) => {
+      const da = getBackupFolderDepth(a);
+      const dbDepth = getBackupFolderDepth(b);
+      if (da !== dbDepth) return da - dbDepth;
+      return (a.id || 0) - (b.id || 0);
+    });
+
+    function processFolderAt(idx) {
+      if (idx >= userFolders.length) {
+        processNotes();
+        return;
+      }
+
+      const f = userFolders[idx];
+      const resolvedParentId = resolveParentId(f, true);
+      const resolvedParentSyncId =
+        resolvedParentId !== null
+          ? newIdToSyncId.get(resolvedParentId) || getBackupParentSyncId(f) || null
+          : null;
+
+      // 1) syncId가 동일한 기존 폴더 재사용
+      const existingFolder = f.syncId ? existingBySyncId.get(f.syncId) : null;
+      if (existingFolder && existingFolder.type === "folder") {
+        if (f.id !== undefined && f.id !== null) {
+          oldIdToNewId.set(f.id, existingFolder.id);
+        }
+        syncIdToNewId.set(existingFolder.syncId, existingFolder.id);
+        newIdToSyncId.set(existingFolder.id, existingFolder.syncId);
+
+        let needPut = false;
+        if (existingFolder.isDeleted) {
+          existingFolder.isDeleted = false;
+          delete existingFolder.deletedAt;
+          existingFolder.parentId = resolvedParentId;
+          if (resolvedParentSyncId) existingFolder.parentSyncId = resolvedParentSyncId;
+          else delete existingFolder.parentSyncId;
+          existingFolder.updatedAt = Math.max(existingFolder.updatedAt || 0, f.updatedAt || Date.now());
+          needPut = true;
+          restoredFolderCount++;
+        } else if (
+          existingFolder.parentId !== null &&
+          !existingFoldersById.has(existingFolder.parentId)
+        ) {
+          existingFolder.parentId = resolvedParentId;
+          if (resolvedParentSyncId) existingFolder.parentSyncId = resolvedParentSyncId;
+          else delete existingFolder.parentSyncId;
+          needPut = true;
+        }
+        if (needPut) store.put(existingFolder);
+        processFolderAt(idx + 1);
+        return;
+      }
+
+      // 2) 같은 부모 폴더 아래에 동일한 이름의 활성 폴더가 이미 존재하면 재사용
+      const fKey = `${resolvedParentId ?? "null"}::${f.title || ""}`;
+      const sameParentFolder = existingActiveFoldersByParentAndTitle.get(fKey);
+      if (sameParentFolder) {
+        if (f.id !== undefined && f.id !== null) {
+          oldIdToNewId.set(f.id, sameParentFolder.id);
+        }
+        if (f.syncId && !syncIdToNewId.has(f.syncId)) {
+          syncIdToNewId.set(f.syncId, sameParentFolder.id);
+        }
+        processFolderAt(idx + 1);
+        return;
+      }
+
+      // 3) 신규 폴더 생성 후 실제 생성 ID를 즉시 지도에 등록
+      const newFolder = { ...f };
+      delete newFolder.id;
+      newFolder.type = "folder";
+      delete newFolder.isSystem;
+      newFolder.parentId = resolvedParentId;
+      if (resolvedParentSyncId) newFolder.parentSyncId = resolvedParentSyncId;
+      else delete newFolder.parentSyncId;
+      newFolder.isDeleted = false;
+      delete newFolder.deletedAt;
+      delete newFolder.isPermanentlyDeleted;
+      if (!newFolder.syncId || existingBySyncId.has(newFolder.syncId)) {
+        newFolder.syncId = generateSyncId();
+      }
+      if (!newFolder.updatedAt) newFolder.updatedAt = Date.now();
+
+      store.add(newFolder).onsuccess = (ev) => {
+        const newId = ev.target.result;
+        newFolder.id = newId;
+        if (f.id !== undefined && f.id !== null) {
+          oldIdToNewId.set(f.id, newId);
+        }
+        syncIdToNewId.set(newFolder.syncId, newId);
+        newIdToSyncId.set(newId, newFolder.syncId);
+        existingBySyncId.set(newFolder.syncId, newFolder);
+        existingFoldersById.set(newId, newFolder);
+        existingActiveFoldersByParentAndTitle.set(fKey, newFolder);
+        restoredFolderCount++;
+        processFolderAt(idx + 1);
+      };
+    }
+
+    function processNotes() {
+      backupNotes.forEach((m) => {
+        const resolvedParentId = resolveParentId(m, false);
+        const resolvedParentSyncId =
+          resolvedParentId !== null
+            ? newIdToSyncId.get(resolvedParentId) || getBackupParentSyncId(m) || null
+            : null;
+
+        const existing = m.syncId ? existingBySyncId.get(m.syncId) : null;
+        if (existing && existing.type !== "folder") {
+          if (existing.isDeleted || existing.isPermanentlyDeleted) {
+            existing.isDeleted = false;
+            delete existing.deletedAt;
+            delete existing.isPermanentlyDeleted;
+            existing.title = m.title;
+            existing.content = m.content;
+            existing.plainText = m.plainText;
+            if (m.pinnedAt && !existing.pinnedAt) existing.pinnedAt = m.pinnedAt;
+            existing.parentId = resolvedParentId;
+            if (resolvedParentSyncId) existing.parentSyncId = resolvedParentSyncId;
+            else delete existing.parentSyncId;
+            existing.updatedAt = Math.max(existing.updatedAt || 0, m.updatedAt || Date.now());
+            store.put(existing);
+            existingBySyncId.set(existing.syncId, existing);
+            const nKey = String(resolvedParentId ?? "null");
+            if (!existingActiveNotesByParent.has(nKey)) {
+              existingActiveNotesByParent.set(nKey, []);
+            }
+            existingActiveNotesByParent.get(nKey).push(existing);
+            restoredCount++;
+            return;
+          }
+
+          const backupIsNewer = (m.updatedAt || 0) > (existing.updatedAt || 0);
+          const localWasEmpty = !existing.content && Boolean(m.content);
+          const hasBrokenParent =
+            existing.parentId !== null && !existingFoldersById.has(existing.parentId);
+
+          if (backupIsNewer || localWasEmpty) {
+            existing.title = m.title;
+            existing.content = m.content;
+            existing.plainText = m.plainText;
+            if (m.pinnedAt) existing.pinnedAt = m.pinnedAt;
+            existing.parentId = resolvedParentId;
+            if (resolvedParentSyncId) existing.parentSyncId = resolvedParentSyncId;
+            else delete existing.parentSyncId;
+            existing.updatedAt = m.updatedAt || Date.now();
+            store.put(existing);
+            updatedCount++;
+            return;
+          }
+
+          if (hasBrokenParent) {
+            existing.parentId = resolvedParentId;
+            if (resolvedParentSyncId) existing.parentSyncId = resolvedParentSyncId;
+            else delete existing.parentSyncId;
+            store.put(existing);
+          }
+
+          skippedCount++;
+          return;
+        }
+
+        // 동일 폴더 내 제목+내용이 완전히 같은 활성 노트가 이미 있는 경우만 중복 제외
+        const destKey = String(resolvedParentId ?? "null");
+        const sameParentNotes = existingActiveNotesByParent.get(destKey) || [];
+        const isDuplicateContent = sameParentNotes.some(
+          (ex) => ex.title === m.title && ex.content === m.content,
+        );
+        if (isDuplicateContent) {
+          skippedCount++;
+          return;
+        }
+
+        const newMemo = { ...m };
+        delete newMemo.id;
+        newMemo.type = "file";
+        newMemo.parentId = resolvedParentId;
+        if (resolvedParentSyncId) newMemo.parentSyncId = resolvedParentSyncId;
+        else delete newMemo.parentSyncId;
+        newMemo.isDeleted = false;
+        delete newMemo.deletedAt;
+        delete newMemo.isPermanentlyDeleted;
+        if (!newMemo.syncId || existingBySyncId.has(newMemo.syncId)) {
+          newMemo.syncId = generateSyncId();
+        }
+        if (!newMemo.updatedAt) newMemo.updatedAt = Date.now();
+
+        store.add(newMemo);
+        existingBySyncId.set(newMemo.syncId, newMemo);
+        if (!existingActiveNotesByParent.has(destKey)) {
+          existingActiveNotesByParent.set(destKey, []);
+        }
+        existingActiveNotesByParent.get(destKey).push(newMemo);
+        restoredCount++;
+      });
+    }
+
+    processFolderAt(0);
   };
 
   tx.oncomplete = () => {
     healDatabase(() => {
       loadMemoList();
-      alert(`복원이 완료되었습니다.\n(복원노트: ${restoredCount}개 / 중복제외: ${skippedCount}개)`);
+      const fmPane = document.getElementById("file-manager-pane");
+      if (fmPane && fmPane.style.display === "flex" && typeof loadFileManager === "function") {
+        loadFileManager(currentFmFolderId);
+      }
+      if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
+      alert(
+        `복원이 완료되었습니다.\n(복원 노트: ${restoredCount}개 / 복원 폴더: ${restoredFolderCount}개 / 최신 갱신: ${updatedCount}개 / 중복 제외: ${skippedCount}개)`,
+      );
       if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
       if (typeof onCompleteCallback === "function") onCompleteCallback();
     });

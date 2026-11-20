@@ -508,7 +508,6 @@ const quill = new Quill('#editor', {
                     const input = document.createElement('input');
                     input.setAttribute('type', 'file');
                     input.setAttribute('accept', 'image/*,application/pdf,.pdf');
-                    input.click();
                     input.onchange = () => {
                         const file = input.files[0];
                         if (!file) return;
@@ -527,6 +526,11 @@ const quill = new Quill('#editor', {
                             }
                         }
                     };
+                    if (typeof openFilePickerWithAutoLockPause === 'function') {
+                        openFilePickerWithAutoLockPause(input);
+                    } else {
+                        input.click();
+                    }
                 },
 
                 // 🎯 줄 전체 글자(Inline)에 취소선을 긋고 투명 방어막 전개
@@ -1877,6 +1881,13 @@ if (tbEl) {
            ========================================== */
 document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+        // [V1.2.0] 앱 화면 잠금 오버레이 표시 중에는 ESC 우회 원천 차단
+        if (typeof isAppScreenLocked === "function" && isAppScreenLocked()) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+
         // 🎯 [V4.9.0] 전체화면 이미지 돋보기 뷰어(Lightbox) 닫기 (최우선)
         const lbModal = document.getElementById("zen-image-lightbox");
         if (lbModal && lbModal.classList.contains("is-open")) {
@@ -1897,6 +1908,13 @@ document.addEventListener("keydown", (e) => {
             (typeof window.hasSelectedImages === "function" && window.hasSelectedImages());
         if (hasImgSel) {
             if (typeof hideZenImageResizer === "function") hideZenImageResizer();
+            return;
+        }
+
+        // [V1.2.0] 비밀번호 입력 설정/변경/해제 모달 닫기 (환경설정 모달보다 우선)
+        const appLockSetupModal = document.getElementById("app-lock-setup-modal");
+        if (appLockSetupModal && appLockSetupModal.style.display === "flex") {
+            if (typeof closeAppLockSetupModal === "function") closeAppLockSetupModal();
             return;
         }
 
@@ -2084,6 +2102,11 @@ window.addEventListener("popstate", (e) => {
         return;
     }
 
+    // [V1.2.0] 앱 화면 잠금 오버레이 표시 중 뒤로가기 우회 차단
+    if (typeof isAppScreenLocked === "function" && isAppScreenLocked()) {
+        return;
+    }
+
     // 🎯 [V4.9.0] 전체화면 이미지 돋보기 뷰어(Lightbox) 닫기
     const lbModal = document.getElementById("zen-image-lightbox");
     if (lbModal && lbModal.classList.contains("is-open")) {
@@ -2122,6 +2145,14 @@ window.addEventListener("popstate", (e) => {
     const fmNamePromptModal = document.getElementById("fm-name-prompt-modal");
     if (fmNamePromptModal && fmNamePromptModal.style.display === "flex") {
         if (typeof closeFmTextInputModal === "function") closeFmTextInputModal(null, true);
+        return;
+    }
+
+    // [V1.2.0] 비밀번호 입력 설정/변경/해제 모달 닫기
+    const appLockSetupModal = document.getElementById("app-lock-setup-modal");
+    if (appLockSetupModal && appLockSetupModal.style.display === "flex") {
+        if (typeof closeAppLockSetupModal === "function") closeAppLockSetupModal(true);
+        else appLockSetupModal.style.display = "none";
         return;
     }
 
@@ -3199,6 +3230,7 @@ window.createDefaultTable = createDefaultTable;
 // - 특수문자/이모티콘: Ctrl + F10
 // ============================================================================
 window.addEventListener('keydown', function (e) {
+    if (typeof isAppScreenLocked === 'function' && isAppScreenLocked()) return;
     const specModal = document.getElementById('special-char-modal');
     const isSpecOpen = specModal && (specModal.style.display === 'flex' || specModal.classList.contains('is-open'));
 
@@ -4548,7 +4580,11 @@ window.addEventListener('keydown', function (e) {
                 case 'replace-image': {
                     if (replaceInput) {
                         replaceInput.value = '';
-                        replaceInput.click();
+                        if (typeof openFilePickerWithAutoLockPause === 'function') {
+                            openFilePickerWithAutoLockPause(replaceInput);
+                        } else {
+                            replaceInput.click();
+                        }
                     }
                     break;
                 }

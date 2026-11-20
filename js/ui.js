@@ -549,77 +549,563 @@ function triggerTrashSearch() {
 }
 
 // ============================================================================
-// 🚨 [최종 철통 방어막] 화면 최소화 및 백그라운드 전환 시 '은행급 오토-락' 가동
+// [V1.2.0] 앱 화면 잠금(비밀번호 입력 · 화면 자동 잠금) & 2중 오토-락 엔진
 // ============================================================================
-function triggerBankAutoLock() {
-  // 이미 잠겨 있고 보안 노트를 편집 중이지 않다면 불필요한 중복 대피 방지
+const APP_LOCK_ENABLED_KEY = "zen_app_lock_enabled";
+const APP_LOCK_HASH_KEY = "zen_app_lock_hash";
+const APP_LOCK_HINT_KEY = "zen_app_lock_hint";
+const APP_LOCK_AUTO_KEY = "zen_app_lock_auto";
+
+let appLockSetupMode = "setup"; // 'setup' | 'change' | 'disable'
+let isAppLockSubmitting = false;
+
+window.__zenNativeDialogDepth = window.__zenNativeDialogDepth || 0;
+window.__zenSuppressBlurLockUntil = window.__zenSuppressBlurLockUntil || 0;
+
+function beginNativeDialogPause() {
+  window.__zenNativeDialogDepth = (window.__zenNativeDialogDepth || 0) + 1;
+}
+
+function endNativeDialogPause() {
+  window.__zenNativeDialogDepth = Math.max(0, (window.__zenNativeDialogDepth || 1) - 1);
+  window.__zenSuppressBlurLockUntil = Date.now() + 600;
+}
+
+function isNativeDialogSuppressingBlur() {
+  return (
+    (window.__zenNativeDialogDepth || 0) > 0 ||
+    Date.now() < (window.__zenSuppressBlurLockUntil || 0)
+  );
+}
+
+function openFilePickerWithAutoLockPause(inputEl) {
+  if (!inputEl) return;
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    window.removeEventListener("focus", onFocusReturn, true);
+    inputEl.removeEventListener("change", finish);
+    inputEl.removeEventListener("cancel", finish);
+    endNativeDialogPause();
+  };
+  const onFocusReturn = () => {
+    setTimeout(finish, 180);
+  };
+  beginNativeDialogPause();
+  window.addEventListener("focus", onFocusReturn, true);
+  inputEl.addEventListener("change", finish, { once: true });
+  inputEl.addEventListener("cancel", finish, { once: true });
+  inputEl.click();
+}
+
+function isAppLockEnabled() {
+  return (
+    localStorage.getItem(APP_LOCK_ENABLED_KEY) === "true" &&
+    Boolean(localStorage.getItem(APP_LOCK_HASH_KEY))
+  );
+}
+
+function isAppLockAutoEnabled() {
+  if (!isAppLockEnabled()) return false;
+  return localStorage.getItem(APP_LOCK_AUTO_KEY) !== "false";
+}
+
+function isAppScreenLocked() {
+  const overlay = document.getElementById("app-lock-overlay");
+  return Boolean(
+    window.__zenAppScreenLocked ||
+      (overlay && overlay.style.display === "flex")
+  );
+}
+
+async function sha256Hex(text) {
+  const msgBuffer = new TextEncoder().encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function lockAppScreen(reason = "auto") {
+  if (!isAppLockEnabled()) return;
+  const overlay = document.getElementById("app-lock-overlay");
+  if (!overlay) return;
+
+  const input = document.getElementById("app-lock-input");
+  const alreadyOpen = overlay.style.display === "flex";
+  window.__zenAppScreenLocked = true;
+
+  if (alreadyOpen) {
+    if (input && document.activeElement !== input) {
+      setTimeout(() => {
+        if (isAppScreenLocked()) input.focus();
+      }, 40);
+    }
+    return;
+  }
+
+  // 열려 있는 컨텍스트/드롭다운 메뉴 정리
+  if (typeof closeLeftNoteMenu === "function") closeLeftNoteMenu();
+  if (typeof closeAllMemoMenus === "function") closeAllMemoMenus();
+  const imgMenu = document.getElementById("image-context-menu");
+  if (imgMenu) imgMenu.style.display = "none";
+  const tableMenu = document.getElementById("table-context-menu");
+  if (tableMenu) tableMenu.style.display = "none";
+
+  const hint = (localStorage.getItem(APP_LOCK_HINT_KEY) || "").trim();
+  const hintBox = document.getElementById("app-lock-hint-box");
+  const hintText = document.getElementById("app-lock-hint-text");
+  if (hintBox && hintText) {
+    if (hint) {
+      hintText.textContent = hint;
+      hintBox.style.display = "flex";
+    } else {
+      hintText.textContent = "";
+      hintBox.style.display = "none";
+    }
+  }
+
+  const errorEl = document.getElementById("app-lock-error");
+  if (errorEl) errorEl.textContent = "";
+  if (input) input.value = "";
+
+  overlay.style.display = "flex";
+  if (input) {
+    setTimeout(() => {
+      if (isAppScreenLocked()) input.focus();
+    }, 50);
+  }
+}
+
+async function submitAppLockUnlock() {
+  if (isAppLockSubmitting) return;
+  const overlay = document.getElementById("app-lock-overlay");
+  const card = document.getElementById("app-lock-card");
+  const input = document.getElementById("app-lock-input");
+  const errorEl = document.getElementById("app-lock-error");
+  if (!overlay || !input) return;
+
+  const pw = input.value.trim();
+  if (!pw) {
+    if (errorEl) errorEl.textContent = "비밀번호를 입력하세요.";
+    input.focus();
+    return;
+  }
+
+  isAppLockSubmitting = true;
+  try {
+    const savedHash = localStorage.getItem(APP_LOCK_HASH_KEY) || "";
+    const inputHash = await sha256Hex(pw);
+
+    if (savedHash && inputHash === savedHash) {
+      window.__zenAppScreenLocked = false;
+      overlay.style.display = "none";
+      input.value = "";
+      if (errorEl) errorEl.textContent = "";
+    } else {
+      if (errorEl) errorEl.textContent = "비밀번호가 일치하지 않습니다.";
+      if (card) {
+        card.classList.remove("shake");
+        void card.offsetWidth;
+        card.classList.add("shake");
+        setTimeout(() => card.classList.remove("shake"), 400);
+      }
+      input.select();
+      input.focus();
+    }
+  } finally {
+    isAppLockSubmitting = false;
+  }
+}
+
+function syncAppLockSettingsUI() {
+  const enabled = isAppLockEnabled();
+  const autoEnabled = localStorage.getItem(APP_LOCK_AUTO_KEY) !== "false";
+  const hint = (localStorage.getItem(APP_LOCK_HINT_KEY) || "").trim();
+
+  const toggleEl = document.getElementById("setting-app-lock-toggle");
+  if (toggleEl) toggleEl.checked = enabled;
+
+  const detailsEl = document.getElementById("setting-app-lock-details");
+  if (detailsEl) detailsEl.style.display = enabled ? "flex" : "none";
+
+  const autoToggleEl = document.getElementById("setting-app-lock-auto-toggle");
+  if (autoToggleEl) autoToggleEl.checked = autoEnabled;
+
+  const hintPreviewEl = document.getElementById("setting-app-lock-hint-preview");
+  if (hintPreviewEl) {
+    hintPreviewEl.textContent = hint ? `힌트: ${hint}` : "힌트 미설정";
+  }
+}
+
+function handleSettingAppLockToggle(checked) {
+  // 모달 검증 완료 전까지는 기존 저장 상태로 시각적 토글을 유지
+  syncAppLockSettingsUI();
+  openAppLockSetupModal(checked ? "setup" : "disable");
+}
+
+function handleSettingAppLockAutoChange(checked) {
+  localStorage.setItem(APP_LOCK_AUTO_KEY, checked ? "true" : "false");
+  if (typeof showToast === "function") {
+    showToast(
+      checked ? "화면 자동 잠금이 켜졌습니다." : "화면 자동 잠금이 꺼졌습니다."
+    );
+  }
+}
+
+function openAppLockSetupModal(mode = "setup") {
+  const modal = document.getElementById("app-lock-setup-modal");
+  if (!modal) return;
+
+  appLockSetupMode = mode;
+  const titleEl = document.getElementById("app-lock-setup-title");
+  const descEl = document.getElementById("app-lock-setup-desc");
+  const currentRow = document.getElementById("app-lock-current-row");
+  const newRow = document.getElementById("app-lock-new-row");
+  const confirmRow = document.getElementById("app-lock-confirm-row");
+  const hintRow = document.getElementById("app-lock-hint-row");
+  const currentInput = document.getElementById("app-lock-current-input");
+  const newInput = document.getElementById("app-lock-new-input");
+  const confirmInput = document.getElementById("app-lock-confirm-input");
+  const hintInput = document.getElementById("app-lock-hint-input");
+  const errorEl = document.getElementById("app-lock-setup-error");
+  const submitBtn = document.getElementById("app-lock-setup-submit-btn");
+
+  if (currentInput) currentInput.value = "";
+  if (newInput) newInput.value = "";
+  if (confirmInput) confirmInput.value = "";
+  if (hintInput) {
+    hintInput.value =
+      mode === "change" ? (localStorage.getItem(APP_LOCK_HINT_KEY) || "") : "";
+  }
+  if (errorEl) errorEl.textContent = "";
+
+  if (mode === "setup") {
+    if (titleEl) titleEl.textContent = "비밀번호 입력 설정";
+    if (descEl) {
+      descEl.textContent =
+        "앱을 열거나 잠글 때 사용할 비밀번호를 설정합니다. (보안 폴더와 별도)";
+    }
+    if (currentRow) currentRow.style.display = "none";
+    if (newRow) newRow.style.display = "flex";
+    if (confirmRow) confirmRow.style.display = "flex";
+    if (hintRow) hintRow.style.display = "flex";
+    if (submitBtn) submitBtn.textContent = "설정";
+  } else if (mode === "change") {
+    if (titleEl) titleEl.textContent = "비밀번호 변경";
+    if (descEl) {
+      descEl.textContent =
+        "현재 비밀번호를 확인한 뒤 새 비밀번호와 힌트를 저장합니다.";
+    }
+    if (currentRow) currentRow.style.display = "flex";
+    if (newRow) newRow.style.display = "flex";
+    if (confirmRow) confirmRow.style.display = "flex";
+    if (hintRow) hintRow.style.display = "flex";
+    if (submitBtn) submitBtn.textContent = "변경";
+  } else {
+    if (titleEl) titleEl.textContent = "비밀번호 입력 해제";
+    if (descEl) {
+      descEl.textContent = "비밀번호 입력 잠금을 해제하려면 현재 비밀번호를 입력하세요.";
+    }
+    if (currentRow) currentRow.style.display = "flex";
+    if (newRow) newRow.style.display = "none";
+    if (confirmRow) confirmRow.style.display = "none";
+    if (hintRow) hintRow.style.display = "none";
+    if (submitBtn) submitBtn.textContent = "해제";
+  }
+
+  modal.style.display = "flex";
+  if (!window.history.state || window.history.state.modal !== "app-lock-setup") {
+    history.pushState({ modal: "app-lock-setup" }, "");
+  }
+
+  setTimeout(() => {
+    if (mode === "setup" && newInput) {
+      newInput.focus();
+    } else if (currentInput) {
+      currentInput.focus();
+    }
+  }, 50);
+}
+
+function closeAppLockSetupModal(fromPopstate = false) {
+  const modal = document.getElementById("app-lock-setup-modal");
+  if (!modal || modal.style.display !== "flex") {
+    syncAppLockSettingsUI();
+    return;
+  }
+
+  modal.style.display = "none";
+  const currentInput = document.getElementById("app-lock-current-input");
+  const newInput = document.getElementById("app-lock-new-input");
+  const confirmInput = document.getElementById("app-lock-confirm-input");
+  const hintInput = document.getElementById("app-lock-hint-input");
+  const errorEl = document.getElementById("app-lock-setup-error");
+  if (currentInput) currentInput.value = "";
+  if (newInput) newInput.value = "";
+  if (confirmInput) confirmInput.value = "";
+  if (hintInput) hintInput.value = "";
+  if (errorEl) errorEl.textContent = "";
+
+  if (!fromPopstate && window.history.state && window.history.state.modal === "app-lock-setup") {
+    if (typeof programmaticBackCount !== "undefined") programmaticBackCount++;
+    window.history.back();
+  }
+
+  syncAppLockSettingsUI();
+}
+
+async function submitAppLockSetupModal() {
+  const currentInput = document.getElementById("app-lock-current-input");
+  const newInput = document.getElementById("app-lock-new-input");
+  const confirmInput = document.getElementById("app-lock-confirm-input");
+  const hintInput = document.getElementById("app-lock-hint-input");
+  const errorEl = document.getElementById("app-lock-setup-error");
+
+  const setErr = (msg, targetEl) => {
+    if (errorEl) errorEl.textContent = msg;
+    if (targetEl) targetEl.focus();
+  };
+
+  if (appLockSetupMode === "change" || appLockSetupMode === "disable") {
+    const curPw = currentInput ? currentInput.value.trim() : "";
+    if (!curPw) {
+      setErr("현재 비밀번호를 입력하세요.", currentInput);
+      return;
+    }
+    const savedHash = localStorage.getItem(APP_LOCK_HASH_KEY) || "";
+    const curHash = await sha256Hex(curPw);
+    if (!savedHash || curHash !== savedHash) {
+      setErr("현재 비밀번호가 일치하지 않습니다.", currentInput);
+      if (currentInput) currentInput.select();
+      return;
+    }
+  }
+
+  if (appLockSetupMode === "disable") {
+    localStorage.setItem(APP_LOCK_ENABLED_KEY, "false");
+    localStorage.removeItem(APP_LOCK_HASH_KEY);
+    localStorage.removeItem(APP_LOCK_HINT_KEY);
+    closeAppLockSetupModal(false);
+    if (typeof showToast === "function") {
+      showToast("비밀번호 입력이 해제되었습니다.");
+    }
+    return;
+  }
+
+  const newPw = newInput ? newInput.value.trim() : "";
+  const confirmPw = confirmInput ? confirmInput.value.trim() : "";
+  const hintText = hintInput ? hintInput.value.trim() : "";
+
+  if (!newPw) {
+    setErr("새 비밀번호를 입력하세요.", newInput);
+    return;
+  }
+  if (newPw !== confirmPw) {
+    setErr("새 비밀번호와 확인 비밀번호가 일치하지 않습니다.", confirmInput);
+    if (confirmInput) confirmInput.select();
+    return;
+  }
+
+  const newHash = await sha256Hex(newPw);
+  localStorage.setItem(APP_LOCK_HASH_KEY, newHash);
+  localStorage.setItem(APP_LOCK_ENABLED_KEY, "true");
+  if (localStorage.getItem(APP_LOCK_AUTO_KEY) === null) {
+    localStorage.setItem(APP_LOCK_AUTO_KEY, "true");
+  }
+  if (hintText) {
+    localStorage.setItem(APP_LOCK_HINT_KEY, hintText);
+  } else {
+    localStorage.removeItem(APP_LOCK_HINT_KEY);
+  }
+
+  const wasSetup = appLockSetupMode === "setup";
+  closeAppLockSetupModal(false);
+  if (typeof showToast === "function") {
+    showToast(
+      wasSetup ? "비밀번호 입력이 설정되었습니다." : "비밀번호가 변경되었습니다."
+    );
+  }
+}
+
+window.beginNativeDialogPause = beginNativeDialogPause;
+window.endNativeDialogPause = endNativeDialogPause;
+window.openFilePickerWithAutoLockPause = openFilePickerWithAutoLockPause;
+window.isAppLockEnabled = isAppLockEnabled;
+window.isAppLockAutoEnabled = isAppLockAutoEnabled;
+window.isAppScreenLocked = isAppScreenLocked;
+window.lockAppScreen = lockAppScreen;
+window.submitAppLockUnlock = submitAppLockUnlock;
+window.syncAppLockSettingsUI = syncAppLockSettingsUI;
+window.handleSettingAppLockToggle = handleSettingAppLockToggle;
+window.handleSettingAppLockAutoChange = handleSettingAppLockAutoChange;
+window.openAppLockSetupModal = openAppLockSetupModal;
+window.closeAppLockSetupModal = closeAppLockSetupModal;
+window.submitAppLockSetupModal = submitAppLockSetupModal;
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (isAppLockEnabled() && isAppScreenLocked()) {
+    const input = document.getElementById("app-lock-input");
+    if (input) {
+      setTimeout(() => {
+        if (isAppScreenLocked()) input.focus();
+      }, 80);
+    }
+  }
+});
+
+// ============================================================================
+// 🚨 [최종 철통 방어막] 화면 최소화 및 백그라운드 전환 시 '2중 오토-락' 가동
+// ============================================================================
+function triggerBankAutoLock(reason = "auto") {
+  const isHardEvent =
+    reason === "minimize" ||
+    reason === "visibility" ||
+    reason === "sessionLock" ||
+    reason === "powerSuspend";
+  const isSoftBlur =
+    reason === "blur" || reason === "deactivate" || reason === "restore";
+
+  // OS 파일 저장/열기 대화상자 호출 중 발생하는 포커스 이탈 오탐 방어
+  if (isSoftBlur && isNativeDialogSuppressingBlur()) {
+    return;
+  }
+
+  window.__zenAutoLockInProgress = true;
+  setTimeout(() => {
+    window.__zenAutoLockInProgress = false;
+  }, 400);
+
+  // [1중 잠금] 앱 화면 자동 잠금 (비밀번호 입력 + 화면 자동 잠금 활성화 시 0ms 화면 차단)
+  if (isAppLockEnabled() && isAppLockAutoEnabled()) {
+    const setupModal = document.getElementById("app-lock-setup-modal");
+    const isSetupModalOpen = setupModal && setupModal.style.display === "flex";
+    if (isHardEvent || !isSetupModalOpen) {
+      if (isHardEvent && isSetupModalOpen) {
+        closeAppLockSetupModal(false);
+      }
+      lockAppScreen(reason);
+    }
+  }
+
+  // [2중 잠금] 보안 폴더 암호화 자동 저장 + 암호키 파기 + 보안 노트 대피 + 보안 폴더 퇴거
   const wasUnlocked = !!currentSecKey || isSecurityUnlocked || isEditingSecureMemo;
+  const hasPendingChanges = Boolean(
+    (typeof saveTimer !== "undefined" && saveTimer) ||
+      (typeof pendingSave !== "undefined" && pendingSave) ||
+      (typeof isSaving !== "undefined" && isSaving)
+  );
+
+  // 작성 중이던 보안 노트가 있다면 키를 지우기 직전 스냅샷과 키 참조를 확보
+  let secureSnapshot = null;
+  if (isEditingSecureMemo && currentSecKey) {
+    if (hasPendingChanges || !currentMemoId) {
+      const titleInputEl = document.getElementById("memo-title-input");
+      const rawTitle = titleInputEl ? titleInputEl.value : "";
+      const contentHtml =
+        typeof quill !== "undefined" && quill ? quill.root.innerHTML : "";
+      const plainTextStr =
+        typeof quill !== "undefined" && quill ? quill.getText() : "";
+      secureSnapshot = {
+        cryptoKey: currentSecKey,
+        memoId: currentMemoId,
+        targetParentId:
+          typeof targetNewMemoFolderId !== "undefined"
+            ? targetNewMemoFolderId
+            : null,
+        rawTitle: rawTitle,
+        title: rawTitle.trim() || "제목 없는 노트",
+        content: contentHtml,
+        plainText: plainTextStr,
+      };
+    }
+    if (typeof saveTimer !== "undefined" && saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    if (typeof pendingSave !== "undefined") pendingSave = false;
+  }
 
   // 1. 메모리에 떠 있는 암호화 열쇠 즉시 분쇄하여 완벽하게 잠금
   currentSecKey = null;
   isSecurityUnlocked = false;
 
   // 2. 만약 유저가 '보안 노트'를 화면(에디터)에 열어두고 최소화/이탈했다면?
-  // 평문 내용이 화면 잔상으로 남지 않도록 에디터의 글을 즉시 대피
+  // 평문 내용이 화면 잔상으로 남지 않도록 에디터의 글을 즉시 대피 & 미저장분 암호화 저장
   if (isEditingSecureMemo) {
     isEditingSecureMemo = false;
-    if (typeof openTopDesktopMemo === 'function') {
+    if (typeof openTopDesktopMemo === "function") {
       openTopDesktopMemo();
-    } else if (typeof createNewMemo === 'function') {
+    } else if (typeof createNewMemo === "function") {
       createNewMemo();
     }
-    if (typeof showToast === 'function') {
-      showToast("보안을 위해 노트가 닫혔습니다.");
+    if (secureSnapshot && typeof saveSecureMemoSnapshotAndWipe === "function") {
+      saveSecureMemoSnapshotAndWipe(secureSnapshot);
     }
+    secureSnapshot = null;
+    if (typeof showToast === "function" && !isAppScreenLocked()) {
+      showToast(
+        hasPendingChanges
+          ? "보안을 위해 작성 중인 노트를 암호화 저장하고 잠갔습니다."
+          : "보안을 위해 노트가 닫혔습니다."
+      );
+    }
+  } else if (typeof saveTimer !== "undefined" && saveTimer) {
+    // 일반 노트 편집 중 미저장 변경분 즉시 저장
+    if (typeof forceSaveImmediate === "function") forceSaveImmediate();
   }
 
   // 3. 만약 파일 관리창에서 '보안 폴더 내부'를 구경 중이었다면?
   // 비동기 history.go가 아닌 동기식으로 즉시 안전한 바탕화면(Home) 0층으로 강제 퇴거 및 재렌더링
-  const fmPane = document.getElementById('file-manager-pane');
-  if (fmPane && fmPane.style.display === 'flex') {
+  const fmPane = document.getElementById("file-manager-pane");
+  if (fmPane && fmPane.style.display === "flex") {
     const isInsideSecurityFm =
       wasUnlocked ||
       currentFmFolderId === globalSecurityFolderId ||
       (Array.isArray(fmPath) && fmPath.some((p) => p && p.id === globalSecurityFolderId));
     if (isInsideSecurityFm) {
-      if (typeof forceCleanFmUI === 'function') forceCleanFmUI();
+      if (typeof forceCleanFmUI === "function") forceCleanFmUI();
       fmPath = [{ id: null, title: "Home" }];
       currentFmFolderId = null;
-      if (typeof loadFileManager === 'function') {
+      if (typeof loadFileManager === "function") {
         loadFileManager(null);
       }
     }
   }
 
   // 4. 보안 비밀번호 모달이 열려있다면 즉시 닫기
-  const secModal = document.getElementById('fm-security-modal');
-  if (secModal && secModal.style.display === 'flex') {
-    secModal.style.display = 'none';
+  const secModal = document.getElementById("fm-security-modal");
+  if (secModal && secModal.style.display === "flex") {
+    secModal.style.display = "none";
   }
 
-  if (wasUnlocked && typeof updateLeftMenuCurrentFolderPath === 'function') {
+  if (wasUnlocked && typeof updateLeftMenuCurrentFolderPath === "function") {
     updateLeftMenuCurrentFolderPath();
   }
 }
 
 window.triggerBankAutoLock = triggerBankAutoLock;
 
-document.addEventListener('visibilitychange', () => {
+document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    triggerBankAutoLock();
+    triggerBankAutoLock("visibility");
   }
 });
 
-window.addEventListener('blur', () => {
+window.addEventListener("blur", () => {
   // 🎯 모바일 가상 키보드/자동완성 시트 호출 시 발생하는 blur 오탐 방지
-  const isTouchMobile = (window.innerWidth <= 768) || (navigator.maxTouchPoints > 0 && !(window.chrome && window.chrome.webview));
+  const isTouchMobile =
+    window.innerWidth <= 768 ||
+    (navigator.maxTouchPoints > 0 && !(window.chrome && window.chrome.webview));
   if (isTouchMobile) return;
 
-  // 🎯 비밀번호 입력 모달이 열려 있는 동안에는 blur로 모달을 강제 닫지 않음 (visibilitychange가 백그라운드 전환 방어)
-  const secModal = document.getElementById('fm-security-modal');
-  if (secModal && secModal.style.display === 'flex') return;
+  // 🎯 보안 폴더 또는 앱 비밀번호 설정 모달이 열려 있는 동안에는 blur로 강제 잠금하지 않음 (visibilitychange가 백그라운드 전환 방어)
+  const secModal = document.getElementById("fm-security-modal");
+  if (secModal && secModal.style.display === "flex") return;
+  const setupModal = document.getElementById("app-lock-setup-modal");
+  if (setupModal && setupModal.style.display === "flex") return;
 
-  triggerBankAutoLock();
+  triggerBankAutoLock("blur");
 });
 
 // ============================================================================
@@ -1225,6 +1711,7 @@ function openSettingsModal() {
   updateSegmentedActive('setting-fontsize-segmented', fontSize);
   updateSegmentedActive('setting-recent-count-segmented', String(recentCount));
   if (typeof updateExportLocationUI === 'function') updateExportLocationUI();
+  if (typeof syncAppLockSettingsUI === 'function') syncAppLockSettingsUI();
 
   modal.style.display = 'flex';
 

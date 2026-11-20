@@ -134,7 +134,9 @@ async function executeSave() {
   // 🎯 2. 보안 구역일 경우 암호화 수행
   if (isSecure) {
     if (!currentSecKey) {
-      showToast("보안 세션이 만료되어 변경 사항을 저장할 수 없습니다.");
+      if (!window.__zenAutoLockInProgress) {
+        showToast("보안 세션이 만료되어 변경 사항을 저장할 수 없습니다.");
+      }
       isSaving = false;
       updateUIState("saved");
       return; // 열쇠가 없으면 평문 유출 방지를 위해 저장을 차단
@@ -528,46 +530,113 @@ function healDatabase(callback) {
       }
     });
 
-    // 3. 살아남은 정상적인 ID 목록 작성
+    // 3. 살아남은 정상적인 폴더/항목 ID 및 syncId 지도 작성 (유령 부모 방어)
+    const validFolderIds = new Set();
+    const folderById = new Map();
+    const folderBySyncId = new Map();
+
     allData.forEach((m) => {
-      if (!duplicateIds.has(m.id)) validIds.add(m.id);
+      if (duplicateIds.has(m.id)) return;
+      validIds.add(m.id);
+      if (m.type === "folder" && !m.isPermanentlyDeleted) {
+        validFolderIds.add(m.id);
+        folderById.set(m.id, m);
+        if (m.syncId) {
+          const existing = folderBySyncId.get(m.syncId);
+          if (!existing || (existing.isDeleted && !m.isDeleted)) {
+            folderBySyncId.set(m.syncId, m);
+          }
+        }
+      }
     });
+
+    // 순환 참조 검사 헬퍼 (폴더 조상 체인)
+    function hasFolderCycle(folderItem) {
+      if (!folderItem || folderItem.type !== "folder") return false;
+      const seen = new Set([folderItem.id]);
+      let curr = folderItem.parentId;
+      while (curr !== null && curr !== undefined) {
+        if (seen.has(curr)) return true;
+        seen.add(curr);
+        const pf = folderById.get(curr);
+        if (!pf) break;
+        curr = pf.parentId;
+      }
+      return false;
+    }
 
     // 4. 가짜 폴더에 갇혀있던 파일이나 부모를 잃어버린 파일 구출 작전
     allData.forEach((m) => {
-      if (duplicateIds.has(m.id)) return;
+      if (duplicateIds.has(m.id) || m.isPermanentlyDeleted) return;
 
-      let currentParent = m.parentId;
       let changed = false;
 
-      // 🚀 [V3.4.4 핵심 교정: 글로벌 족보 동기화]
-      // 1. 내 기기의 parentId가 유효한 폴더라면, parentSyncId를 현재 부모의 syncId로 맞춤 (사용자의 폴더 이동 존중 및 고정)
-      if (m.parentId !== null && validIds.has(m.parentId)) {
-        const curParent = allData.find(f => f.id === m.parentId);
-        if (curParent && curParent.syncId && m.parentSyncId !== curParent.syncId) {
-          m.parentSyncId = curParent.syncId;
+      if (m.isSystem) {
+        if (m.parentId !== null) {
+          m.parentId = null;
           changed = true;
         }
-      }
-      // 2. 구글에서 막 다운로드되었거나 부모 ID가 유실된 경우에만 parentSyncId로 로컬 부모 ID 복원
-      else if (m.parentSyncId) {
-        const realParent = allData.find(f => f.syncId === m.parentSyncId);
-        if (realParent && validIds.has(realParent.id) && Number(m.parentId) !== realParent.id) {
-          m.parentId = realParent.id;
-          changed = true;
+        if (changed) {
+          store.put(m);
+          needsUpdate = true;
         }
+        return;
       }
 
-      // 작전 A: 가짜 폴더에 들어있던 파일들을 진짜 폴더(원본)로 무사히 이동
-      if (dupToMasterMap.has(currentParent)) {
-        m.parentId = dupToMasterMap.get(currentParent);
+      // 작전 A: 가짜 중복 시스템 폴더에 들어있던 파일들을 진짜 원본 폴더로 이동
+      if (dupToMasterMap.has(m.parentId)) {
+        m.parentId = dupToMasterMap.get(m.parentId);
         changed = true;
       }
-      // 작전 B: 동기화 오류로 부모 폴더를 잃어버려 허공에 뜬 미아 파일들을 바탕화면으로 안전하게 착륙
-      else if (currentParent !== null && !validIds.has(currentParent)) {
-        // 🚀 [수정] 방금 전 '작전 S'에서 부모를 찾은 녀석은 바탕화면으로 쫓겨나지 않도록 방어!
-        if (!changed) {
+
+      // 폴더 자기 참조/순환 참조 방어
+      if (m.type === "folder" && (m.parentId === m.id || hasFolderCycle(m))) {
+        m.parentId = null;
+        delete m.parentSyncId;
+        changed = true;
+      }
+
+      // 작전 B: 부모 ID 유효성 검사 (반드시 실제 존재하는 '폴더'여야 함 — 일반 노트 ID 오연결 원천 차단)
+      if (m.parentId !== null && m.parentId !== undefined) {
+        if (validFolderIds.has(m.parentId)) {
+          const curParent = folderById.get(m.parentId);
+          if (curParent && curParent.syncId && m.parentSyncId !== curParent.syncId) {
+            m.parentSyncId = curParent.syncId;
+            changed = true;
+          }
+        } else {
+          const realParent = m.parentSyncId ? folderBySyncId.get(m.parentSyncId) : null;
+          if (realParent && realParent.id !== m.id) {
+            m.parentId = realParent.id;
+            changed = true;
+          } else if (m.type === "folder") {
+            m.parentId = null;
+            delete m.parentSyncId;
+            changed = true;
+          } else {
+            m.parentId = globalDesktopFolderId;
+            m.parentSyncId = "sys_desktop";
+            changed = true;
+          }
+        }
+      } else if (m.parentId === undefined) {
+        const realParent = m.parentSyncId ? folderBySyncId.get(m.parentSyncId) : null;
+        if (realParent && realParent.id !== m.id) {
+          m.parentId = realParent.id;
+          changed = true;
+        } else if (m.type === "folder") {
+          m.parentId = null;
+          changed = true;
+        } else {
           m.parentId = globalDesktopFolderId;
+          m.parentSyncId = "sys_desktop";
+          changed = true;
+        }
+      } else if (m.parentId === null && m.parentSyncId) {
+        // parentId가 null이지만 parentSyncId가 특정 폴더를 가리키는 경우 복원
+        const realParent = folderBySyncId.get(m.parentSyncId);
+        if (realParent && realParent.id !== m.id) {
+          m.parentId = realParent.id;
           changed = true;
         }
       }
@@ -796,3 +865,85 @@ async function markDescendantsPermanentlyDeleted(store, parentId) {
     };
   });
 }
+
+// [V1.2.0] 보안 폴더 2중 오토-락용: 작성 중이던 보안 노트를 키 파기 전에 즉시 암호화 저장 후 키 참조 소멸
+async function saveSecureMemoSnapshotAndWipe(snapshot) {
+  if (!db || !snapshot || !snapshot.cryptoKey) {
+    if (snapshot) snapshot.cryptoKey = null;
+    return;
+  }
+
+  const keyRef = snapshot.cryptoKey;
+  snapshot.cryptoKey = null;
+
+  try {
+    const rawTitle = typeof snapshot.rawTitle === "string" ? snapshot.rawTitle : "";
+    const title = (snapshot.title || rawTitle.trim() || "제목 없는 노트");
+    const content = snapshot.content || "";
+    const plainText = snapshot.plainText || "";
+    const hasNoText = plainText.trim() === "";
+    const hasNoImage = !content.includes("<img");
+
+    if (!snapshot.memoId && rawTitle.trim() === "" && hasNoText && hasNoImage) {
+      return;
+    }
+
+    const finalContent = await encryptData(content, keyRef);
+    const finalPlainText = await encryptData(plainText, keyRef);
+
+    const tx = db.transaction(["memos"], "readwrite");
+    const store = tx.objectStore("memos");
+
+    if (snapshot.memoId) {
+      store.get(snapshot.memoId).onsuccess = (e) => {
+        const m = e.target.result;
+        if (!m || m.isDeleted || m.isPermanentlyDeleted) return;
+        m.title = title;
+        m.content = finalContent;
+        m.plainText = finalPlainText;
+        m.updatedAt = Date.now();
+        store.put(m);
+      };
+    } else {
+      const savedParentId =
+        snapshot.targetParentId !== null && snapshot.targetParentId !== undefined
+          ? snapshot.targetParentId
+          : globalSecurityFolderId;
+      const insertNew = (parentSyncId) => {
+        const memoData = {
+          title,
+          content: finalContent,
+          plainText: finalPlainText,
+          updatedAt: Date.now(),
+          isDeleted: false,
+          type: "file",
+          syncId: generateSyncId(),
+          parentId: savedParentId,
+          parentSyncId: parentSyncId || "sys_security",
+        };
+        store.add(memoData);
+      };
+      if (savedParentId) {
+        store.get(savedParentId).onsuccess = (ev) => {
+          const pf = ev.target.result;
+          insertNew(pf && pf.syncId ? pf.syncId : "sys_security");
+        };
+      } else {
+        insertNew("sys_security");
+      }
+    }
+
+    tx.oncomplete = () => {
+      isSaving = false;
+      saveTimer = null;
+      if (typeof updateUIState === "function") updateUIState("saved");
+      if (typeof loadMemoList === "function") loadMemoList(true);
+      if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
+      if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+    };
+  } catch (err) {
+    console.warn("보안 노트 스냅샷 암호화 저장 오류:", err);
+  }
+}
+
+window.saveSecureMemoSnapshotAndWipe = saveSecureMemoSnapshotAndWipe;
