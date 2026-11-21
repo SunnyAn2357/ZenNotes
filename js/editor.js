@@ -2072,8 +2072,12 @@ if (tbEl) {
            ========================================== */
 document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-        // [V1.2.0] 앱 화면 잠금 오버레이 표시 중에는 ESC 우회 원천 차단
+        // [V1.2.0 / V1.4.0] 앱 화면 잠금 오버레이 표시 중 ESC: 마스터 복구 모달만 닫고 잠금은 유지
         if (typeof isAppScreenLocked === "function" && isAppScreenLocked()) {
+            const setupModal = document.getElementById("app-lock-setup-modal");
+            if (setupModal && setupModal.style.display === "flex") {
+                if (typeof closeAppLockSetupModal === "function") closeAppLockSetupModal();
+            }
             e.preventDefault();
             e.stopPropagation();
             return;
@@ -2301,8 +2305,13 @@ window.addEventListener("popstate", (e) => {
         return;
     }
 
-    // [V1.2.0] 앱 화면 잠금 오버레이 표시 중 뒤로가기 우회 차단
+    // [V1.2.0 / V1.4.0] 앱 화면 잠금 오버레이 표시 중 뒤로가기: 마스터 복구 모달만 닫고 잠금은 유지
     if (typeof isAppScreenLocked === "function" && isAppScreenLocked()) {
+        const setupModal = document.getElementById("app-lock-setup-modal");
+        if (setupModal && setupModal.style.display === "flex") {
+            if (typeof closeAppLockSetupModal === "function") closeAppLockSetupModal(true);
+            else setupModal.style.display = "none";
+        }
         return;
     }
 
@@ -2449,7 +2458,7 @@ window.addEventListener("popstate", (e) => {
 
         // 5. 평상시 폴더 탐색 중일 때 뒤로가기
         if (e.state && e.state.fmOpen) {
-            fmPath = e.state.fmPath || [{ id: null, title: "Home" }];
+            fmPath = e.state.fmPath || [{ id: null, title: typeof getRootDriveLabel === "function" ? getRootDriveLabel() : "MY 노트(M:)" }];
             loadFileManager(e.state.fmFolderId);
             return;
         } else {

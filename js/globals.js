@@ -20,8 +20,21 @@ let selectedTrashMemos = new Set(), displayedTrashMemos = [], lastSelectedTrashI
 // 🎯 [모바일 다중선택]
 let isMultiSelectMode = false, isTrashMultiSelectMode = false, pressTimer = null, isPressTriggered = false;
 
-// 🎯 [폴더 시스템 4대장]
+// 🎯 [폴더 시스템 3대장] (임시 폴더, 보안 폴더, 휴지통; backup은 하위 호환용 null)
 let globalDesktopFolderId = null, globalSecurityFolderId = null, globalTrashFolderId = null, globalBackupFolderId = null;
+
+function getRootDriveLabel() {
+  if (typeof window !== "undefined" && window.ZEN_ROOT_DRIVE_LABEL) {
+    return window.ZEN_ROOT_DRIVE_LABEL;
+  }
+  if (typeof document !== "undefined" && document.title && document.title.indexOf("ZenNotes") !== -1) {
+    return "ZenNotes(Z:)";
+  }
+  return "MY 노트(M:)";
+}
+if (typeof window !== "undefined") {
+  window.getRootDriveLabel = getRootDriveLabel;
+}
 
 // 🎯 [검색 타이머]
 let mainSearchTimer = null, trashSearchTimer = null;

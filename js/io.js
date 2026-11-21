@@ -582,7 +582,7 @@ async function getCurrentMemoDetails() {
         id: null,
         syncId: null,
         title,
-        folderPath: "바탕 화면",
+        folderPath: "임시 폴더",
         createdAt: now,
         updatedAt: now,
         isPinned: false,
@@ -601,7 +601,7 @@ async function getCurrentMemoDetails() {
             id: currentMemoId,
             syncId: null,
             title,
-            folderPath: "바탕 화면",
+            folderPath: "임시 폴더",
             createdAt: now,
             updatedAt: now,
             isPinned: false,
@@ -619,10 +619,10 @@ async function getCurrentMemoDetails() {
         while (curr) {
           const f = folderMap.get(curr);
           if (!f) break;
-          path.unshift(f.title);
+          path.unshift(f.isSystem === "desktop" ? "임시 폴더" : f.title);
           curr = f.parentId;
         }
-        const folderPath = path.length > 0 ? path.join(" / ") : "바탕 화면";
+        const folderPath = path.length > 0 ? path.join(" / ") : "임시 폴더";
 
         resolve({
           id: memo.id,
@@ -639,7 +639,7 @@ async function getCurrentMemoDetails() {
           id: currentMemoId,
           syncId: null,
           title,
-          folderPath: "바탕 화면",
+          folderPath: "임시 폴더",
           createdAt: now,
           updatedAt: now,
           isPinned: false,
@@ -650,7 +650,7 @@ async function getCurrentMemoDetails() {
         id: currentMemoId,
         syncId: null,
         title,
-        folderPath: "바탕 화면",
+        folderPath: "임시 폴더",
         createdAt: now,
         updatedAt: now,
         isPinned: false,
@@ -2310,6 +2310,13 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
     if (item.syncId === "sys_backup") return "backup";
     if (item.syncId === "sys_security") return "security";
     if (item.syncId === "sys_trash") return "trash";
+    if (item.title === "바탕 화면" || item.title === "임시 폴더") return "desktop";
+    if (
+      (item.parentId === null || item.parentId === undefined) &&
+      (item.title === "쓸어 담기" || item.title === "임시 저장")
+    ) {
+      return "backup";
+    }
     return null;
   }
 
@@ -2347,9 +2354,11 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
   store.getAll().onsuccess = (event) => {
     const currentMemos = event.target.result || [];
 
+    const desktopMasterId =
+      typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null;
     const sysMasterByType = {
-      desktop: typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null,
-      backup: typeof globalBackupFolderId !== "undefined" ? globalBackupFolderId : null,
+      desktop: desktopMasterId,
+      backup: desktopMasterId,
       security: typeof globalSecurityFolderId !== "undefined" ? globalSecurityFolderId : null,
       trash: typeof globalTrashFolderId !== "undefined" ? globalTrashFolderId : null,
     };
@@ -2366,7 +2375,10 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
       if (cm.type === "folder") {
         existingFoldersById.set(cm.id, cm);
         const sysType = detectBackupSystemType(cm);
-        if (sysType && !sysMasterByType[sysType]) {
+        if (sysType === "desktop") {
+          if (!sysMasterByType.desktop) sysMasterByType.desktop = cm.id;
+          sysMasterByType.backup = sysMasterByType.desktop;
+        } else if (sysType && !sysMasterByType[sysType]) {
           sysMasterByType[sysType] = cm.id;
         }
         if (!cm.isDeleted && !sysType) {
@@ -2406,11 +2418,8 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
 
     if (sysMasterByType.desktop) {
       syncIdToNewId.set("sys_desktop", sysMasterByType.desktop);
+      syncIdToNewId.set("sys_backup", sysMasterByType.desktop);
       newIdToSyncId.set(sysMasterByType.desktop, "sys_desktop");
-    }
-    if (sysMasterByType.backup) {
-      syncIdToNewId.set("sys_backup", sysMasterByType.backup);
-      newIdToSyncId.set(sysMasterByType.backup, "sys_backup");
     }
     if (sysMasterByType.security) {
       syncIdToNewId.set("sys_security", sysMasterByType.security);

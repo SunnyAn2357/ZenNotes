@@ -11,8 +11,10 @@
 
     <title>ZenNotes</title>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.3.0">
-    <link rel="manifest" href="manifest.json?v=1.3.0">
+    <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
+
+    <link rel="icon" type="image/png" href="favicon.png?v=1.4.0">
+    <link rel="manifest" href="manifest.json?v=1.4.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -25,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.3.0">
+    <link rel="stylesheet" href="css/main.css?v=1.4.0">
 
 </head>
 
@@ -116,7 +118,7 @@
                             <i class="fa-solid fa-folder-tree"></i>
                             <div class="left-menu-folder-texts">
                                 <span class="left-menu-folder-title">현재 폴더 및 이동</span>
-                                <span id="left-menu-current-path" class="left-menu-folder-path">위치: 바탕 화면</span>
+                                <span id="left-menu-current-path" class="left-menu-folder-path">위치: ZenNotes(Z:) &gt; 임시 폴더</span>
                             </div>
                         </div>
                         <i class="fa-solid fa-arrow-right-arrow-left left-menu-action-icon"></i>
@@ -181,7 +183,7 @@
                 </button>
             </div>
         </div>
-        <ul id="memo-list" class="memo-list sidebar-tree"></ul>
+        <ul id="memo-list" class="memo-list sidebar-tree" tabindex="0" role="tree" aria-label="노트 탐색기"></ul>
         <div id="left-sidebar-resizer" class="sidebar-resizer" title="드래그하여 너비 조절 (더블클릭 초기화)"></div>
     </div>
 
@@ -387,7 +389,7 @@
                 </button>
                 <div class="search-bar">
                     <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
-                    <input type="text" id="trash-search-input" placeholder="바탕 화면 휴지통 검색..."
+                    <input type="text" id="trash-search-input" placeholder="휴지통 검색..."
                         oninput="triggerTrashSearch()">
                 </div>
             </div>
@@ -862,8 +864,8 @@
         </div>
     </div>
 
-    <!-- [V1.2.0] 비밀번호 입력 설정/변경/해제 모달 -->
-    <div id="app-lock-setup-modal" class="fm-modal-overlay" style="display: none; z-index: 11000;" onclick="if(event.target===this) closeAppLockSetupModal()">
+    <!-- [V1.2.0 / V1.4.0] 비밀번호 입력 설정/변경/해제/마스터복구 모달 -->
+    <div id="app-lock-setup-modal" class="fm-modal-overlay" style="display: none; z-index: 1000010;" onclick="if(event.target===this) closeAppLockSetupModal()">
         <div class="zen-settings-card app-lock-setup-card" role="dialog" aria-modal="true" aria-labelledby="app-lock-setup-title" onclick="event.stopPropagation()">
             <div class="zen-settings-header">
                 <div class="zen-settings-title-wrap">
@@ -884,7 +886,7 @@
                 <div id="app-lock-new-row" class="app-lock-field-row">
                     <label for="app-lock-new-input" class="app-lock-field-label">새 비밀번호</label>
                     <input type="password" id="app-lock-new-input" class="app-lock-field-input" placeholder="새 비밀번호 입력" autocomplete="new-password" enterkeyhint="next"
-                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitAppLockSetupModal();}">
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();var cRow=document.getElementById('app-lock-confirm-row');var cIn=document.getElementById('app-lock-confirm-input');if(cRow&&cRow.style.display!=='none'&&cIn&&!cIn.value){cIn.focus();}else{submitAppLockSetupModal();}}">
                 </div>
                 <div id="app-lock-confirm-row" class="app-lock-field-row">
                     <label for="app-lock-confirm-input" class="app-lock-field-label">새 비밀번호 확인</label>
@@ -978,19 +980,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.3.0"></script>
-    <script src="js/db.js?v=1.3.0"></script>
-    <script src="js/ui.js?v=1.3.0"></script>
-    <script src="js/editor.js?v=1.3.0"></script>
-    <script src="js/file_manager.js?v=1.3.0"></script>
-    <script src="js/io.js?v=1.3.0"></script>
-    <script src="js/auth.js?v=1.3.0"></script>
+    <script src="js/globals.js?v=1.4.0"></script>
+    <script src="js/db.js?v=1.4.0"></script>
+    <script src="js/ui.js?v=1.4.0"></script>
+    <script src="js/editor.js?v=1.4.0"></script>
+    <script src="js/file_manager.js?v=1.4.0"></script>
+    <script src="js/io.js?v=1.4.0"></script>
+    <script src="js/auth.js?v=1.4.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.3.0");
+            console.log("[ZenNotes] 현재 버전: V1.4.0");
             console.log("=========================================");
         });
     </script>

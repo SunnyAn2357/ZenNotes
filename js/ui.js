@@ -565,8 +565,69 @@ const APP_LOCK_HASH_KEY = "zen_app_lock_hash";
 const APP_LOCK_HINT_KEY = "zen_app_lock_hint";
 const APP_LOCK_AUTO_KEY = "zen_app_lock_auto";
 
-let appLockSetupMode = "setup"; // 'setup' | 'change' | 'disable'
+let appLockSetupMode = "setup"; // 'setup' | 'change' | 'disable' | 'masterReset'
 let isAppLockSubmitting = false;
+let appLockMasterResetTimer = null;
+
+const ZEN_DUBEOLSIK_COMPAT_MAP = {
+  "\u3131": "r", "\u3132": "r", "\u3133": "rt", "\u3134": "s", "\u3135": "sw", "\u3136": "sg",
+  "\u3137": "e", "\u3138": "e", "\u3139": "f", "\u313a": "fr", "\u313b": "fa", "\u313c": "fq",
+  "\u313d": "ft", "\u313e": "fx", "\u313f": "fv", "\u3140": "fg", "\u3141": "a", "\u3142": "q",
+  "\u3143": "q", "\u3144": "qt", "\u3145": "t", "\u3146": "t", "\u3147": "d", "\u3148": "w",
+  "\u3149": "w", "\u314a": "c", "\u314b": "z", "\u314c": "x", "\u314d": "v", "\u314e": "g",
+  "\u314f": "k", "\u3150": "o", "\u3151": "i", "\u3152": "o", "\u3153": "j", "\u3154": "p",
+  "\u3155": "u", "\u3156": "p", "\u3157": "h", "\u3158": "hk", "\u3159": "ho", "\u315a": "hl",
+  "\u315b": "y", "\u315c": "n", "\u315d": "nj", "\u315e": "np", "\u315f": "nl", "\u3160": "b",
+  "\u3161": "m", "\u3162": "ml", "\u3163": "l"
+};
+const ZEN_HANGUL_CHO = ["r", "r", "s", "e", "e", "f", "a", "q", "q", "t", "t", "d", "w", "w", "c", "z", "x", "v", "g"];
+const ZEN_HANGUL_JUNG = ["k", "o", "i", "o", "j", "p", "u", "p", "h", "hk", "ho", "hl", "y", "n", "nj", "np", "nl", "b", "m", "ml", "l"];
+const ZEN_HANGUL_JONG = ["", "r", "r", "rt", "s", "sw", "sg", "e", "f", "fr", "fa", "fq", "ft", "fx", "fv", "fg", "a", "q", "qt", "t", "t", "d", "w", "c", "z", "x", "v", "g"];
+
+function normalizeAppLockMasterCandidate(raw) {
+  const str = String(raw || "").trim();
+  if (!str) return "";
+  let out = "";
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const code = str.charCodeAt(i);
+    if (ZEN_DUBEOLSIK_COMPAT_MAP[ch]) {
+      out += ZEN_DUBEOLSIK_COMPAT_MAP[ch];
+    } else if (code >= 0xac00 && code <= 0xd7a3) {
+      const sIndex = code - 0xac00;
+      const choIdx = Math.floor(sIndex / (21 * 28));
+      const jungIdx = Math.floor((sIndex % (21 * 28)) / 28);
+      const jongIdx = sIndex % 28;
+      out += (ZEN_HANGUL_CHO[choIdx] || "") + (ZEN_HANGUL_JUNG[jungIdx] || "") + (ZEN_HANGUL_JONG[jongIdx] || "");
+    } else if (code >= 0x1100 && code <= 0x1112) {
+      out += ZEN_HANGUL_CHO[code - 0x1100] || "";
+    } else if (code >= 0x1161 && code <= 0x1175) {
+      out += ZEN_HANGUL_JUNG[code - 0x1161] || "";
+    } else if (code >= 0x11a8 && code <= 0x11c2) {
+      out += ZEN_HANGUL_JONG[code - 0x11a8 + 1] || "";
+    } else {
+      out += ch.toLowerCase();
+    }
+  }
+  return out;
+}
+
+function isAppLockMasterKey(raw) {
+  return normalizeAppLockMasterCandidate(raw) === "myads";
+}
+
+function isAppLockSetupModalOpen() {
+  const modal = document.getElementById("app-lock-setup-modal");
+  return Boolean(modal && modal.style.display === "flex");
+}
+
+function requestNativeWebViewFocus() {
+  if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === "function") {
+    try {
+      window.chrome.webview.postMessage(JSON.stringify({ type: "focusWebView" }));
+    } catch (e) {}
+  }
+}
 
 window.__zenNativeDialogDepth = window.__zenNativeDialogDepth || 0;
 window.__zenSuppressBlurLockUntil = window.__zenSuppressBlurLockUntil || 0;
@@ -638,14 +699,32 @@ async function sha256Hex(text) {
 let appLockLiveCheckSeq = 0;
 
 function focusAppLockInputNow() {
-  if (!isAppScreenLocked()) return;
+  if (!isAppScreenLocked() || isAppLockSetupModalOpen()) return;
   const input = document.getElementById("app-lock-input");
   if (input && document.activeElement !== input) {
     input.focus();
   }
 }
 
+function triggerMasterPasswordResetModal() {
+  if (appLockMasterResetTimer) {
+    clearTimeout(appLockMasterResetTimer);
+    appLockMasterResetTimer = null;
+  }
+  if (!isAppScreenLocked()) return;
+  appLockLiveCheckSeq++;
+  const input = document.getElementById("app-lock-input");
+  const errorEl = document.getElementById("app-lock-error");
+  if (input) input.value = "";
+  if (errorEl) errorEl.textContent = "";
+  openAppLockSetupModal("masterReset");
+}
+
 function unlockAppScreenSuccess() {
+  if (appLockMasterResetTimer) {
+    clearTimeout(appLockMasterResetTimer);
+    appLockMasterResetTimer = null;
+  }
   const overlay = document.getElementById("app-lock-overlay");
   const input = document.getElementById("app-lock-input");
   const errorEl = document.getElementById("app-lock-error");
@@ -660,7 +739,11 @@ function unlockAppScreenSuccess() {
 }
 
 async function handleAppLockInputLive() {
-  if (!isAppScreenLocked()) return;
+  if (!isAppScreenLocked() || isAppLockSetupModalOpen()) return;
+  if (appLockMasterResetTimer) {
+    clearTimeout(appLockMasterResetTimer);
+    appLockMasterResetTimer = null;
+  }
   const input = document.getElementById("app-lock-input");
   const errorEl = document.getElementById("app-lock-error");
   if (!input) return;
@@ -674,13 +757,25 @@ async function handleAppLockInputLive() {
 
   const seq = ++appLockLiveCheckSeq;
   const savedHash = localStorage.getItem(APP_LOCK_HASH_KEY) || "";
-  if (!savedHash) return;
+  if (savedHash) {
+    const inputHash = await sha256Hex(pw);
+    if (seq !== appLockLiveCheckSeq || !isAppScreenLocked() || isAppLockSetupModalOpen()) return;
+    if (inputHash === savedHash) {
+      unlockAppScreenSuccess();
+      return;
+    }
+  }
 
-  const inputHash = await sha256Hex(pw);
-  if (seq !== appLockLiveCheckSeq || !isAppScreenLocked()) return;
-
-  if (inputHash === savedHash) {
-    unlockAppScreenSuccess();
+  if (isAppLockMasterKey(pw)) {
+    appLockMasterResetTimer = setTimeout(() => {
+      appLockMasterResetTimer = null;
+      if (!isAppScreenLocked() || isAppLockSetupModalOpen()) return;
+      const curInput = document.getElementById("app-lock-input");
+      const curVal = curInput ? curInput.value.trim() : "";
+      if (isAppLockMasterKey(curVal)) {
+        triggerMasterPasswordResetModal();
+      }
+    }, 320);
   }
 }
 
@@ -690,7 +785,7 @@ function initAppLockFocusTrap() {
   overlay.dataset.focusTrapReady = "true";
 
   const handleLockSurfaceMouseDown = (e) => {
-    if (!isAppScreenLocked()) return;
+    if (!isAppScreenLocked() || isAppLockSetupModalOpen()) return;
     if (e.target && e.target.closest("#app-lock-input, #app-lock-submit-btn")) {
       return;
     }
@@ -701,19 +796,19 @@ function initAppLockFocusTrap() {
   overlay.addEventListener("pointerdown", handleLockSurfaceMouseDown);
   overlay.addEventListener("mousedown", handleLockSurfaceMouseDown);
   overlay.addEventListener("click", (e) => {
-    if (!isAppScreenLocked()) return;
+    if (!isAppScreenLocked() || isAppLockSetupModalOpen()) return;
     if (e.target && e.target.closest("#app-lock-submit-btn")) return;
     focusAppLockInputNow();
   });
 
   window.addEventListener("focus", () => {
-    if (isAppScreenLocked()) {
+    if (isAppScreenLocked() && !isAppLockSetupModalOpen()) {
       setTimeout(focusAppLockInputNow, 20);
     }
   });
 
   document.addEventListener("focusin", (e) => {
-    if (!isAppScreenLocked()) return;
+    if (!isAppScreenLocked() || isAppLockSetupModalOpen()) return;
     if (e.target && e.target.closest("#app-lock-input, #app-lock-submit-btn")) return;
     focusAppLockInputNow();
   }, true);
@@ -729,6 +824,7 @@ function lockAppScreen(reason = "auto") {
   window.__zenAppScreenLocked = true;
 
   if (alreadyOpen) {
+    requestNativeWebViewFocus();
     focusAppLockInputNow();
     setTimeout(focusAppLockInputNow, 40);
     return;
@@ -762,6 +858,7 @@ function lockAppScreen(reason = "auto") {
 
   overlay.style.display = "flex";
   initAppLockFocusTrap();
+  requestNativeWebViewFocus();
   if (input) {
     input.focus();
     requestAnimationFrame(focusAppLockInputNow);
@@ -770,7 +867,11 @@ function lockAppScreen(reason = "auto") {
 }
 
 async function submitAppLockUnlock() {
-  if (isAppLockSubmitting) return;
+  if (isAppLockSubmitting || isAppLockSetupModalOpen()) return;
+  if (appLockMasterResetTimer) {
+    clearTimeout(appLockMasterResetTimer);
+    appLockMasterResetTimer = null;
+  }
   const overlay = document.getElementById("app-lock-overlay");
   const card = document.getElementById("app-lock-card");
   const input = document.getElementById("app-lock-input");
@@ -791,6 +892,8 @@ async function submitAppLockUnlock() {
 
     if (savedHash && inputHash === savedHash) {
       unlockAppScreenSuccess();
+    } else if (isAppLockMasterKey(pw)) {
+      triggerMasterPasswordResetModal();
     } else {
       if (errorEl) errorEl.textContent = "비밀번호가 일치하지 않습니다.";
       if (card) {
@@ -860,12 +963,26 @@ function openAppLockSetupModal(mode = "setup") {
   const errorEl = document.getElementById("app-lock-setup-error");
   const submitBtn = document.getElementById("app-lock-setup-submit-btn");
 
-  if (currentInput) currentInput.value = "";
-  if (newInput) newInput.value = "";
-  if (confirmInput) confirmInput.value = "";
+  if (currentInput) {
+    currentInput.value = "";
+    currentInput.disabled = false;
+    currentInput.placeholder = "현재 비밀번호 입력";
+  }
+  if (currentRow) currentRow.classList.remove("is-disabled");
+  if (newInput) {
+    newInput.value = "";
+    newInput.disabled = false;
+  }
+  if (confirmInput) {
+    confirmInput.value = "";
+    confirmInput.disabled = false;
+  }
   if (hintInput) {
+    hintInput.disabled = false;
     hintInput.value =
-      mode === "change" ? (localStorage.getItem(APP_LOCK_HINT_KEY) || "") : "";
+      (mode === "change" || mode === "masterReset")
+        ? (localStorage.getItem(APP_LOCK_HINT_KEY) || "")
+        : "";
   }
   if (errorEl) errorEl.textContent = "";
 
@@ -880,6 +997,24 @@ function openAppLockSetupModal(mode = "setup") {
     if (confirmRow) confirmRow.style.display = "flex";
     if (hintRow) hintRow.style.display = "flex";
     if (submitBtn) submitBtn.textContent = "설정";
+  } else if (mode === "masterReset") {
+    if (titleEl) titleEl.textContent = "비밀번호 변경";
+    if (descEl) {
+      descEl.textContent =
+        "마스터 암호가 확인되었습니다. 새 비밀번호와 힌트를 설정하세요.";
+    }
+    if (currentRow) {
+      currentRow.style.display = "flex";
+      currentRow.classList.add("is-disabled");
+    }
+    if (currentInput) {
+      currentInput.disabled = true;
+      currentInput.placeholder = "마스터 암호로 인증됨";
+    }
+    if (newRow) newRow.style.display = "flex";
+    if (confirmRow) confirmRow.style.display = "flex";
+    if (hintRow) hintRow.style.display = "flex";
+    if (submitBtn) submitBtn.textContent = "변경";
   } else if (mode === "change") {
     if (titleEl) titleEl.textContent = "비밀번호 변경";
     if (descEl) {
@@ -908,33 +1043,55 @@ function openAppLockSetupModal(mode = "setup") {
     history.pushState({ modal: "app-lock-setup" }, "");
   }
 
-  setTimeout(() => {
-    if (mode === "setup" && newInput) {
+  const focusSetupField = () => {
+    if ((mode === "setup" || mode === "masterReset") && newInput) {
       newInput.focus();
     } else if (currentInput) {
       currentInput.focus();
     }
-  }, 50);
+  };
+  focusSetupField();
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(focusSetupField);
+  }
+  setTimeout(focusSetupField, 50);
 }
 
 function closeAppLockSetupModal(fromPopstate = false) {
   const modal = document.getElementById("app-lock-setup-modal");
+  const currentRow = document.getElementById("app-lock-current-row");
+  const currentInput = document.getElementById("app-lock-current-input");
+  const newInput = document.getElementById("app-lock-new-input");
+  const confirmInput = document.getElementById("app-lock-confirm-input");
+  const hintInput = document.getElementById("app-lock-hint-input");
+  const errorEl = document.getElementById("app-lock-setup-error");
+
+  if (currentRow) currentRow.classList.remove("is-disabled");
+  if (currentInput) {
+    currentInput.value = "";
+    currentInput.disabled = false;
+    currentInput.placeholder = "현재 비밀번호 입력";
+  }
+  if (newInput) {
+    newInput.value = "";
+    newInput.disabled = false;
+  }
+  if (confirmInput) {
+    confirmInput.value = "";
+    confirmInput.disabled = false;
+  }
+  if (hintInput) {
+    hintInput.value = "";
+    hintInput.disabled = false;
+  }
+  if (errorEl) errorEl.textContent = "";
+
   if (!modal || modal.style.display !== "flex") {
     syncAppLockSettingsUI();
     return;
   }
 
   modal.style.display = "none";
-  const currentInput = document.getElementById("app-lock-current-input");
-  const newInput = document.getElementById("app-lock-new-input");
-  const confirmInput = document.getElementById("app-lock-confirm-input");
-  const hintInput = document.getElementById("app-lock-hint-input");
-  const errorEl = document.getElementById("app-lock-setup-error");
-  if (currentInput) currentInput.value = "";
-  if (newInput) newInput.value = "";
-  if (confirmInput) confirmInput.value = "";
-  if (hintInput) hintInput.value = "";
-  if (errorEl) errorEl.textContent = "";
 
   if (!fromPopstate && window.history.state && window.history.state.modal === "app-lock-setup") {
     if (typeof programmaticBackCount !== "undefined") programmaticBackCount++;
@@ -942,6 +1099,9 @@ function closeAppLockSetupModal(fromPopstate = false) {
   }
 
   syncAppLockSettingsUI();
+  if (isAppScreenLocked()) {
+    setTimeout(focusAppLockInputNow, 40);
+  }
 }
 
 async function submitAppLockSetupModal() {
@@ -1009,8 +1169,14 @@ async function submitAppLockSetupModal() {
   }
 
   const wasSetup = appLockSetupMode === "setup";
+  const wasMasterReset = appLockSetupMode === "masterReset";
   closeAppLockSetupModal(false);
-  if (typeof showToast === "function") {
+  if (wasMasterReset) {
+    unlockAppScreenSuccess();
+    if (typeof showToast === "function") {
+      showToast("새 비밀번호가 설정되었습니다.");
+    }
+  } else if (typeof showToast === "function") {
     showToast(
       wasSetup ? "비밀번호 입력이 설정되었습니다." : "비밀번호가 변경되었습니다."
     );
@@ -1020,6 +1186,9 @@ async function submitAppLockSetupModal() {
 window.beginNativeDialogPause = beginNativeDialogPause;
 window.endNativeDialogPause = endNativeDialogPause;
 window.openFilePickerWithAutoLockPause = openFilePickerWithAutoLockPause;
+window.normalizeAppLockMasterCandidate = normalizeAppLockMasterCandidate;
+window.isAppLockMasterKey = isAppLockMasterKey;
+window.isAppLockSetupModalOpen = isAppLockSetupModalOpen;
 window.isAppLockEnabled = isAppLockEnabled;
 window.isAppLockAutoEnabled = isAppLockAutoEnabled;
 window.isAppScreenLocked = isAppScreenLocked;
@@ -1037,8 +1206,20 @@ window.submitAppLockSetupModal = submitAppLockSetupModal;
 document.addEventListener("DOMContentLoaded", () => {
   initAppLockFocusTrap();
   if (isAppLockEnabled() && isAppScreenLocked()) {
+    requestNativeWebViewFocus();
+    focusAppLockInputNow();
+    setTimeout(focusAppLockInputNow, 60);
+    setTimeout(focusAppLockInputNow, 180);
+    setTimeout(focusAppLockInputNow, 400);
+  }
+});
+
+window.addEventListener("load", () => {
+  if (isAppLockEnabled() && isAppScreenLocked()) {
+    requestNativeWebViewFocus();
     focusAppLockInputNow();
     setTimeout(focusAppLockInputNow, 80);
+    setTimeout(focusAppLockInputNow, 250);
   }
 });
 
@@ -1153,7 +1334,7 @@ function triggerBankAutoLock(reason = "auto") {
       (Array.isArray(fmPath) && fmPath.some((p) => p && p.id === globalSecurityFolderId));
     if (isInsideSecurityFm) {
       if (typeof forceCleanFmUI === "function") forceCleanFmUI();
-      fmPath = [{ id: null, title: "Home" }];
+      fmPath = [{ id: null, title: typeof getRootDriveLabel === "function" ? getRootDriveLabel() : "MY 노트(M:)" }];
       currentFmFolderId = null;
       if (typeof loadFileManager === "function") {
         loadFileManager(null);
@@ -1650,6 +1831,7 @@ function updateLeftMenuCurrentFolderPath() {
   const pathEl = document.getElementById("left-menu-current-path");
   if (!pathEl || !db) return;
 
+  const driveLabel = typeof getRootDriveLabel === "function" ? getRootDriveLabel() : "MY 노트(M:)";
   const tx = db.transaction(["memos"], "readonly");
   tx.objectStore("memos").getAll().onsuccess = (e) => {
     const allData = e.target.result || [];
@@ -1659,16 +1841,20 @@ function updateLeftMenuCurrentFolderPath() {
     });
 
     function buildPathStr(folderId) {
-      if (folderId === null || folderId === undefined) return "Home";
+      if (folderId === null || folderId === undefined) return driveLabel;
       const parts = [];
       let curr = folderId;
+      const visited = new Set();
       while (curr) {
+        if (visited.has(curr)) break;
+        visited.add(curr);
         const f = folderMap.get(curr);
         if (!f) break;
-        parts.unshift(f.title);
+        const fTitle = f.isSystem === "desktop" ? "임시 폴더" : f.title;
+        parts.unshift(fTitle);
         curr = f.parentId;
       }
-      return parts.length > 0 ? parts.join(" / ") : "바탕 화면";
+      return parts.length > 0 ? `${driveLabel} > ${parts.join(" > ")}` : `${driveLabel} > 임시 폴더`;
     }
 
     if (currentMemoId) {
