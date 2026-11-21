@@ -156,18 +156,51 @@ function handleLeftHamburger() {
   } else {
     const colLeft = document.getElementById('col-left');
     colLeft.classList.toggle('collapsed');
-    const icon = document.getElementById('left-collapse-icon');
     const collapseBtn = document.getElementById('left-collapse-btn');
     const isCollapsed = colLeft.classList.contains('collapsed');
-    if (icon) {
-      // 🎯 [V4.5.0] 접혔을 때 창 넓히는(펼치는) 아이콘을 '삼선(fa-bars)'으로 위장!
-      icon.className = isCollapsed
-        ? 'fa-solid fa-bars'
-        : 'fa-solid fa-angles-left';
+    if (isCollapsed && typeof closeSidebarSearchBar === 'function') {
+      closeSidebarSearchBar(true);
     }
     if (collapseBtn) {
+      collapseBtn.classList.toggle('is-collapsed', isCollapsed);
       collapseBtn.setAttribute('title', isCollapsed ? '사이드바 펼치기' : '사이드바 접기');
+      collapseBtn.setAttribute('aria-label', isCollapsed ? '사이드바 펼치기' : '사이드바 접기');
     }
+  }
+}
+
+function toggleSidebarSearchBar(forceOpen) {
+  closeLeftNoteMenu();
+  const bar = document.getElementById('sidebar-search-bar');
+  const btn = document.getElementById('btn-sidebar-search-toggle');
+  const inp = document.getElementById('list-search-input');
+  if (!bar) return;
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !bar.classList.contains('is-open');
+  if (shouldOpen) {
+    bar.classList.add('is-open');
+    if (btn) btn.classList.add('is-active');
+    setTimeout(() => {
+      if (inp) {
+        inp.focus();
+        inp.select();
+      }
+    }, 20);
+  } else {
+    closeSidebarSearchBar(true);
+  }
+}
+
+function closeSidebarSearchBar(clearQuery = true) {
+  const bar = document.getElementById('sidebar-search-bar');
+  const btn = document.getElementById('btn-sidebar-search-toggle');
+  const inp = document.getElementById('list-search-input');
+  if (bar) bar.classList.remove('is-open');
+  if (btn) btn.classList.remove('is-active');
+  if (clearQuery && inp && inp.value !== '') {
+    inp.value = '';
+    triggerMainSearch();
+  } else {
+    syncMainSearchClearBtn();
   }
 }
 
@@ -360,35 +393,81 @@ function showToast(msg, undoData = null) {
   );
 }
 
-// 🎯 [실행 취소] 핵심 DB 롤백 엔진
+// 🎯 [실행 취소] 핵심 DB 롤백 엔진 (restore / moveBack / renameBack 통합)
 function executeUndo() {
-  if (!lastUndoData || !db) return;
+  if (!Array.isArray(lastUndoData) || lastUndoData.length === 0 || !db) return;
+  const undoItems = lastUndoData.slice();
+  lastUndoData = null;
+
+  const existingToast = document.getElementById("zen-toast");
+  if (existingToast) {
+    existingToast.style.opacity = "0";
+    existingToast.style.pointerEvents = "none";
+  }
+  if (typeof toastTimer !== "undefined" && toastTimer) {
+    clearTimeout(toastTimer);
+    toastTimer = null;
+  }
+
+  const renamedUpdates = [];
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
 
-  lastUndoData.forEach((item) => {
+  undoItems.forEach((item) => {
+    if (!item || item.id === undefined || item.id === null) return;
     store.get(item.id).onsuccess = (e) => {
       const m = e.target.result;
-      if (m) {
-        if (item.action === "restore") {
-          m.isDeleted = false; // 휴지통에서 다시 살려냄
+      if (!m) return;
+      if (item.action === "restore") {
+        m.isDeleted = false;
+        delete m.deletedAt;
+      } else if (item.action === "moveBack") {
+        m.parentId = item.oldParentId !== undefined ? item.oldParentId : null;
+        if (item.oldParentSyncId) m.parentSyncId = item.oldParentSyncId;
+        else delete m.parentSyncId;
+        if (item.wasDeleted) {
+          m.isDeleted = true;
+          if (item.oldDeletedAt) m.deletedAt = item.oldDeletedAt;
+        } else {
+          m.isDeleted = false;
           delete m.deletedAt;
-        } else if (item.action === "moveBack") {
-          m.parentId = item.oldParentId; // 원래 있던 방으로 되돌림
         }
-        m.updatedAt = Date.now();
-        store.put(m);
+      } else if (item.action === "renameBack" && typeof item.oldTitle === "string") {
+        m.title = item.oldTitle;
+        renamedUpdates.push({ id: m.id, oldTitle: item.oldTitle });
       }
+      m.updatedAt = Date.now();
+      store.put(m);
     };
   });
 
   tx.oncomplete = () => {
+    renamedUpdates.forEach((r) => {
+      if (typeof updateRecentNoteTitleIfExist === "function") {
+        updateRecentNoteTitleIfExist(r.id, r.oldTitle);
+      }
+      if (typeof currentMemoId !== "undefined" && Number(currentMemoId) === Number(r.id)) {
+        const titleInput = document.getElementById("memo-title-input");
+        if (titleInput) titleInput.value = r.oldTitle;
+        document.title = r.oldTitle;
+      }
+    });
+
     showToast("작업이 실행 취소되었습니다.");
-    lastUndoData = null; // 기억 비우기
-    loadFileManager(currentFmFolderId); // 현재 창 새로고침
-    loadMemoList(true); // 메인 목록 새로고침
-    updateUnsyncedCount();
-    if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
+    if (typeof loadMemoList === "function") loadMemoList(true);
+    const fmPane = document.getElementById("file-manager-pane");
+    if (fmPane && fmPane.style.display === "flex" && typeof loadFileManager === "function") {
+      loadFileManager(typeof currentFmFolderId !== "undefined" ? currentFmFolderId : null);
+    }
+    const trashPane = document.getElementById("trash-pane");
+    if (trashPane && trashPane.classList.contains("is-open") && typeof loadTrashList === "function") {
+      loadTrashList();
+    }
+    if (typeof updateLeftMenuCurrentFolderPath === "function") {
+      updateLeftMenuCurrentFolderPath();
+    }
+    if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
   };
 }
 
@@ -1348,9 +1427,12 @@ function triggerBankAutoLock(reason = "auto") {
     secModal.style.display = "none";
   }
 
-  // 5. [V1.3.0] 좌측 사이드바 보안 폴더 즉시 접기 및 DOM 제거
+  // 5. [V1.3.0 / V1.5.0] 좌측 사이드바 및 전체 폴더관리 보안 폴더 즉시 접기 및 DOM 제거
   if (typeof collapseSidebarSecurityTree === "function") {
     collapseSidebarSecurityTree();
+  }
+  if (typeof collapseFmSecurityTree === "function") {
+    collapseFmSecurityTree();
   }
 
   if (wasUnlocked && typeof updateLeftMenuCurrentFolderPath === "function") {
@@ -2347,6 +2429,9 @@ function initSidebarResizer() {
 }
 
 // 하위 호환성 글로벌 함수 노출
+window.toggleSidebarSearchBar = toggleSidebarSearchBar;
+window.closeSidebarSearchBar = closeSidebarSearchBar;
+window.executeUndo = executeUndo;
 window.syncMainSearchClearBtn = syncMainSearchClearBtn;
 window.showZoomResetToast = showZoomResetToast;
 window.hideZoomResetToast = hideZoomResetToast;

@@ -628,7 +628,7 @@ body.light-theme .sidebar-resizer:hover {
     caret-color: transparent;
 }
 
-/* 🎯 [V4.0.0 / V4.2.2] 삼선(노트 메뉴)과 같은 줄 우측에 사이드바 접기 버튼 나란히 배치 */
+/* 🎯 [V1.5.0] 제미나이 스타일 좌측 상단 헤더 (삼선 메뉴 + 우측 검색/사이드바 접기 SVG) */
 .nav-header-top {
     position: relative;
     display: flex;
@@ -639,8 +639,39 @@ body.light-theme .sidebar-resizer:hover {
     -webkit-user-select: none;
 }
 
+.nav-header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.nav-header-icon-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.nav-header-icon-btn:hover,
+.nav-header-icon-btn.is-active {
+    color: var(--accent) !important;
+    background: var(--surface-hover);
+}
+
+.sidebar-toggle-svg {
+    display: block;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
 .left-collapse-btn {
-    transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+    transition: color 0.18s ease, background-color 0.18s ease;
 }
 
 .left-collapse-btn:hover {
@@ -917,9 +948,10 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     justify-content: center;
 }
 
-/* 🎯 [V4.4.6] 사이드바 접힘 시 삼선 메뉴 숨김 및 펼치기 버튼을 최상단으로 단독 배치 */
+/* 🎯 [V4.4.6 / V1.5.0] 사이드바 접힘 시 삼선·검색 숨김 및 사이드바 토글 버튼 단독 배치 */
 .col-left.collapsed #left-note-menu-btn,
-.col-left.collapsed #left-note-menu {
+.col-left.collapsed #left-note-menu,
+.col-left.collapsed #btn-sidebar-search-toggle {
     display: none !important;
 }
 
@@ -939,7 +971,7 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 .nav-action-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     width: 100%;
     gap: 6px;
 }
@@ -1025,6 +1057,14 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     align-items: center;
     gap: 7px;
     border: 1px solid var(--border);
+}
+
+#sidebar-search-bar {
+    display: none;
+}
+
+#sidebar-search-bar.is-open {
+    display: flex;
 }
 
 .search-bar input {
@@ -2794,51 +2834,25 @@ body.light-theme .ql-editor {
 .fm-header {
     display: flex;
     justify-content: flex-start;
-    /* 🎯 좌측 정렬로 꽉 차 보이게 변경 */
     align-items: center;
-    padding: 30px 24px 16px;
+    padding: 20px 24px 12px;
     border-bottom: 1px solid var(--border);
-    gap: 12px;
-    /* 🎯 버튼 사이 간격 축소 */
-    max-width: 800px;
+    gap: 10px;
+    max-width: 920px;
     margin: 0 auto;
     width: 100%;
 }
 
-/* 🎯 네비게이션 화살표 디자인 (새로 추가됨!) */
-.fm-nav-btn {
-    background: transparent;
-    color: var(--text-muted);
-    border: none;
-    font-size: 16px;
-    padding: 8px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-}
-
-.fm-nav-btn:hover {
-    background: var(--surface-hover);
-    color: var(--accent);
-}
-
 .fm-search-bar {
     flex: 1;
-    /* 🎯 남은 빈 공간을 검색창이 유연하게 쫙 채움 */
-    margin-left: 4px;
-    margin-right: 12px;
+    margin-left: 2px;
+    margin-right: 8px;
     background: var(--surface);
-    padding: 10px 16px;
+    padding: 7px 12px;
     border-radius: 8px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     border: 1px solid var(--border);
     transition: border-color 0.2s;
 }
@@ -2849,7 +2863,8 @@ body.light-theme .ql-editor {
 
 .fm-search-bar input {
     width: 100%;
-    font-size: 15px;
+    min-width: 0;
+    font-size: 13.5px;
 }
 
 .fm-header-actions {
@@ -2875,13 +2890,11 @@ body.light-theme .ql-editor {
 .fm-body {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 24px calc(30px + env(safe-area-inset-bottom)) 24px;
-    /* 👈 파일관리창 하단 여백: 기본 30px */
-    max-width: 800px;
+    padding: 14px 24px calc(30px + env(safe-area-inset-bottom)) 24px;
+    max-width: 920px;
     margin: 0 auto;
     width: 100%;
     transition: padding-bottom 0.3s ease;
-    /* 여백 변화를 부드럽게 */
 }
 
 /* 🎯 [추가] 다중 선택 바가 나타났을 때만 목록을 더 위로 밀어올림 */
@@ -3459,12 +3472,6 @@ body.light-theme {
 
 /* 🎯 모바일 전용 미디어쿼리 통합 (max-width: 768px) */
 @media screen and (max-width: 768px) {
-
-    /* 🎯 [추가] 모바일에서는 네비게이션 화살표 숨기기 */
-    .fm-nav-btn {
-        display: none !important;
-    }
-
     /* 🎯 [추가] 모바일에서는 좁은 화면을 위해 검색창 여백 정돈 */
     .fm-search-bar {
         margin-left: 0 !important;
@@ -3833,7 +3840,8 @@ body.light-theme {
         display: flex !important;
     }
 
-    .tree-folder-count {
+    .tree-folder-count,
+    .fm-row-meta {
         display: none !important;
     }
 
@@ -6705,4 +6713,91 @@ body.light-theme .sidebar-context-menu {
     margin: 4px 6px;
     background: var(--border);
     opacity: 0.7;
+}
+
+/* [V1.5.0] 사이드바 & 전체 폴더관리(FM) 휴지통 트리·넓은 화면 관리 UI 통합 스타일 */
+.tree-folder-icon.is-trash {
+    color: #f87171;
+    opacity: 0.85;
+}
+
+body.light-theme .tree-folder-icon.is-trash {
+    color: #dc2626;
+    opacity: 0.82;
+}
+
+.tree-row.tree-in-trash .tree-note-title,
+.tree-row.tree-in-trash .tree-folder-title,
+.tree-row.tree-in-trash .tree-note-icon,
+.tree-row.tree-in-trash .tree-folder-icon {
+    color: var(--text-muted);
+    opacity: 0.72;
+}
+
+#file-manager-pane,
+#file-manager-pane *:not(input):not(textarea) {
+    user-select: none;
+    -webkit-user-select: none;
+    caret-color: transparent;
+}
+
+.fm-list.fm-tree {
+    padding: 2px 0 28px;
+}
+
+.fm-list.fm-tree .tree-row {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.fm-tree-checkbox {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.fm-tree-checkbox.is-checked {
+    color: var(--accent);
+}
+
+.fm-row-meta {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    opacity: 0.68;
+    margin-left: auto;
+    padding-left: 12px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.fm-list.fm-tree .tree-row:hover .fm-row-meta {
+    display: none;
+}
+
+.fm-list.fm-tree .tree-folder-count {
+    margin-left: 6px;
+    padding-right: 0;
+}
+
+.fm-list.fm-tree .tree-folder-count + .fm-row-meta {
+    margin-left: auto;
+}
+
+.fm-list.fm-tree .tree-act-empty-trash:hover,
+.fm-list.fm-tree .tree-act-harddel:hover,
+.fm-list.fm-tree .tree-act-delete:hover {
+    color: var(--danger);
+}
+
+.fm-list.fm-tree .tree-act-restore:hover {
+    color: var(--accent);
+}
+
+@media (max-width: 768px) {
+    .fm-quick-label {
+        display: none;
+    }
 }

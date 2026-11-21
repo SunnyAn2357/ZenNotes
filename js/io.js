@@ -2455,7 +2455,6 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
       if (pSyncId === "sys_trash" && sysMasterByType.trash) return sysMasterByType.trash;
 
       if (isFolder) return null;
-      if (item.parentId === null && !pSyncId) return null;
       return sysMasterByType.desktop;
     }
 

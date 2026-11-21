@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.4.0">
-    <link rel="manifest" href="manifest.json?v=1.4.0">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.5.0">
+    <link rel="manifest" href="manifest.json?v=1.5.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.4.0">
+    <link rel="stylesheet" href="css/main.css?v=1.5.0">
 
 </head>
 
@@ -95,15 +95,23 @@
                 <button id="left-note-menu-btn" class="toggle-btn" onclick="toggleLeftNoteMenu(event)" title="노트 메뉴">
                     <i class="fa-solid fa-bars"></i>
                 </button>
-                <button id="left-collapse-btn" class="toggle-btn left-collapse-btn" onclick="handleLeftHamburger()" title="사이드바 접기/열기">
-                    <i id="left-collapse-icon" class="fa-solid fa-angles-left"></i>
-                </button>
+                <div class="nav-header-right">
+                    <button type="button" id="btn-sidebar-search-toggle" class="toggle-btn nav-header-icon-btn" onclick="toggleSidebarSearchBar()" title="노트 검색" aria-label="노트 검색">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </button>
+                    <button type="button" id="left-collapse-btn" class="toggle-btn left-collapse-btn nav-header-icon-btn" onclick="handleLeftHamburger()" title="사이드바 접기" aria-label="사이드바 접기">
+                        <svg id="left-collapse-icon" class="sidebar-toggle-svg" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="2.5" y="3.5" width="15" height="13" rx="3"></rect>
+                            <line x1="7.5" y1="3.5" x2="7.5" y2="16.5"></line>
+                        </svg>
+                    </button>
+                </div>
 
                 <!-- 🎯 [V4.2.2 / V4.5.2] 좌측 삼선 통합 노트 메뉴 -->
                 <div id="left-note-menu" class="left-note-menu" onclick="event.stopPropagation()">
                     <div class="left-menu-item left-menu-expandable" id="left-menu-recent-btn" onclick="toggleRecentNotesSubmenu(event)">
                         <div class="left-menu-item-main">
-                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <i class="fa-regular fa-clock"></i>
                             <span>최근 노트</span>
                         </div>
                         <i id="recent-notes-chevron" class="fa-solid fa-chevron-up left-menu-chevron"></i>
@@ -162,23 +170,15 @@
                 </div>
             </div>
             <div class="nav-action-row">
-                <button class="new-note-btn" onclick="createNewMemoSmart()" title="현재 폴더에 새 노트 작성"
+                <button class="new-note-btn" onclick="createNewMemoSmart()" title="새 노트 작성"
                     style="color: var(--text-main); font-weight: 600;">
                     <i class="fa-solid fa-pen-to-square"></i> <span class="btn-text">새 노트 작성</span>
                 </button>
-                <div class="nav-mini-actions">
-                    <button type="button" id="btn-sidebar-new-folder" class="nav-mini-btn" onclick="createSidebarFolderFromHeader()" title="새 폴더 만들기" aria-label="새 폴더 만들기">
-                        <i class="fa-solid fa-folder-plus"></i>
-                    </button>
-                    <button type="button" id="btn-sidebar-collapse-all" class="nav-mini-btn" onclick="toggleAllSidebarFolders()" title="모든 폴더 접기" aria-label="모든 폴더 접기">
-                        <i class="fa-solid fa-angles-up"></i>
-                    </button>
-                </div>
             </div>
-            <div class="search-bar">
+            <div id="sidebar-search-bar" class="search-bar">
                 <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
                 <input type="text" id="list-search-input" placeholder="전체 노트 검색..." oninput="triggerMainSearch()">
-                <button type="button" id="list-search-clear-btn" class="search-clear-btn" onclick="clearMainSearch()" title="검색어 지우기" aria-label="검색어 지우기" style="display: none;">
+                <button type="button" id="list-search-clear-btn" class="search-clear-btn" onclick="clearMainSearch(true)" title="검색어 지우기" aria-label="검색어 지우기" style="display: none;">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
@@ -191,15 +191,15 @@
 
         <div id="file-manager-pane" class="file-manager-pane" style="display: none;">
             <div class="fm-header">
-                <button class="toggle-btn" onclick="handleFmHamburger()"><i class="fa-solid fa-bars"></i></button>
-
-                <button class="fm-nav-btn" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i></button>
-                <button class="fm-nav-btn" onclick="history.forward()"><i class="fa-solid fa-arrow-right"></i></button>
+                <button type="button" class="toggle-btn" onclick="handleFmHamburger()" title="노트로 돌아가기" aria-label="노트로 돌아가기"><i class="fa-solid fa-bars"></i></button>
 
                 <div class="fm-search-bar">
                     <i class="fa-solid fa-magnifying-glass" style="font-size: 12px; color: var(--text-muted);"></i>
-                    <input type="text" id="fm-search-input" placeholder="MY Notes 검색..."
+                    <input type="text" id="fm-search-input" placeholder="ZenNotes 검색..."
                         oninput="triggerFmSearch()">
+                    <button type="button" id="fm-search-clear-btn" class="search-clear-btn" onclick="clearFmSearch()" title="검색어 지우기" aria-label="검색어 지우기" style="display: none;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
 
                 <div class="fm-header-actions" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
@@ -207,7 +207,7 @@
                         <span class="status-text" data-ns-text="미동기: 0">미동기: 0</span>
                         <div class="status-dot logged-out"></div>
                     </div>
-                    <button class="toggle-btn fm-more-btn" onclick="toggleFmGlobalMenu(event)"><i
+                    <button type="button" class="toggle-btn fm-more-btn" onclick="toggleFmGlobalMenu(event)" title="더보기 메뉴" aria-label="더보기 메뉴"><i
                             class="fa-solid fa-ellipsis-vertical"></i></button>
                 </div>
             </div>
@@ -238,7 +238,7 @@
                     <div id="fm-breadcrumbs" class="fm-breadcrumbs"></div>
                     <div id="fm-quick-actions" class="fm-quick-actions"></div>
                 </div>
-                <ul id="fm-list" class="fm-list"></ul>
+                <ul id="fm-list" class="fm-list sidebar-tree fm-tree" tabindex="0" role="tree" aria-label="전체 폴더관리"></ul>
             </div>
         </div>
 
@@ -980,19 +980,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.4.0"></script>
-    <script src="js/db.js?v=1.4.0"></script>
-    <script src="js/ui.js?v=1.4.0"></script>
-    <script src="js/editor.js?v=1.4.0"></script>
-    <script src="js/file_manager.js?v=1.4.0"></script>
-    <script src="js/io.js?v=1.4.0"></script>
-    <script src="js/auth.js?v=1.4.0"></script>
+    <script src="js/globals.js?v=1.5.0"></script>
+    <script src="js/db.js?v=1.5.0"></script>
+    <script src="js/ui.js?v=1.5.0"></script>
+    <script src="js/editor.js?v=1.5.0"></script>
+    <script src="js/file_manager.js?v=1.5.0"></script>
+    <script src="js/io.js?v=1.5.0"></script>
+    <script src="js/auth.js?v=1.5.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.4.0");
+            console.log("[ZenNotes] 현재 버전: V1.5.0");
             console.log("=========================================");
         });
     </script>

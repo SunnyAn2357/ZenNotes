@@ -2071,6 +2071,23 @@ if (tbEl) {
            2. 전 환경: ESC 키 및 뒤로가기 통합 제어 허브
            ========================================== */
 document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && String(e.key || "").toLowerCase() === "z") {
+        if (typeof isAppScreenLocked === "function" && isAppScreenLocked()) return;
+        const ae = document.activeElement;
+        const isTypingInInput = ae && (
+            ae.tagName === "INPUT" ||
+            ae.tagName === "TEXTAREA" ||
+            ae.tagName === "SELECT" ||
+            ae.isContentEditable ||
+            (ae.closest && ae.closest(".ql-editor"))
+        );
+        if (!isTypingInInput && Array.isArray(lastUndoData) && lastUndoData.length > 0 && typeof executeUndo === "function") {
+            e.preventDefault();
+            executeUndo();
+        }
+        return;
+    }
+
     if (e.key === "Escape") {
         // [V1.2.0 / V1.4.0] 앱 화면 잠금 오버레이 표시 중 ESC: 마스터 복구 모달만 닫고 잠금은 유지
         if (typeof isAppScreenLocked === "function" && isAppScreenLocked()) {
@@ -2201,8 +2218,18 @@ document.addEventListener("keydown", (e) => {
                 return; // 글자만 지우고 커서 유지 (창 안 닫힘)
             } else {
                 document.activeElement.blur(); // 빈칸이면 커서 빼고 창 닫기로 직행
+                if (activeId === "list-search-input" && typeof closeSidebarSearchBar === "function") {
+                    closeSidebarSearchBar(true);
+                }
                 return;
             }
+        }
+
+        // [1.2순위] 좌측 사이드바 토글형 검색바 닫기
+        const sidebarSearchBarEl = document.getElementById("sidebar-search-bar");
+        if (sidebarSearchBarEl && sidebarSearchBarEl.classList.contains("is-open")) {
+            if (typeof closeSidebarSearchBar === "function") closeSidebarSearchBar(true);
+            return;
         }
 
         // [1.5순위] 파일관리창 팝업 메뉴 및 좌측 삼선 노트 메뉴 수동 닫기 (히스토리를 남기지 않는 UI)
@@ -2452,20 +2479,14 @@ window.addEventListener("popstate", (e) => {
 
         // 4. 검색 중일 때 뒤로가기
         if (isSearching) {
-            resetFmToHome();
+            if (typeof clearFmSearch === "function") clearFmSearch();
+            history.pushState({ fmOpen: true, fmFolderId: currentFmFolderId, fmPath: fmPath }, "");
             return;
         }
 
-        // 5. 평상시 폴더 탐색 중일 때 뒤로가기
-        if (e.state && e.state.fmOpen) {
-            fmPath = e.state.fmPath || [{ id: null, title: typeof getRootDriveLabel === "function" ? getRootDriveLabel() : "MY 노트(M:)" }];
-            loadFileManager(e.state.fmFolderId);
-            return;
-        } else {
-            // 6. Home 상태라면 파일관리창 닫기
-            closeFileManager();
-            return;
-        }
+        // 5. 전체 폴더관리 종료
+        closeFileManager(true);
+        return;
     }
 
     const trashPane = document.getElementById("trash-pane");

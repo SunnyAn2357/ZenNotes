@@ -465,6 +465,27 @@ async function initFileSystem() {
         });
       }
 
+      // [V1.5.0] 드라이브 루트(parentId === null/undefined)에 놓인 활성 노트를 임시 폴더로 자동 이관
+      function migrateLooseRootNotes(targetDesktopId) {
+        if (targetDesktopId === null || targetDesktopId === undefined) return;
+        const now = Date.now();
+        allData.forEach((m) => {
+          if (
+            m &&
+            m.type !== "folder" &&
+            m.type !== undefined &&
+            !m.isDeleted &&
+            !m.isPermanentlyDeleted &&
+            (m.parentId === null || m.parentId === undefined)
+          ) {
+            m.parentId = targetDesktopId;
+            m.parentSyncId = "sys_desktop";
+            m.updatedAt = now;
+            store.put(m);
+          }
+        });
+      }
+
       function migrateLegacyBackup(targetDesktopId) {
         globalBackupFolderId = null;
         if (legacyBackupFolders.length === 0) return;
@@ -564,10 +585,12 @@ async function initFileSystem() {
           globalDesktopFolderId = ev.target.result;
           migrateFiles(globalDesktopFolderId);
           migrateLegacyBackup(globalDesktopFolderId);
+          migrateLooseRootNotes(globalDesktopFolderId);
         };
       } else {
         migrateFiles(globalDesktopFolderId);
         migrateLegacyBackup(globalDesktopFolderId);
+        migrateLooseRootNotes(globalDesktopFolderId);
       }
 
       // 4. 보안 폴더 생성
@@ -789,6 +812,20 @@ function healDatabase(callback) {
           m.parentId = realParent.id;
           changed = true;
         }
+      }
+
+      if (
+        m.type !== "folder" &&
+        !m.isDeleted &&
+        !m.isPermanentlyDeleted &&
+        (m.parentId === null || m.parentId === undefined) &&
+        globalDesktopFolderId !== null &&
+        globalDesktopFolderId !== undefined
+      ) {
+        m.parentId = globalDesktopFolderId;
+        m.parentSyncId = "sys_desktop";
+        m.updatedAt = Date.now();
+        changed = true;
       }
 
       if (changed) {
