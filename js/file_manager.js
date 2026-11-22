@@ -2789,23 +2789,6 @@ function lockSecurityFolderOnly() {
   }
 }
 
-function updateCollapseAllButtonState(cache) {
-  const btn = document.getElementById("btn-sidebar-collapse-all");
-  if (!btn) return;
-  const icon = btn.querySelector("i");
-  const hasAnyNonSecurityExpanded = Array.from(sidebarExpandedSet).some((id) => {
-    if (id === globalSecurityFolderId) return false;
-    if (cache && cache.isUnderSecuritySync(id)) return false;
-    return !cache || cache.folderMap.has(id);
-  });
-  if (icon) {
-    icon.className = hasAnyNonSecurityExpanded ? "fa-solid fa-angles-up" : "fa-solid fa-angles-down";
-  }
-  const label = hasAnyNonSecurityExpanded ? "모든 폴더 접기" : "모두 펼치기";
-  btn.setAttribute("title", label);
-  btn.setAttribute("aria-label", label);
-}
-
 function setSubtreeExpanded(folderId, expand) {
   closeSidebarContextMenu();
   const cache = window.__zenTreeDataCache;
@@ -4411,7 +4394,6 @@ function renderExplorerTreeSurface(surface = "sidebar") {
     ensureSidebarExpandedInitialized();
     bindSidebarKeyboardNav();
     if (typeof syncMainSearchClearBtn === "function") syncMainSearchClearBtn();
-    updateCollapseAllButtonState(cache);
   } else {
     bindFmKeyboardNav();
     syncFmSearchClearBtn();

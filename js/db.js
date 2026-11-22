@@ -163,6 +163,7 @@ async function executeSave() {
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
   const wasExistingMemo = !!currentMemoId;
+  let skippedDeleted = false;
   let savedParentId =
     targetNewMemoFolderId !== null
       ? targetNewMemoFolderId
@@ -175,6 +176,7 @@ async function executeSave() {
       if (m) {
         // 🚀 [리턴 방어막 2] 이미 다른 기기에서 삭제된 노트라면 덮어쓰기 절대 금지!
         if (m.isDeleted || m.isPermanentlyDeleted) {
+          skippedDeleted = true;
           isSaving = false;
           saveTimer = null;
           return;
@@ -207,6 +209,7 @@ async function executeSave() {
   }
 
   tx.oncomplete = () => {
+    if (skippedDeleted) return;
     isSaving = false;
     saveTimer = null;
     updateUIState("saved");
@@ -230,6 +233,18 @@ async function executeSave() {
     // 🎯 에디터 저장 완료 후 3초 뒤 클라우드 업로드 장전!
     if (typeof triggerBackgroundSync === 'function') triggerBackgroundSync();
   };
+
+  const handleSaveTxFailure = () => {
+    isSaving = false;
+    pendingSave = false;
+    saveTimer = null;
+    if (typeof updateUIState === "function") updateUIState("saved");
+    if (typeof showToast === "function") {
+      showToast("저장 중 오류가 발생했습니다. 저장 공간을 확인해 주세요.");
+    }
+  };
+  tx.onerror = handleSaveTxFailure;
+  tx.onabort = handleSaveTxFailure;
 }
 
 // 3. 타이머 무시 즉시 저장 (창 닫기 전 등)
@@ -848,21 +863,54 @@ function runAutoPurge() {
   let isPurged = false; // 🚀 [추가] 지울 게 있는지 확인할 깃발
 
   store.getAll().onsuccess = (e) => {
+    const allItems = e.target.result || [];
     const now = Date.now();
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-    e.target.result.forEach((m) => {
-      // 휴지통에 들어간 지 30일이 지난 파일 발견 시
-      if (m.isDeleted && m.deletedAt && now - m.deletedAt > THIRTY_DAYS) {
+
+    const childrenByParentId = new Map();
+    allItems.forEach((item) => {
+      if (!item || item.parentId === null || item.parentId === undefined) return;
+      const pid = Number(item.parentId);
+      if (!childrenByParentId.has(pid)) childrenByParentId.set(pid, []);
+      childrenByParentId.get(pid).push(item);
+    });
+
+    const markSubtreeSync = (rootFolderId) => {
+      const queue = [Number(rootFolderId)];
+      const visited = new Set([Number(rootFolderId)]);
+      while (queue.length > 0) {
+        const curId = queue.shift();
+        const children = childrenByParentId.get(curId) || [];
+        for (const child of children) {
+          if (!child.isPermanentlyDeleted) {
+            child.isPermanentlyDeleted = true;
+            child.updatedAt = now;
+            store.put(child);
+          }
+          if (child.type === "folder" && child.id !== undefined && child.id !== null) {
+            const cid = Number(child.id);
+            if (!visited.has(cid)) {
+              visited.add(cid);
+              queue.push(cid);
+            }
+          }
+        }
+      }
+    };
+
+    allItems.forEach((m) => {
+      // 휴지통에 들어간 지 30일이 지난 미영구삭제 파일 발견 시
+      if (m && m.isDeleted && !m.isPermanentlyDeleted && m.deletedAt && now - m.deletedAt > THIRTY_DAYS) {
         m.isPermanentlyDeleted = true;
-        m.updatedAt = Date.now();
+        m.updatedAt = now;
         store.put(m);
 
-        // 🚀 [추가] 지우려는 대상이 폴더면, 그 안의 식구들도 전부 영구 삭제 예약!
-        if (m.type === 'folder') {
-          markDescendantsPermanentlyDeleted(store, m.id);
+        // 지우려는 대상이 폴더면 그 하위 자손들도 동기 BFS로 전부 영구 삭제 예약
+        if (m.type === "folder" && m.id !== undefined && m.id !== null) {
+          markSubtreeSync(m.id);
         }
 
-        isPurged = true; // 🚀 [추가] "지울 파일 찾았다!" 하고 깃발을 듭니다.
+        isPurged = true; // "지울 파일 찾았다!" 하고 깃발을 듭니다.
       }
     });
   };
@@ -933,6 +981,10 @@ function purgeEmptyMemos() {
     const cursor = e.target.result;
     if (cursor) {
       const m = cursor.value;
+      if (!m || m.type === "folder" || m.isSystem || m.isDeleted || m.isPermanentlyDeleted) {
+        cursor.continue();
+        return;
+      }
       const title = (m.title || "").trim();
       const isTitleEmptyOrAuto =
         title === "" || title === "제목 없는 노트" || title === "Untitled";
@@ -1034,22 +1086,39 @@ function openTopDesktopMemo() {
 }
 
 // 🚀 [신규] 폴더 삭제 시 그 하위의 모든 자식들도 함께 영구 삭제 상태로 만듭니다.
-async function markDescendantsPermanentlyDeleted(store, parentId) {
+function markDescendantsPermanentlyDeleted(store, parentId) {
   return new Promise((resolve) => {
-    store.index("parentId").getAll(Number(parentId)).onsuccess = async (e) => {
-      const children = e.target.result;
-      for (const child of children) {
-        child.isPermanentlyDeleted = true;
-        child.updatedAt = Date.now();
-        store.put(child);
-
-        // 만약 자식이 폴더라면, 그 밑의 자식들도 또 찾으러 내려갑니다 (재귀)
-        if (child.type === 'folder') {
-          await markDescendantsPermanentlyDeleted(store, child.id);
-        }
+    const queue = [Number(parentId)];
+    const visited = new Set([Number(parentId)]);
+    const now = Date.now();
+    function step() {
+      if (queue.length === 0) {
+        resolve();
+        return;
       }
-      resolve();
-    };
+      const curParentId = queue.shift();
+      const req = store.index("parentId").getAll(curParentId);
+      req.onsuccess = (e) => {
+        const children = e.target.result || [];
+        for (const child of children) {
+          if (!child.isPermanentlyDeleted) {
+            child.isPermanentlyDeleted = true;
+            child.updatedAt = now;
+            store.put(child);
+          }
+          if (child.type === "folder" && child.id !== undefined && child.id !== null) {
+            const cid = Number(child.id);
+            if (!visited.has(cid)) {
+              visited.add(cid);
+              queue.push(cid);
+            }
+          }
+        }
+        step();
+      };
+      req.onerror = () => step();
+    }
+    step();
   });
 }
 

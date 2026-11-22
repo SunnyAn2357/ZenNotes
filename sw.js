@@ -1,11 +1,20 @@
 // 캐시 이름 (앱을 업데이트할 때마다 v2, v3... 로 숫자를 올려주세요!)
-const CACHE_NAME = 'zennotes-cache-v1.7.2';
+const CACHE_NAME = 'zennotes-cache-v1.7.3';
 
 // 반드시 캐싱해야 할 내 서버의 기본 파일들
 const STATIC_ASSETS = [
     './',
     './index.html',
     './manifest.json',
+    './css/main.css?v=1.7.3',
+    './js/globals.js?v=1.7.3',
+    './js/db.js?v=1.7.3',
+    './js/ui.js?v=1.7.3',
+    './js/editor.js?v=1.7.3',
+    './js/file_manager.js?v=1.7.3',
+    './js/io.js?v=1.7.3',
+    './js/auth.js?v=1.7.3',
+    './js/zen_bridge.js?v=1.7.3',
     './img192.png',
     './img512.png',
     './miryang_bi.png'
@@ -39,12 +48,13 @@ self.addEventListener('activate', event => {
 
 // 3. 패치(Fetch) 이벤트: 앱이 무언가를 요청할 때 워커가 중간에 가로챕니다. (핵심 로직)
 self.addEventListener('fetch', event => {
+    if (event.request.method !== 'GET') return;
     // 🎯 [V4.3.1] http/https 요청만 처리 (크롬 확장 프로그램 chrome-extension:// 등 캐시 불가 스키마 제외)
     if (!event.request.url.startsWith('http')) return;
 
-    // 주의: 구글 로그인, Firebase(인증·Firestore) 등은 캐싱하면 에러가 납니다. 그대로 통과시킵니다.
+    // 주의: 구글 로그인, Firebase(인증·Firestore), Timely AI API 등은 캐싱하면 에러가 납니다. 그대로 통과시킵니다.
     const reqUrl = event.request.url;
-    if (reqUrl.includes('google') || reqUrl.includes('apis.com') || reqUrl.includes('firebase') || reqUrl.includes('gstatic.com')) {
+    if (reqUrl.includes('google') || reqUrl.includes('apis.com') || reqUrl.includes('firebase') || reqUrl.includes('gstatic.com') || reqUrl.includes('timelyai.io')) {
         return;
     }
 
@@ -71,8 +81,9 @@ self.addEventListener('fetch', event => {
 
                 return networkResponse;
             }).catch(() => {
-                // 오프라인 상태인데 캐시에도 파일이 없을 때 이리로 빠집니다.
+                // 오프라인 상태인데 캐시에도 파일이 없을 때 유효한 503 Response 반환
                 console.log('❌ 워커: 오프라인 상태이며 캐시가 없습니다:', event.request.url);
+                return new Response('', { status: 503, statusText: 'Offline' });
             });
         })
     );

@@ -7030,7 +7030,7 @@ body.light-theme .tree-folder-icon.is-trash {
 
 /* MY 일정관리로 보내기 모달 */
 #send-to-schedule-modal {
-    z-index: 1000005;
+    z-index: 10600;
     user-select: none;
     caret-color: transparent;
 }
@@ -7295,7 +7295,7 @@ body.light-theme .tree-folder-icon.is-trash {
 .zen-bh-portal-layer {
     position: fixed;
     inset: 0;
-    z-index: 1000020;
+    z-index: 10650;
     background: rgba(6, 9, 18, 0.56);
     backdrop-filter: blur(5px);
     display: none;

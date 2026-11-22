@@ -473,6 +473,8 @@ function executeUndo() {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
+    const isDesktopWebView = !!(window.chrome && window.chrome.webview);
+    if (isDesktopWebView) return;
     navigator.serviceWorker
       .register("./sw.js")
       .then((registration) => {
@@ -556,14 +558,28 @@ function handleLaunchParams() {
       document.getElementById("memo-title-input").value = sharedTitle;
     }
 
-    // 본문 세팅 (텍스트와 URL을 조합하여 삽입)
+    // 본문 세팅 (텍스트와 URL을 안전하게 이스케이프·검증하여 삽입)
     if (sharedUrl || sharedText) {
       let content = "";
-      if (sharedText) content += sharedText + "<br><br>";
+      if (sharedText) {
+        content += escapeHtmlSafe(sharedText).replace(/\r?\n/g, "<br>") + "<br><br>";
+      }
 
-      // URL이 있으면 클릭 가능한 링크 형태로 삽입
+      // URL이 있으면 http/https 프로토콜 검증 후 클릭 가능한 링크 형태로 삽입
       if (sharedUrl) {
-        content += `<a href="${sharedUrl}" target="_blank">${sharedUrl}</a><br><br>`;
+        let safeHref = "";
+        try {
+          const parsedUrl = new URL(sharedUrl);
+          if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+            safeHref = parsedUrl.href;
+          }
+        } catch (e) {}
+        const escapedDisplay = escapeHtmlSafe(sharedUrl);
+        if (safeHref) {
+          content += `<a href="${escapeHtmlSafe(safeHref)}" target="_blank" rel="noopener noreferrer">${escapedDisplay}</a><br><br>`;
+        } else {
+          content += `${escapedDisplay}<br><br>`;
+        }
       }
 
       quill.root.innerHTML = content;
@@ -909,7 +925,16 @@ function lockAppScreen(reason = "auto") {
     return;
   }
 
-  // 열려 있는 컨텍스트/드롭다운 메뉴 정리
+  // 열려 있는 컨텍스트/드롭다운 메뉴 및 민감 모달 정리
+  if (typeof window.cancelPendingBlackHoleAutoSchedule === "function") {
+    window.cancelPendingBlackHoleAutoSchedule();
+  }
+  if (typeof window.closeSendToScheduleModal === "function") {
+    window.closeSendToScheduleModal(true);
+  }
+  if (typeof window.closeBlackHolePortal === "function") {
+    window.closeBlackHolePortal(true);
+  }
   if (typeof closeLeftNoteMenu === "function") closeLeftNoteMenu();
   if (typeof closeAllMemoMenus === "function") closeAllMemoMenus();
   const imgMenu = document.getElementById("image-context-menu");
@@ -1601,7 +1626,8 @@ window.addEventListener('keydown', function (e) {
    ========================================== */
 function initScrollToTop() {
   const btn = document.getElementById("scroll-to-top-btn");
-  if (!btn) return;
+  if (!btn || btn.dataset.scrollBound === "true") return;
+  btn.dataset.scrollBound = "true";
 
   function updateBtnVisibility() {
     // 파일 관리자 화면이 열려있으면 숨김
@@ -1723,7 +1749,7 @@ function toggleAppTheme() {
   applyAppTheme(nextTheme, true);
   
   if (typeof showToast === "function") {
-    showToast(nextTheme === "light" ? "☀️ 화이트 모드로 전환되었습니다." : "🌙 다크 모드로 전환되었습니다.");
+    showToast(nextTheme === "light" ? "화이트 모드로 전환되었습니다." : "다크 모드로 전환되었습니다.");
   }
 }
 

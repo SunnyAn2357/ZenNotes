@@ -452,6 +452,10 @@
     // ========================================================================
     const MYAI_KEY_STORAGE_KEY = "zen_myai_api_key";
 
+    function getSavedMyAiApiKey() {
+        return (localStorage.getItem(MYAI_KEY_STORAGE_KEY) || "").trim();
+    }
+
     function syncMyAiApiKeySettingsUI() {
         const input = document.getElementById("setting-myai-api-key");
         const statusEl = document.getElementById("setting-myai-key-status");
@@ -561,13 +565,41 @@
     }
 
     function detectScheduleLocationFromNote(rootEl, plainText) {
+        const locationLabelRe = /^(?:제출처|장소\s*\/\s*제출처|장소|수신처|제출\s*기관|담당\s*부서)$/;
+        const headerIgnoreRe = /^(?:문서명|일정\s*\/\s*기한|핵심\s*내용|제출처|장소\s*\/\s*제출처|장소|수신처|제출\s*기관|담당\s*부서)$/;
         if (rootEl) {
-            const cells = Array.from(rootEl.querySelectorAll("td, th"));
-            for (let i = 0; i < cells.length - 1; i++) {
-                const label = (cells[i].textContent || "").replace(/\s+/g, " ").trim();
-                if (/^(?:제출처|장소\s*\/\s*제출처|장소|수신처|제출\s*기관|담당\s*부서)$/.test(label)) {
-                    const val = (cells[i + 1].textContent || "").replace(/\s+/g, " ").trim();
-                    if (val && val !== "-") return val.slice(0, 80);
+            const tables = Array.from(rootEl.querySelectorAll("table"));
+            for (const tbl of tables) {
+                const rows = Array.from(tbl.querySelectorAll("tr"));
+                for (let r = 0; r < rows.length; r++) {
+                    const rowCells = Array.from(rows[r].querySelectorAll("td, th"));
+                    for (let c = 0; c < rowCells.length; c++) {
+                        const cell = rowCells[c];
+                        const label = (cell.textContent || "").replace(/\s+/g, " ").trim();
+                        if (!locationLabelRe.test(label)) continue;
+
+                        const nextRow = rows[r + 1];
+                        const isColumnHeaderRow =
+                            !!nextRow &&
+                            (rowCells.length >= 3 || cell.tagName === "TH" || !!cell.querySelector("strong"));
+                        if (isColumnHeaderRow) {
+                            const belowCells = Array.from(nextRow.querySelectorAll("td, th"));
+                            if (belowCells[c]) {
+                                const belowVal = (belowCells[c].textContent || "").replace(/\s+/g, " ").trim();
+                                if (belowVal && belowVal !== "-" && !headerIgnoreRe.test(belowVal)) {
+                                    return belowVal.slice(0, 80);
+                                }
+                            }
+                            continue;
+                        }
+
+                        if (rowCells.length === 2 && c === 0 && rowCells[1]) {
+                            const sideVal = (rowCells[1].textContent || "").replace(/\s+/g, " ").trim();
+                            if (sideVal && sideVal !== "-" && !headerIgnoreRe.test(sideVal)) {
+                                return sideVal.slice(0, 80);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -694,10 +726,17 @@
         });
     }
 
-    function openSendToScheduleModal() {
+    function cancelPendingBlackHoleAutoSchedule() {
         if (bhAutoScheduleTimer) {
             clearTimeout(bhAutoScheduleTimer);
             bhAutoScheduleTimer = null;
+        }
+    }
+
+    function openSendToScheduleModal() {
+        cancelPendingBlackHoleAutoSchedule();
+        if (typeof isAppScreenLocked === "function" && isAppScreenLocked()) {
+            return;
         }
         const modal = document.getElementById("send-to-schedule-modal");
         if (!modal) return;
@@ -1496,6 +1535,28 @@
         generic: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 6.5L13.6 10.4L17.5 12L13.6 13.6L12 17.5L10.4 13.6L6.5 12L10.4 10.4L12 6.5Z" fill="#3B82F6"/></svg>`
     };
 
+    let myAiSvgGradSeq = 0;
+
+    function getMyAiProviderIconSvg(provider) {
+        const raw = MYAI_PROVIDER_ICONS[provider] || MYAI_PROVIDER_ICONS.generic;
+        if (provider !== "upstage" && provider !== "google") {
+            return raw;
+        }
+        const seq = ++myAiSvgGradSeq;
+        if (provider === "upstage") {
+            return raw
+                .replace(/id="zen-solar-g"/g, `id="zen-solar-g-${seq}"`)
+                .replace(/url\(#zen-solar-g\)/g, `url(#zen-solar-g-${seq})`);
+        }
+        return raw
+            .replace(/id="zen-gem-0"/g, `id="zen-gem-0-${seq}"`)
+            .replace(/url\(#zen-gem-0\)/g, `url(#zen-gem-0-${seq})`)
+            .replace(/id="zen-gem-1"/g, `id="zen-gem-1-${seq}"`)
+            .replace(/url\(#zen-gem-1\)/g, `url(#zen-gem-1-${seq})`)
+            .replace(/id="zen-gem-2"/g, `id="zen-gem-2-${seq}"`)
+            .replace(/url\(#zen-gem-2\)/g, `url(#zen-gem-2-${seq})`);
+    }
+
     const MYAI_DEFAULT_MODELS = [
         {
             id: "solar-pro4",
@@ -1737,7 +1798,7 @@
         const iconEl = document.getElementById("zen-bh-model-btn-icon");
         const labelEl = document.getElementById("zen-bh-model-btn-label");
         if (iconEl) {
-            iconEl.innerHTML = MYAI_PROVIDER_ICONS[meta.provider] || MYAI_PROVIDER_ICONS.generic;
+            iconEl.innerHTML = getMyAiProviderIconSvg(meta.provider);
         }
         if (labelEl) {
             labelEl.textContent = meta.name || "Solar Pro4";
@@ -1757,7 +1818,7 @@
                 html += `<div class="zen-bh-model-section-label">${escapeHtmlStr(m.group)}</div>`;
             }
             const isSel = m.id === meta.id;
-            const svg = MYAI_PROVIDER_ICONS[m.provider] || MYAI_PROVIDER_ICONS.generic;
+            const svg = getMyAiProviderIconSvg(m.provider);
             html += [
                 `<button type="button" class="zen-bh-model-option${isSel ? " is-selected" : ""}" data-model-id="${escapeHtmlStr(m.id)}">`,
                 `<span class="zen-bh-model-opt-icon">${svg}</span>`,
@@ -2050,7 +2111,7 @@
                     systemPrompt,
                     userPrompt
                 },
-                48000
+                75000
             );
             if (res && res.ok && res.content) {
                 if (/종료되었습니다|DIRECT_API_GUIDE/i.test(res.content)) {
@@ -2184,9 +2245,9 @@
         const mmPad = pad2(monthNum);
         const ddPad = pad2(dayNum);
         const patterns = [
-            new RegExp(`${monthNum}\\s*[.\\-/월]\\s*${dayNum}`),
-            new RegExp(`${mmPad}\\s*[.\\-/월]\\s*${ddPad}`),
-            new RegExp(`${mmPad}${ddPad}`)
+            new RegExp(`(?<!\\d)${monthNum}\\s*[.\\-/월]\\s*${dayNum}(?!\\d)`),
+            new RegExp(`(?<!\\d)${mmPad}\\s*[.\\-/월]\\s*${ddPad}(?!\\d)`),
+            new RegExp(`(?<!\\d)${mmPad}${ddPad}(?!\\d)`)
         ];
         const exists = patterns.some((re) => re.test(rawSourceText));
         return exists ? s : "";
@@ -2220,10 +2281,11 @@
 
         // 1. 문서 본문 텍스트 추출
         const rawFileText = await extractDocumentTextForAi(firstItem);
-        const savedApiKey = (localStorage.getItem(MYAI_KEY_STORAGE_KEY) || "").trim();
+        const savedApiKey = getSavedMyAiApiKey();
 
         let aiData = null;
         let aiErrorNotice = "";
+        let resolvedModelName = selectedModelMeta.name;
 
         if (!savedApiKey) {
             aiErrorNotice = "환경설정 > MY AI 개인 API 키에 연동 키(tgpt_s...)를 먼저 저장해 주세요.";
@@ -2281,6 +2343,11 @@
             const aiResp = await requestTimelyAiCompletion(savedApiKey, selectedModelMeta.id, systemPrompt, userPrompt);
 
             if (aiResp && aiResp.ok && aiResp.content) {
+                if (aiResp.model) {
+                    const normRespId = normalizeMyAiModelId(aiResp.model);
+                    const matched = myAiActiveModels.find((m) => m.id === normRespId);
+                    resolvedModelName = (matched && matched.name) ? matched.name : formatLiveModelDisplayName(normRespId);
+                }
                 aiData = parseAiStructuredJson(aiResp.content);
                 if (!aiData) {
                     const cleanLines = aiResp.content
@@ -2350,17 +2417,17 @@
             const noteTitle = rawSubj;
             if (!aiData) {
                 const errHtml = [
-                    `<p><strong>[MY AI 문서 요약 · ${escapeHtmlStr(selectedModelMeta.name)}]</strong></p>`,
+                    `<p><strong>[MY AI 문서 요약 · ${escapeHtmlStr(resolvedModelName)}]</strong></p>`,
                     `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 요약할 수 없습니다.")}</blockquote>`,
                     linksHtml
                 ].join("");
-                return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice };
+                return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice, modelName: resolvedModelName };
             }
 
             const overview = cleanHallucinatedPlaceholder(aiData.overview);
             const highlightSentence = cleanHallucinatedPlaceholder(aiData.highlightSentence);
             const htmlParts = [
-                `<p><strong>[MY AI 문서 핵심 요약 · ${escapeHtmlStr(selectedModelMeta.name)}]</strong></p>`
+                `<p><strong>[MY AI 문서 핵심 요약 · ${escapeHtmlStr(resolvedModelName)}]</strong></p>`
             ];
 
             if (overview || highlightSentence) {
@@ -2400,15 +2467,16 @@
                 title: noteTitle,
                 html: htmlParts.join(""),
                 targetFolderId: targetNoteFolderId,
-                usedRealAi: true
+                usedRealAi: true,
+                modelName: resolvedModelName
             };
         }
 
         // 5. [공문 분석 / 쪽지 분석 모드] 원문에 있는 사실만 표기하고, 없는 항목은 빈칸("")으로 유지
         const noteTitle = compactDue ? `${rawSubj} (${compactDue}까지)` : rawSubj;
         const headerBadge = modeKey === "official"
-            ? `[MY AI 공문 분석 · ${selectedModelMeta.name}]`
-            : `[MY AI 쪽지 분석 · ${selectedModelMeta.name}]`;
+            ? `[MY AI 공문 분석 · ${resolvedModelName}]`
+            : `[MY AI 쪽지 분석 · ${resolvedModelName}]`;
 
         if (!aiData) {
             const errHtml = [
@@ -2416,7 +2484,7 @@
                 `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 분석할 수 없습니다.")}</blockquote>`,
                 linksHtml
             ].join("");
-            return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice };
+            return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice, modelName: resolvedModelName };
         }
 
         const summaryLead = cleanHallucinatedPlaceholder(aiData.summaryLead);
@@ -2464,7 +2532,8 @@
             title: noteTitle,
             html: htmlParts.join(""),
             targetFolderId: targetNoteFolderId,
-            usedRealAi: true
+            usedRealAi: true,
+            modelName: resolvedModelName
         };
     }
 
@@ -2577,12 +2646,13 @@
             if (summaryResult && summaryResult.aiErrorNotice) {
                 showToast(`${meta.label}: ${summaryResult.aiErrorNotice}`);
             } else {
-                showToast(`[${modelMeta.name}] ${meta.label} 요약 노트가 생성되었습니다.`);
+                const usedLabel = (summaryResult && summaryResult.modelName) || modelMeta.name;
+                showToast(`[${usedLabel}] ${meta.label} 요약 노트가 생성되었습니다.`);
             }
         }
 
-        // 공문 분석(official)과 쪽지 분석(memo)일 때만 1.2초 후 'MY 일정관리로 보내기' 팝업 자동 실행 (일반 문서 요약은 띄우지 않음)
-        if (activeMode === "official" || activeMode === "memo") {
+        // 공문 분석(official)과 쪽지 분석(memo)이 정상 완료되었을 때만 1.2초 후 'MY 일정관리로 보내기' 팝업 자동 실행
+        if ((activeMode === "official" || activeMode === "memo") && summaryResult && summaryResult.usedRealAi && !summaryResult.aiErrorNotice) {
             bhAutoScheduleTimer = setTimeout(() => {
                 bhAutoScheduleTimer = null;
                 openSendToScheduleModal();
@@ -2668,6 +2738,7 @@
 
     window.openSendToScheduleModal = openSendToScheduleModal;
     window.closeSendToScheduleModal = closeSendToScheduleModal;
+    window.cancelPendingBlackHoleAutoSchedule = cancelPendingBlackHoleAutoSchedule;
     window.normalizeSmartScheduleDateInput = normalizeSmartScheduleDateInput;
     window.normalizeSmartScheduleTimeInput = normalizeSmartScheduleTimeInput;
     window.exportNoteAsDdaySchedule = exportNoteAsDdaySchedule;
