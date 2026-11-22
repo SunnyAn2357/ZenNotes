@@ -1289,8 +1289,8 @@
         const ts = typeof now === "number" ? now : performance.now();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = canvas.getBoundingClientRect();
-        const cw = Math.max(300, Math.round(rect.width || 400));
-        const ch = Math.max(260, Math.round(rect.height || 284));
+        const cw = Math.max(160, Math.round(rect.width || 400));
+        const ch = Math.max(160, Math.round(rect.height || 214));
         if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
             canvas.width = cw * dpr;
             canvas.height = ch * dpr;
