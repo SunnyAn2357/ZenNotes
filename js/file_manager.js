@@ -389,7 +389,10 @@ function renderFmQuickActions(cache) {
       selectableItems.every((m) => fmSelectedItems.has(m.id));
     html += `
       <button type="button" class="fm-quick-btn is-active" onclick="toggleFmSelectAll()" title="${allSelected ? "전체 선택 해제" : "전체 선택"}">
-        <i class="fa-solid ${allSelected ? "fa-square-check" : "fa-check-double"}"></i> <span>${allSelected ? "전체 해제" : "전체 선택"}</span>
+        <i class="fa-solid ${allSelected ? "fa-square-check" : "fa-list-check"}"></i> <span>${allSelected ? "전체 해제" : "전체 선택"}</span>
+      </button>
+      <button type="button" class="fm-quick-btn" onclick="toggleFmAllFolders()" title="${hasExpanded ? "모든 폴더 접기" : "모든 폴더 펼치기"}">
+        <i class="fa-solid ${hasExpanded ? "fa-angles-up" : "fa-angles-down"}"></i> <span class="fm-quick-label">${hasExpanded ? "모두 접기" : "모두 펼치기"}</span>
       </button>
       <button type="button" class="fm-quick-btn" onclick="cancelFmMultiSelect()" title="선택 모드 취소">
         <i class="fa-solid fa-xmark"></i> <span class="fm-quick-label">취소</span>
@@ -401,7 +404,7 @@ function renderFmQuickActions(cache) {
         <i class="fa-solid fa-folder-plus"></i> <span class="fm-quick-label">새 폴더</span>
       </button>
       <button type="button" class="fm-quick-btn" onclick="startFmMultiSelect()" title="다중 선택 모드 켜기">
-        <i class="fa-solid fa-check-double"></i> <span class="fm-quick-label">선택</span>
+        <i class="fa-solid fa-list-check"></i> <span class="fm-quick-label">다중 선택</span>
       </button>
       <button type="button" class="fm-quick-btn" onclick="toggleFmAllFolders()" title="${hasExpanded ? "모든 폴더 접기" : "모든 폴더 펼치기"}">
         <i class="fa-solid ${hasExpanded ? "fa-angles-up" : "fa-angles-down"}"></i> <span class="fm-quick-label">${hasExpanded ? "모두 접기" : "모두 펼치기"}</span>
@@ -453,7 +456,7 @@ function toggleFmGlobalMenu(e) {
   const sortMode = typeof getSidebarNoteSortMode === "function" ? getSidebarNoteSortMode() : "updated";
   let html = `
     <div class="fm-dropdown-item" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>
-    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-check-double"></i> 다중 선택</div>
+    <div class="fm-dropdown-item" onclick="startFmMultiSelect()"><i class="fa-solid fa-list-check"></i> 다중 선택</div>
     <div class="fm-dropdown-item" onclick="document.getElementById('fm-global-menu').classList.remove('is-active'); setFmAllUnderDriveExpanded(true)"><i class="fa-solid fa-angles-down"></i> 모두 펼치기</div>
     <div class="fm-dropdown-item" onclick="document.getElementById('fm-global-menu').classList.remove('is-active'); setFmAllUnderDriveExpanded(false)"><i class="fa-solid fa-angles-up"></i> 모두 접기</div>
     <div class="fm-dropdown-item" onclick="document.getElementById('fm-global-menu').classList.remove('is-active'); setSidebarNoteSortMode('updated')"><i class="${sortMode === 'updated' ? 'fa-solid fa-check' : 'fa-regular fa-clock'}" style="${sortMode === 'updated' ? 'color: var(--accent);' : ''}"></i> 정렬: 최신 수정순</div>
@@ -4234,7 +4237,7 @@ function createTreeFolderElement(folderObj, depth, cache, options) {
     : (directCount > 0 ? `<span class="tree-folder-count">${directCount}</span>` : "");
 
   const checkboxHtml = (isFm && isFmMultiSelectMode && !isSystemFolder)
-    ? `<i class="${fmSelectedItems.has(folderObj.id) ? "fa-solid fa-square-check is-checked" : "fa-regular fa-square"} fm-tree-checkbox" aria-hidden="true"></i>`
+    ? `<i class="${fmSelectedItems.has(folderObj.id) ? "fa-solid fa-square-check is-checked" : "fa-regular fa-square"} fm-tree-checkbox" title="폴더 선택" aria-hidden="true"></i>`
     : "";
 
   const fmDateMeta = (isFm && !isSystemFolder)
@@ -4331,8 +4334,8 @@ function createTreeFolderElement(folderObj, depth, cache, options) {
   li.onclick = (e) => {
     if (e.target && e.target.closest && e.target.closest(".tree-row-actions")) return;
     closeSidebarContextMenu();
-    const clickedChevron = e.target && e.target.closest && e.target.closest(".tree-chevron");
-    if (isFm && !clickedChevron && !isSystemFolder && (isFmMultiSelectMode || e.ctrlKey || e.metaKey || e.shiftKey)) {
+    const clickedCheckbox = Boolean(e.target && e.target.closest && e.target.closest(".fm-tree-checkbox"));
+    if (isFm && !isSystemFolder && ((isFmMultiSelectMode && (clickedCheckbox || e.ctrlKey || e.metaKey || e.shiftKey)) || (!isFmMultiSelectMode && (e.ctrlKey || e.metaKey || e.shiftKey)))) {
       st.setFocusedRowKey(rowKey);
       handleFmSelectableClick(folderObj, e);
       return;

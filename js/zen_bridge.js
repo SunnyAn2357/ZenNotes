@@ -552,8 +552,10 @@
         return "";
     }
 
-    function detectScheduleTimeFromText(plainText) {
-        const m = (plainText || "").match(/(?:오전|오후)?\s*(\d{1,2})\s*:\s*(\d{2})|(?:오전|오후)\s*(\d{1,2})\s*시\s*(\d{1,2})?분?/);
+    function extractTimeTokenFromSnippet(snippet) {
+        const text = String(snippet || "");
+        if (!text) return "";
+        const m = text.match(/(?:오전|오후)?\s*(?<!\d)(\d{1,2})\s*:\s*(\d{2})(?!\d)|(?:오전|오후)\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/);
         if (!m) return "";
         let h = parseInt(m[1] || m[3], 10);
         const min = parseInt(m[2] || m[4] || "0", 10);
@@ -562,6 +564,69 @@
         if (/오전/.test(m[0]) && h === 12) h = 0;
         if (h < 0 || h > 23) return "";
         return `${pad2(h)}:${pad2(min)}`;
+    }
+
+    function detectScheduleTimeFromNote(rootEl, plainText, detectedDate) {
+        const timeHeaderRe = /^(?:일정\s*\/\s*기한|일시|기한|마감\s*일시|마감일|시간)$/;
+        if (rootEl) {
+            const tables = Array.from(rootEl.querySelectorAll("table"));
+            for (const tbl of tables) {
+                const rows = Array.from(tbl.querySelectorAll("tr"));
+                for (let r = 0; r < rows.length; r++) {
+                    const rowCells = Array.from(rows[r].querySelectorAll("td, th"));
+                    for (let c = 0; c < rowCells.length; c++) {
+                        const cell = rowCells[c];
+                        const label = (cell.textContent || "").replace(/\s+/g, " ").trim();
+                        if (!timeHeaderRe.test(label)) continue;
+
+                        const nextRow = rows[r + 1];
+                        const isColumnHeaderRow =
+                            !!nextRow &&
+                            (rowCells.length >= 3 || cell.tagName === "TH" || !!cell.querySelector("strong"));
+                        if (isColumnHeaderRow) {
+                            const belowCells = Array.from(nextRow.querySelectorAll("td, th"));
+                            if (belowCells[c]) {
+                                const t = extractTimeTokenFromSnippet(belowCells[c].textContent || "");
+                                if (t) return t;
+                            }
+                            continue;
+                        }
+
+                        if (rowCells.length === 2 && c === 0 && rowCells[1]) {
+                            const t = extractTimeTokenFromSnippet(rowCells[1].textContent || "");
+                            if (t) return t;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!detectedDate) return "";
+
+        const text = String(plainText || "");
+        const afterDateMatch = text.match(/\d{4}\s*[.\-/년]\s*\d{1,2}\s*[.\-/월]\s*\d{1,2}일?(?:\s*(?:\([일월화수목금토]\)|[일월화수목금토]요일))?\s*(?:(?:오전|오후)\s*)?(?:(?<!\d)\d{1,2}\s*:\s*\d{2}(?!\d)|\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?)/);
+        if (afterDateMatch) {
+            const t = extractTimeTokenFromSnippet(afterDateMatch[0]);
+            if (t) return t;
+        }
+
+        const labelMatch = text.match(/(?:일시|시간|마감|기한|개최|회의|제출)\s*[:：]\s*[^\r\n]{0,30}/);
+        if (labelMatch) {
+            const t = extractTimeTokenFromSnippet(labelMatch[0]);
+            if (t) return t;
+        }
+
+        const deadlineMatch = text.match(/(?:(?:오전|오후)\s*)?(?:(?<!\d)\d{1,2}\s*:\s*\d{2}(?!\d)|\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?)\s*(?:까지|마감|시작|예정|개최|제출)/);
+        if (deadlineMatch) {
+            const t = extractTimeTokenFromSnippet(deadlineMatch[0]);
+            if (t) return t;
+        }
+
+        return "";
+    }
+
+    function detectScheduleTimeFromText(plainText) {
+        return detectScheduleTimeFromNote(null, plainText, "1");
     }
 
     function detectScheduleLocationFromNote(rootEl, plainText) {
@@ -750,7 +815,7 @@
         const rawHtml = hasQuill ? getCleanQuillElementHtml(quill.root) : "";
         const plainText = hasQuill ? (quill.getText() || "").replace(/\n+$/, "") : "";
         const detectedDate = detectScheduleDateFromNote(rawTitle, plainText);
-        const detectedTime = detectScheduleTimeFromText(plainText);
+        const detectedTime = detectScheduleTimeFromNote(hasQuill ? quill.root : null, plainText, detectedDate);
         const detectedLocation = detectScheduleLocationFromNote(hasQuill ? quill.root : null, plainText);
 
         stsSnapshot = {

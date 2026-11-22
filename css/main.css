@@ -6773,6 +6773,17 @@ body.light-theme .tree-folder-icon.is-trash {
     text-align: center;
     color: var(--text-muted);
     flex-shrink: 0;
+    padding: 4px 5px;
+    margin: -4px -2px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-sizing: content-box;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.fm-tree-checkbox:hover {
+    color: var(--accent);
+    background: rgba(120, 169, 255, 0.14);
 }
 
 .fm-tree-checkbox.is-checked {
