@@ -2072,6 +2072,8 @@ function openSettingsModal() {
   updateSegmentedActive('setting-fontsize-segmented', fontSize);
   updateSegmentedActive('setting-recent-count-segmented', String(recentCount));
   if (typeof updateExportLocationUI === 'function') updateExportLocationUI();
+  if (typeof refreshNotesAutoBackupSettingsUI === 'function') refreshNotesAutoBackupSettingsUI();
+  if (typeof syncMyAiApiKeySettingsUI === 'function') syncMyAiApiKeySettingsUI();
   if (typeof syncAppLockSettingsUI === 'function') syncAppLockSettingsUI();
 
   modal.style.display = 'flex';

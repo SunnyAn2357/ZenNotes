@@ -851,7 +851,7 @@ function initToolbarTooltips() {
         '.ql-toolbar button.ql-strike-line': '취소선 블록',
         '.ql-toolbar button.ql-highlight': '형광펜 (==텍스트==)',
         '.ql-toolbar .ql-color': '글자 색상',
-        '.ql-toolbar .ql-background': '형광펜 / 배경색',
+        '.ql-toolbar .ql-background': '배경색',
 
         // 목록 / 체크리스트
         '.ql-toolbar button.ql-list[value="check"]': '체크리스트 ([ ] / [x])',
@@ -2152,6 +2152,21 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        // [V1.6.0] 블랙홀 포털 및 일정관리 보내기 모달 닫기
+        const bhLayer = document.getElementById("zen-blackhole-portal-layer");
+        if (bhLayer && bhLayer.style.display !== "none" && bhLayer.style.display !== "") {
+            if (typeof window.closeBlackHolePortal === "function") window.closeBlackHolePortal();
+            else bhLayer.style.display = "none";
+            return;
+        }
+
+        const stsModal = document.getElementById("send-to-schedule-modal");
+        if (stsModal && stsModal.style.display === "flex") {
+            if (typeof window.closeSendToScheduleModal === "function") window.closeSendToScheduleModal();
+            else stsModal.style.display = "none";
+            return;
+        }
+
         // [0순위] 환경설정 모달 닫기
         const settingsModal = document.getElementById("settings-modal");
         if (settingsModal && settingsModal.style.display === "flex") {
@@ -2411,6 +2426,21 @@ window.addEventListener("popstate", (e) => {
     if (appLockSetupModal && appLockSetupModal.style.display === "flex") {
         if (typeof closeAppLockSetupModal === "function") closeAppLockSetupModal(true);
         else appLockSetupModal.style.display = "none";
+        return;
+    }
+
+    // [V1.6.0] 블랙홀 포털 및 일정관리 보내기 모달 뒤로가기 닫기
+    const bhLayer = document.getElementById("zen-blackhole-portal-layer");
+    if (bhLayer && bhLayer.style.display !== "none" && bhLayer.style.display !== "") {
+        if (typeof window.closeBlackHolePortal === "function") window.closeBlackHolePortal(true);
+        else bhLayer.style.display = "none";
+        return;
+    }
+
+    const stsModal = document.getElementById("send-to-schedule-modal");
+    if (stsModal && stsModal.style.display === "flex") {
+        if (typeof window.closeSendToScheduleModal === "function") window.closeSendToScheduleModal(true);
+        else stsModal.style.display = "none";
         return;
     }
 

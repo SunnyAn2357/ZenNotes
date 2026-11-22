@@ -6813,3 +6813,555 @@ body.light-theme .tree-folder-icon.is-trash {
         display: none;
     }
 }
+
+/* ============================================================================
+   [V1.6.0] MY AI 블랙홀 버튼, 일정관리 보내기, 자동 전체 백업 & API 키 설정 UI
+   ============================================================================ */
+.col-left.collapsed #zen-blackhole-btn {
+    display: none !important;
+}
+
+.zen-blackhole-trigger-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+    caret-color: transparent;
+    transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.zen-blackhole-trigger-btn svg {
+    transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.zen-blackhole-trigger-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+    border-color: var(--border);
+}
+
+.zen-blackhole-trigger-btn:hover svg {
+    transform: rotate(36deg) scale(1.08);
+}
+
+.zen-blackhole-trigger-btn.is-active {
+    background: var(--surface-hover);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.zen-blackhole-trigger-btn.is-active svg {
+    transform: rotate(180deg);
+}
+
+/* 우측 상단 상태 표시줄 좌측: MY 일정관리로 보내기 (단색 Zen 스타일) */
+.zen-send-schedule-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    margin-right: 4px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    caret-color: transparent;
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+}
+
+.zen-send-schedule-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+    border-color: var(--text-muted);
+}
+
+.zen-send-schedule-btn:active {
+    transform: scale(0.95);
+}
+
+/* 환경설정 확장 카드 (자동 전체 백업 & MY AI API 키) */
+.zen-settings-stack-item {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+}
+
+.zen-settings-inline-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.zen-settings-meta-badge {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.zen-settings-meta-badge.is-saved {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.zen-settings-path-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.zen-settings-path-code {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-main);
+    font-size: 11.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zen-settings-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.zen-settings-key-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.zen-settings-key-input {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-main);
+    font-size: 12.5px;
+    outline: none;
+    user-select: text !important;
+    caret-color: auto !important;
+}
+
+.zen-settings-key-input:focus {
+    border-color: var(--accent);
+}
+
+.zen-settings-eye-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.zen-settings-eye-btn:hover {
+    color: var(--text-main);
+    background: var(--surface-hover);
+}
+
+/* MY 일정관리로 보내기 모달 */
+#send-to-schedule-modal {
+    z-index: 1000005;
+    user-select: none;
+    caret-color: transparent;
+}
+
+#send-to-schedule-modal input,
+#send-to-schedule-modal textarea,
+#send-to-schedule-modal select {
+    user-select: text !important;
+    caret-color: auto !important;
+}
+
+.zen-sts-card {
+    max-width: 580px !important;
+    width: calc(100vw - 28px) !important;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.zen-sts-body {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 16px 20px !important;
+    overflow-y: auto;
+}
+
+.zen-sts-row-top {
+    display: grid;
+    grid-template-columns: 1fr 112px;
+    gap: 8px;
+}
+
+.zen-sts-row-dates {
+    display: grid;
+    grid-template-columns: 1fr 1fr 110px;
+    gap: 8px;
+}
+
+.zen-sts-row-meta {
+    display: grid;
+    grid-template-columns: 1fr 130px;
+    gap: 8px;
+}
+
+.zen-sts-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.zen-sts-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.zen-sts-input,
+.zen-sts-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+}
+
+.zen-sts-input:focus,
+.zen-sts-textarea:focus {
+    border-color: var(--accent);
+}
+
+.zen-sts-textarea {
+    min-height: 110px;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.zen-sts-rem-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.zen-sts-rem-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+.zen-sts-links-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sts-link-pill {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 3px 9px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-hover);
+    color: var(--text-main);
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zen-sts-footer {
+    justify-content: space-between !important;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.zen-sts-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.zen-settings-secondary-btn {
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-main);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.zen-settings-secondary-btn:hover {
+    background: var(--surface-hover);
+}
+
+@media (max-width: 600px) {
+    .zen-sts-row-top,
+    .zen-sts-row-dates,
+    .zen-sts-row-meta {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================================
+   [V1.6.0] NASA 골드 블랙홀 포털 오버레이 (버튼 원점 출현 -> 꿀꺽 -> 원점 복귀)
+   ============================================================================ */
+.zen-bh-portal-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1000020;
+    background: rgba(6, 9, 18, 0.56);
+    backdrop-filter: blur(5px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    user-select: none;
+    caret-color: transparent;
+}
+
+.zen-bh-portal-shell {
+    width: 100%;
+    max-width: 440px;
+    border-radius: 22px;
+    padding: 20px 22px 18px;
+    background: rgba(12, 16, 28, 0.94);
+    border: 1px solid rgba(251, 191, 36, 0.28);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 42px rgba(245, 158, 11, 0.14);
+    color: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+    transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease;
+}
+
+.zen-bh-portal-shell.is-origin,
+.zen-bh-portal-shell.is-retracting {
+    transform: translate(var(--bh-origin-x, -240px), var(--bh-origin-y, -200px)) scale(0.06);
+    opacity: 0;
+}
+
+.zen-bh-shell-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.zen-bh-shell-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #fef3c7;
+}
+
+.zen-bh-close-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.zen-bh-close-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+}
+
+.zen-bh-mode-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    padding: 4px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.zen-bh-mode-btn {
+    height: 30px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.16s ease;
+}
+
+.zen-bh-mode-btn.active {
+    background: rgba(245, 158, 11, 0.24);
+    color: #fef08a;
+    border: 1px solid rgba(251, 191, 36, 0.45);
+}
+
+.zen-bh-orb-dropzone {
+    position: relative;
+    width: 268px;
+    height: 268px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.24s ease, filter 0.24s ease;
+}
+
+.zen-bh-orb-dropzone.is-drag-hover {
+    transform: scale(1.06);
+    filter: brightness(1.12);
+}
+
+.zen-bh-canvas {
+    width: 268px;
+    height: 268px;
+    border-radius: 50%;
+    display: block;
+    pointer-events: none;
+}
+
+.zen-bh-status-pill {
+    width: 100%;
+    padding: 7px 12px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(251, 191, 36, 0.22);
+    color: #fef3c7;
+    font-size: 12px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zen-bh-options-box {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.zen-bh-fold-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #f8fafc;
+    cursor: pointer;
+}
+
+.zen-bh-fold-check input[type="checkbox"] {
+    accent-color: #f59e0b;
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+}
+
+.zen-bh-mode-hint {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.35;
+}
+
+.zen-bh-shell-actions {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.zen-bh-act-btn {
+    height: 31px;
+    padding: 0 13px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.07);
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.16s ease;
+}
+
+.zen-bh-act-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.zen-bh-act-btn.is-gold {
+    border-color: rgba(251, 191, 36, 0.45);
+    background: rgba(245, 158, 11, 0.22);
+    color: #fef08a;
+}
+
+.zen-bh-act-btn.is-gold:hover {
+    background: rgba(245, 158, 11, 0.34);
+}

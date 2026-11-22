@@ -3276,6 +3276,7 @@ function initGlobalFileDragAndDrop() {
   // 1. dragenter (캡처링 단계)
   window.addEventListener("dragenter", (e) => {
     if (!hasFiles(e)) return;
+    if (typeof window.isBlackHolePortalOpen === "function" && window.isBlackHolePortalOpen()) return;
     e.preventDefault();
     dragCounter++;
     if (dragCounter === 1) {
@@ -3286,6 +3287,11 @@ function initGlobalFileDragAndDrop() {
   // 2. dragover (캡처링 단계)
   window.addEventListener("dragover", (e) => {
     if (!hasFiles(e)) return;
+    if (typeof window.isBlackHolePortalOpen === "function" && window.isBlackHolePortalOpen()) {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      return;
+    }
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
   }, true);
@@ -3293,6 +3299,7 @@ function initGlobalFileDragAndDrop() {
   // 3. dragleave (캡처링 단계)
   window.addEventListener("dragleave", (e) => {
     if (!hasFiles(e)) return;
+    if (typeof window.isBlackHolePortalOpen === "function" && window.isBlackHolePortalOpen()) return;
     e.preventDefault();
     dragCounter = Math.max(0, dragCounter - 1);
     if (dragCounter === 0) {
@@ -3310,6 +3317,10 @@ function initGlobalFileDragAndDrop() {
 
     const files = Array.from(e.dataTransfer.files || []);
     if (files.length > 0) {
+      if (typeof window.isBlackHolePortalOpen === "function" && window.isBlackHolePortalOpen() && typeof window.handleBlackHoleDroppedFiles === "function") {
+        window.handleBlackHoleDroppedFiles(files);
+        return;
+      }
       if (typeof promptFileDropAction === "function") {
         promptFileDropAction(files);
       } else {

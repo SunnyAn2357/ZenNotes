@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.5.2">
-    <link rel="manifest" href="manifest.json?v=1.5.2">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.6.0">
+    <link rel="manifest" href="manifest.json?v=1.6.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.5.2">
+    <link rel="stylesheet" href="css/main.css?v=1.6.0">
 
 </head>
 
@@ -174,6 +174,14 @@
                     style="color: var(--text-main); font-weight: 600;">
                     <i class="fa-solid fa-pen-to-square"></i> <span class="btn-text">새 노트 작성</span>
                 </button>
+                <button type="button" id="zen-blackhole-btn" class="zen-blackhole-trigger-btn" onclick="toggleBlackHolePortal()" title="MY AI 블랙홀 (공문 · 쪽지 · 문서 요약)" aria-label="MY AI 블랙홀">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <ellipse cx="12" cy="12" rx="10" ry="3.8" transform="rotate(-24 12 12)" />
+                        <circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none" />
+                        <path d="M8.4 9.6a4.4 4.4 0 0 1 7.2 0" />
+                        <circle cx="19.2" cy="8.2" r="1" fill="currentColor" stroke="none" />
+                    </svg>
+                </button>
             </div>
             <div id="sidebar-search-bar" class="search-bar">
                 <i class="fa-solid fa-magnifying-glass" style="font-size: 12px;"></i>
@@ -290,6 +298,15 @@
             <input type="text" id="memo-title-input" placeholder="제목 없는 노트">
             <div class="editor-actions">
                 <div class="status-container">
+                    <button type="button" id="btn-send-to-schedule" class="zen-send-schedule-btn" onclick="openSendToScheduleModal()" title="MY 일정관리로 보내기" aria-label="MY 일정관리로 보내기">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="3" ry="3" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                            <path d="M9 15.5l2 2 4-4" />
+                        </svg>
+                    </button>
                     <span id="status-text" class="status-text" data-ns-text="미동기: 0">미동기: 0</span>
                     <div id="status-dot" class="status-dot logged-out"></div>
                 </div>
@@ -827,6 +844,52 @@
 
                 <div class="zen-settings-divider"></div>
 
+                <!-- 설정 6B: [V1.6.0] 1시간 주기 조용한 자동 전체 백업 -->
+                <div class="zen-settings-item zen-settings-stack-item">
+                    <div class="zen-settings-inline-head">
+                        <div class="zen-settings-item-label">자동 전체 백업 <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">(30일 보관)</span></div>
+                        <span id="setting-auto-backup-last-at" class="zen-settings-meta-badge">최근: 기록 없음</span>
+                    </div>
+                    <div id="setting-auto-backup-desktop-row" class="zen-settings-path-row" style="display: none;">
+                        <code class="zen-settings-path-code">D:\MY_Apps\Backups\mynotes\</code>
+                        <div class="zen-settings-btn-group">
+                            <button type="button" class="zen-settings-sub-btn" onclick="openNotesAutoBackupFolder()">폴더 열기</button>
+                            <button type="button" class="zen-settings-sub-btn" onclick="runNotesAutoBackupNow()">지금 백업</button>
+                        </div>
+                    </div>
+                    <div id="setting-auto-backup-browser-row" class="zen-settings-path-row" style="display: none;">
+                        <span id="setting-auto-backup-folder-status" class="zen-settings-path-code">확인 중...</span>
+                        <div class="zen-settings-btn-group">
+                            <button type="button" class="zen-settings-sub-btn" onclick="pickNotesAutoBackupDirectory()">백업 폴더 선택</button>
+                            <button type="button" class="zen-settings-sub-btn" onclick="runNotesAutoBackupNow()">지금 백업</button>
+                        </div>
+                    </div>
+                    <div id="setting-auto-backup-mobile-note" class="zen-settings-item-desc" style="display: none;">
+                        모바일 기기에서는 로컬 폴더 자동 백업을 건너뛰며, 클라우드 동기화로 데이터를 보호합니다.
+                    </div>
+                    <div class="zen-settings-item-desc">변경 사항이 있을 때만 1시간마다 조용히 전체 백업을 생성하며 30일 경과 파일은 자동 삭제합니다.</div>
+                </div>
+
+                <div class="zen-settings-divider"></div>
+
+                <!-- 설정 6C: [V1.6.0] MY AI (TimelyGPT) 개인 API 키 -->
+                <div class="zen-settings-item zen-settings-stack-item">
+                    <div class="zen-settings-inline-head">
+                        <div class="zen-settings-item-label">MY AI 개인 API 키</div>
+                        <span id="setting-myai-key-status" class="zen-settings-meta-badge">미입력</span>
+                    </div>
+                    <div class="zen-settings-key-row">
+                        <input type="password" id="setting-myai-api-key" class="zen-settings-key-input" placeholder="TimelyGPT 개인 API 키 입력" autocomplete="off">
+                        <button type="button" id="setting-myai-key-eye-btn" class="zen-settings-eye-btn" onclick="toggleMyAiApiKeyVisibility()" title="API 키 보기" aria-label="API 키 보기">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                        <button type="button" class="zen-settings-sub-btn" onclick="saveMyAiApiKey()">저장</button>
+                    </div>
+                    <div class="zen-settings-item-desc">공문 · 쪽지 · 문서 요약 시 TimelyGPT(MY AI) 호출에 사용할 개인 인증 키입니다.</div>
+                </div>
+
+                <div class="zen-settings-divider"></div>
+
                 <!-- 설정 7: [V1.2.0] 비밀번호 입력 및 화면 자동 잠금 -->
                 <div class="zen-settings-item">
                     <div class="zen-settings-item-info">
@@ -985,19 +1048,130 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
-    <script src="js/globals.js?v=1.5.2"></script>
-    <script src="js/db.js?v=1.5.2"></script>
-    <script src="js/ui.js?v=1.5.2"></script>
-    <script src="js/editor.js?v=1.5.2"></script>
-    <script src="js/file_manager.js?v=1.5.2"></script>
-    <script src="js/io.js?v=1.5.2"></script>
-    <script src="js/auth.js?v=1.5.2"></script>
+    <!-- [V1.6.0] MY 일정관리로 보내기 확인/수정 모달 -->
+    <div id="send-to-schedule-modal" class="fm-modal-overlay" style="display: none;" onclick="if(event.target===this) closeSendToScheduleModal()">
+        <div class="zen-settings-card zen-sts-card" role="dialog" aria-modal="true" aria-labelledby="sts-modal-title" onclick="event.stopPropagation()">
+            <div class="zen-settings-header">
+                <div class="zen-settings-title-wrap">
+                    <i class="fa-regular fa-calendar-check zen-settings-icon"></i>
+                    <span id="sts-modal-title">MY 일정관리로 보내기</span>
+                </div>
+                <button type="button" class="zen-settings-close-btn" onclick="closeSendToScheduleModal()" aria-label="닫기">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="zen-sts-body">
+                <div class="zen-sts-row-top">
+                    <div class="zen-sts-field">
+                        <label class="zen-sts-label" for="sts-title-input">일정 제목 (필수)</label>
+                        <input type="text" id="sts-title-input" class="zen-sts-input" placeholder="일정 제목 입력">
+                    </div>
+                    <div class="zen-sts-field">
+                        <label class="zen-sts-label" for="sts-priority-select">중요도</label>
+                        <select id="sts-priority-select" class="zen-sts-input">
+                            <option value="High">High</option>
+                            <option value="Normal" selected>Normal</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="zen-sts-row-dates">
+                    <div class="zen-sts-field">
+                        <label class="zen-sts-label" for="sts-start-date">시작일</label>
+                        <input type="date" id="sts-start-date" class="zen-sts-input">
+                    </div>
+                    <div class="zen-sts-field">
+                        <label class="zen-sts-label" for="sts-due-date">마감일 (필수)</label>
+                        <input type="date" id="sts-due-date" class="zen-sts-input">
+                    </div>
+                    <div class="zen-sts-field">
+                        <label class="zen-sts-label" for="sts-time-input">시간</label>
+                        <input type="text" id="sts-time-input" class="zen-sts-input" placeholder="14:00" oninput="normalizeSmartScheduleTimeInput(this)">
+                    </div>
+                </div>
+                <div class="zen-sts-row-meta">
+                    <div class="zen-sts-field">
+                        <label class="zen-sts-label" for="sts-location-input">장소 / 담당</label>
+                        <input type="text" id="sts-location-input" class="zen-sts-input" placeholder="장소 또는 제출처 입력">
+                    </div>
+                    <div class="zen-sts-field" style="justify-content: flex-end;">
+                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-main); cursor: pointer; padding: 7px 2px;">
+                            <input type="checkbox" id="sts-keep-html-check" checked style="accent-color: var(--accent);"> 원본 서식 유지
+                        </label>
+                    </div>
+                </div>
+                <div class="zen-sts-field">
+                    <span class="zen-sts-label">알림 주기</span>
+                    <div class="zen-sts-rem-row">
+                        <label><input type="checkbox" name="sts-rem" value="3"> 3일 전</label>
+                        <label><input type="checkbox" name="sts-rem" value="5"> 5일 전</label>
+                        <label><input type="checkbox" name="sts-rem" value="h2" checked> 2시간 전</label>
+                        <label><input type="checkbox" name="sts-rem" value="h1" checked> 1시간 전</label>
+                    </div>
+                </div>
+                <div id="sts-links-preview" class="zen-sts-links-preview" style="display: none;"></div>
+                <div class="zen-sts-field">
+                    <label class="zen-sts-label" for="sts-memo-input">내용 (수정 가능)</label>
+                    <textarea id="sts-memo-input" class="zen-sts-textarea" placeholder="일정관리로 보낼 요약 내용 및 링크"></textarea>
+                </div>
+            </div>
+            <div class="zen-settings-footer zen-sts-footer">
+                <button type="button" class="zen-settings-secondary-btn" onclick="exportNoteAsDdaySchedule()">.dday 파일로 내보내기</button>
+                <div class="zen-sts-footer-actions">
+                    <button type="button" class="zen-settings-secondary-btn" onclick="closeSendToScheduleModal()">취소</button>
+                    <button type="button" class="zen-settings-done-btn" onclick="sendNoteToScheduleDirectStub()">일정관리로 보내기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- [V1.6.0] 좌측 블랙홀 버튼 원점 출현 · 투입 꿀꺽 · 복귀 포털 껍데기 -->
+    <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
+        <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
+            <div class="zen-bh-shell-head">
+                <span class="zen-bh-shell-title">MY AI 블랙홀 투입</span>
+                <button type="button" class="zen-bh-close-btn" onclick="closeBlackHolePortal()" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="zen-bh-mode-tabs" role="tablist" aria-label="투입 유형">
+                <button type="button" class="zen-bh-mode-btn active" data-bh-mode="official" onclick="setBlackHoleMode('official')">정식 공문</button>
+                <button type="button" class="zen-bh-mode-btn" data-bh-mode="memo" onclick="setBlackHoleMode('memo')">수신 쪽지</button>
+                <button type="button" class="zen-bh-mode-btn" data-bh-mode="summary" onclick="setBlackHoleMode('summary')">일반 문서 요약</button>
+            </div>
+            <div id="zen-bh-orb-dropzone" class="zen-bh-orb-dropzone" onclick="triggerBlackHoleFilePick()" title="파일을 끌어다 놓거나 클릭해 선택하세요">
+                <canvas id="zen-bh-canvas" class="zen-bh-canvas"></canvas>
+                <input type="file" id="zen-bh-file-input" multiple style="display: none;">
+            </div>
+            <div id="zen-bh-status-pill" class="zen-bh-status-pill">공문 .zip 또는 문서를 끌어다 놓거나 클릭해 선택하세요</div>
+            <div class="zen-bh-options-box">
+                <label class="zen-bh-fold-check">
+                    <input type="checkbox" id="zen-bh-folding-toggle" checked>
+                    <span>자동 폴더링 실행 (원본 및 첨부 분류 보관)</span>
+                </label>
+                <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">주 공문 본문만 AI 전송 (첨부 제외) · 자동 폴더링 기본 켜짐</div>
+            </div>
+            <div class="zen-bh-shell-actions">
+                <button type="button" class="zen-bh-act-btn is-gold" onclick="demoBlackHoleSwallow()">투입 시연</button>
+                <button type="button" class="zen-bh-act-btn" onclick="closeBlackHolePortal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/globals.js?v=1.6.0"></script>
+    <script src="js/db.js?v=1.6.0"></script>
+    <script src="js/ui.js?v=1.6.0"></script>
+    <script src="js/editor.js?v=1.6.0"></script>
+    <script src="js/file_manager.js?v=1.6.0"></script>
+    <script src="js/io.js?v=1.6.0"></script>
+    <script src="js/auth.js?v=1.6.0"></script>
+    <script src="js/zen_bridge.js?v=1.6.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.5.2");
+            console.log("[ZenNotes] 현재 버전: V1.6.0");
             console.log("=========================================");
         });
     </script>
