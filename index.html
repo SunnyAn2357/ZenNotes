@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.6.4">
-    <link rel="manifest" href="manifest.json?v=1.6.4">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.6.5">
+    <link rel="manifest" href="manifest.json?v=1.6.5">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.6.4">
+    <link rel="stylesheet" href="css/main.css?v=1.6.5">
 
 </head>
 
@@ -1111,11 +1111,21 @@
         </div>
     </div>
 
-    <!-- [V1.6.1] 좌측 블랙홀 버튼 원점 출현 · 투입 꿀꺽 · 복귀 포털 -->
+    <!-- [V1.6.5] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 투입 꿀꺽 · 복귀 포털 (시연 버튼 제거) -->
     <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
         <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
             <div class="zen-bh-shell-head">
-                <span class="zen-bh-shell-title">MY AI 문서 분석·요약</span>
+                <div class="zen-bh-head-left">
+                    <span class="zen-bh-shell-title">MY AI 문서 분석·요약</span>
+                    <div class="zen-bh-model-picker-wrap">
+                        <button type="button" id="zen-bh-model-btn" class="zen-bh-model-btn" onclick="toggleBlackHoleModelDropdown(event)" title="문서 분석·요약에 사용할 AI 모델 선택">
+                            <span id="zen-bh-model-btn-icon" class="zen-bh-model-icon"></span>
+                            <span id="zen-bh-model-btn-label">AI 선택</span>
+                            <i class="fa-solid fa-caret-down zen-bh-model-caret"></i>
+                        </button>
+                        <div id="zen-bh-model-dropdown" class="zen-bh-model-dropdown" style="display: none;" onclick="event.stopPropagation()"></div>
+                    </div>
+                </div>
                 <button type="button" class="zen-bh-close-btn" onclick="closeBlackHolePortal()" aria-label="닫기" title="닫기 (Esc)">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -1137,27 +1147,26 @@
                 </label>
                 <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">공문 본문만 AI 전송·분석합니다(첨부 제외).</div>
             </div>
-            <div class="zen-bh-shell-actions">
-                <button type="button" class="zen-bh-act-btn is-gold" onclick="demoBlackHoleSwallow()">투입 시연</button>
+            <div class="zen-bh-shell-actions is-right-only">
                 <button type="button" class="zen-bh-act-btn" onclick="closeBlackHolePortal()">닫기</button>
             </div>
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.6.4"></script>
-    <script src="js/db.js?v=1.6.4"></script>
-    <script src="js/ui.js?v=1.6.4"></script>
-    <script src="js/editor.js?v=1.6.4"></script>
-    <script src="js/file_manager.js?v=1.6.4"></script>
-    <script src="js/io.js?v=1.6.4"></script>
-    <script src="js/auth.js?v=1.6.4"></script>
-    <script src="js/zen_bridge.js?v=1.6.4"></script>
+    <script src="js/globals.js?v=1.6.5"></script>
+    <script src="js/db.js?v=1.6.5"></script>
+    <script src="js/ui.js?v=1.6.5"></script>
+    <script src="js/editor.js?v=1.6.5"></script>
+    <script src="js/file_manager.js?v=1.6.5"></script>
+    <script src="js/io.js?v=1.6.5"></script>
+    <script src="js/auth.js?v=1.6.5"></script>
+    <script src="js/zen_bridge.js?v=1.6.5"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.6.4");
+            console.log("[ZenNotes] 현재 버전: V1.6.5");
             console.log("=========================================");
         });
     </script>

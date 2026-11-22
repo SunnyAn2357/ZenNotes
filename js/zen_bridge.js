@@ -509,19 +509,9 @@
         return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
     }
 
-    function getOffsetDateParts(daysOffset = 5) {
+    function getLocalTodayCompact() {
         const d = new Date();
-        d.setDate(d.getDate() + daysOffset);
-        const yyyy = String(d.getFullYear());
-        const mm = pad2(d.getMonth() + 1);
-        const dd = pad2(d.getDate());
-        const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-        const wk = weekdays[d.getDay()];
-        return {
-            iso: `${yyyy}-${mm}-${dd}`,
-            compact: `${yyyy}${mm}${dd}`,
-            zenDate: `${yyyy}.${mm}.${dd}.(${wk})`
-        };
+        return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
     }
 
     function getCleanQuillElementHtml(rootEl) {
@@ -547,7 +537,7 @@
             return `${deadlineTag[1]}-${deadlineTag[2]}-${deadlineTag[3]}`;
         }
         const combined = `${title || ""}\n${plainText || ""}`;
-        const explicitMatch = combined.match(/(\d{4})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})일?\s*(?:([일월화수목금토])\))?\s*(?:\d{1,2}:\d{2})?\s*(?:까지|마감|기한|제출)/);
+        const explicitMatch = combined.match(/(\d{4})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})일?\s*(?:(?:\([일월화수목금토]\))|[일월화수목금토]요일)?\s*(?:\d{1,2}:\d{2})?\s*(?:까지|마감|기한|제출)/);
         if (explicitMatch) {
             return `${explicitMatch[1]}-${pad2(explicitMatch[2])}-${pad2(explicitMatch[3])}`;
         }
@@ -555,7 +545,7 @@
         if (ymdMatch) {
             return `${ymdMatch[1]}-${pad2(ymdMatch[2])}-${pad2(ymdMatch[3])}`;
         }
-        return getLocalTodayIso();
+        return "";
     }
 
     function detectScheduleTimeFromText(plainText) {
@@ -577,13 +567,14 @@
                 const label = (cells[i].textContent || "").replace(/\s+/g, " ").trim();
                 if (/^(?:제출처|장소\s*\/\s*제출처|장소|수신처|제출\s*기관|담당\s*부서)$/.test(label)) {
                     const val = (cells[i + 1].textContent || "").replace(/\s+/g, " ").trim();
-                    if (val) return val.slice(0, 80);
+                    if (val && val !== "-") return val.slice(0, 80);
                 }
             }
         }
         const m = (plainText || "").match(/(?:제출처|장소\s*\/\s*제출처|장소|수신처|제출\s*기관)\s*[:：]\s*([^\r\n|]+)/);
         if (m && m[1]) {
-            return m[1].trim().slice(0, 80);
+            const cleaned = m[1].trim();
+            if (cleaned && cleaned !== "-") return cleaned.slice(0, 80);
         }
         return "";
     }
@@ -651,8 +642,8 @@
         const elMemoEditor = document.getElementById("sts-memo-editor");
 
         if (elTitle) elTitle.value = rawTitle;
-        if (elStart) elStart.value = getLocalTodayIso();
-        if (elDue) elDue.value = detectedDate;
+        if (elStart) elStart.value = detectedDate || "";
+        if (elDue) elDue.value = detectedDate || "";
         if (elTime) elTime.value = detectedTime;
         if (elLoc) elLoc.value = detectedLocation;
         if (elPri) elPri.value = "Normal";
@@ -1262,6 +1253,8 @@
         bhShockActive = false;
         bhTargetHover = 0;
 
+        closeBlackHoleModelDropdown();
+        syncBlackHoleModelPickerUI();
         setBlackHoleMode(bhCurrentMode || "official");
         const pill = document.getElementById("zen-bh-status-pill");
         if (pill) pill.textContent = BH_DEFAULT_PROMPT;
@@ -1288,6 +1281,7 @@
         const btn = document.getElementById("zen-blackhole-btn");
         if (!layer || layer.style.display === "none") return;
 
+        closeBlackHoleModelDropdown();
         clearTimeout(bhSwallowTimer1);
         clearTimeout(bhSwallowTimer2);
         bhSwallowTimer1 = null;
@@ -1331,6 +1325,162 @@
         return !!bhIsOpen;
     }
 
+    // ========================================================================
+    // 5-2. 블랙홀 AI 모델 선택 드롭다운 (디폴트: Solar Pro4, 문서 작업 특화)
+    // ========================================================================
+    const MYAI_MODEL_STORAGE_KEY = "zen_myai_selected_model";
+    const MYAI_DEFAULT_MODEL_ID = "upstage/solar-pro4";
+
+    const MYAI_PROVIDER_ICONS = {
+        upstage: `<svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8.5" fill="#0f172a" stroke="#a855f7" stroke-width="1.2"/><path d="M10 3.2L11.7 8.3L16.8 10L11.7 11.7L10 16.8L8.3 11.7L3.2 10L8.3 8.3L10 3.2Z" fill="#c084fc"/></svg>`,
+        anthropic: `<svg viewBox="0 0 20 20" fill="none"><g stroke="#ea580c" stroke-width="1.65" stroke-linecap="round"><line x1="10" y1="2.5" x2="10" y2="17.5"/><line x1="2.5" y1="10" x2="17.5" y2="10"/><line x1="4.7" y1="4.7" x2="15.3" y2="15.3"/><line x1="15.3" y1="4.7" x2="4.7" y2="15.3"/><line x1="6.8" y1="3.1" x2="13.2" y2="16.9"/><line x1="13.2" y1="3.1" x2="6.8" y2="16.9"/></g></svg>`,
+        openai: `<svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.2" stroke="#e2e8f0" stroke-width="1.5"/><path d="M10 2.8C12.8 2.8 15 5 15 7.8C15 10.6 12.8 12.8 10 12.8C7.2 12.8 5 10.6 5 7.8M10 17.2C7.2 17.2 5 15 5 12.2C5 9.4 7.2 7.2 10 7.2C12.8 7.2 15 9.4 15 12.2" stroke="#e2e8f0" stroke-width="1.35" stroke-linecap="round"/></svg>`,
+        google: `<svg viewBox="0 0 20 20" fill="none"><path d="M10 2.2L12.1 7.9L17.8 10L12.1 12.1L10 17.8L7.9 12.1L2.2 10L7.9 7.9L10 2.2Z" fill="#38bdf8" stroke="#fbbf24" stroke-width="0.9"/></svg>`
+    };
+
+    const MYAI_MODELS = [
+        {
+            id: "upstage/solar-pro4",
+            name: "Solar Pro4",
+            provider: "upstage",
+            group: "기본 추천 모델",
+            desc: "공문·글쓰기·한국어 문서 작업에 최적화 (기본)"
+        },
+        {
+            id: "anthropic/claude-sonnet-5",
+            name: "Claude Sonnet 5",
+            provider: "anthropic",
+            group: "추천 문서 분석 모델",
+            desc: "정밀한 문서 맥락 파악 및 자연스러운 요약"
+        },
+        {
+            id: "openai/gpt-5.6-sol",
+            name: "GPT-5.6 Sol",
+            provider: "openai",
+            group: "추천 문서 분석 모델",
+            desc: "최신 모델 · 복합 문서 구조화 분석"
+        },
+        {
+            id: "google/gemini-3.8-flash",
+            name: "Gemini 3.8 Flash",
+            provider: "google",
+            group: "추천 문서 분석 모델",
+            desc: "대용량 매뉴얼·긴 문서 초고속 분석 및 요약"
+        },
+        {
+            id: "anthropic/claude-sonnet-4.6",
+            name: "Claude Sonnet 4.6",
+            provider: "anthropic",
+            group: "추천 문서 분석 모델",
+            desc: "안정적인 공문서·보고서 핵심 추출"
+        },
+        {
+            id: "openai/gpt-5.5",
+            name: "GPT-5.5",
+            provider: "openai",
+            group: "추천 문서 분석 모델",
+            desc: "균형 잡힌 표준 행정·업무 문서 요약"
+        },
+        {
+            id: "anthropic/claude-haiku-4.5",
+            name: "Claude Haiku 4.5",
+            provider: "anthropic",
+            group: "경량 고속 모델",
+            desc: "빠르고 간결한 쪽지·단문 핵심 추출"
+        },
+        {
+            id: "openai/gpt-4.1-mini",
+            name: "GPT-4.1 Mini",
+            provider: "openai",
+            group: "경량 고속 모델",
+            desc: "경량·고속 실무 요약"
+        }
+    ];
+
+    function getSelectedMyAiModelMeta() {
+        const savedId = (localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || "").trim();
+        const found = MYAI_MODELS.find((m) => m.id === savedId);
+        return found || MYAI_MODELS[0];
+    }
+
+    function syncBlackHoleModelPickerUI() {
+        const meta = getSelectedMyAiModelMeta();
+        const btn = document.getElementById("zen-bh-model-btn");
+        const iconEl = document.getElementById("zen-bh-model-btn-icon");
+        const labelEl = document.getElementById("zen-bh-model-btn-label");
+        if (iconEl) {
+            iconEl.innerHTML = MYAI_PROVIDER_ICONS[meta.provider] || MYAI_PROVIDER_ICONS.upstage;
+        }
+        if (labelEl) {
+            labelEl.textContent = "AI 선택";
+        }
+        if (btn) {
+            btn.title = `현재 선택된 AI 모델: ${meta.name} (${meta.desc})`;
+        }
+
+        const dropdown = document.getElementById("zen-bh-model-dropdown");
+        if (!dropdown) return;
+
+        let html = "";
+        let lastGroup = "";
+        MYAI_MODELS.forEach((m) => {
+            if (m.group !== lastGroup) {
+                lastGroup = m.group;
+                html += `<div class="zen-bh-model-section-label">${escapeHtmlStr(m.group)}</div>`;
+            }
+            const isSel = m.id === meta.id;
+            const svg = MYAI_PROVIDER_ICONS[m.provider] || MYAI_PROVIDER_ICONS.upstage;
+            html += [
+                `<button type="button" class="zen-bh-model-option${isSel ? " is-selected" : ""}" data-model-id="${escapeHtmlStr(m.id)}">`,
+                `<span class="zen-bh-model-opt-icon">${svg}</span>`,
+                `<span class="zen-bh-model-opt-text">`,
+                `<span class="zen-bh-model-opt-name">${escapeHtmlStr(m.name)}</span>`,
+                `<span class="zen-bh-model-opt-desc">${escapeHtmlStr(m.desc)}</span>`,
+                `</span>`,
+                `</button>`
+            ].join("");
+        });
+        dropdown.innerHTML = html;
+        dropdown.querySelectorAll(".zen-bh-model-option").forEach((optBtn) => {
+            optBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const id = optBtn.getAttribute("data-model-id") || MYAI_DEFAULT_MODEL_ID;
+                selectBlackHoleAiModel(id);
+            });
+        });
+    }
+
+    function selectBlackHoleAiModel(modelId) {
+        const found = MYAI_MODELS.find((m) => m.id === modelId) || MYAI_MODELS[0];
+        localStorage.setItem(MYAI_MODEL_STORAGE_KEY, found.id);
+        syncBlackHoleModelPickerUI();
+        closeBlackHoleModelDropdown();
+        if (typeof showToast === "function") {
+            showToast(`AI 모델이 '${found.name}'(으)로 설정되었습니다.`);
+        }
+    }
+
+    function toggleBlackHoleModelDropdown(event) {
+        if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+        const dropdown = document.getElementById("zen-bh-model-dropdown");
+        if (!dropdown) return;
+        const isOpen = dropdown.style.display !== "none";
+        if (isOpen) {
+            dropdown.style.display = "none";
+        } else {
+            syncBlackHoleModelPickerUI();
+            dropdown.style.display = "flex";
+        }
+    }
+
+    function closeBlackHoleModelDropdown() {
+        const dropdown = document.getElementById("zen-bh-model-dropdown");
+        if (dropdown) dropdown.style.display = "none";
+    }
+
+    // ========================================================================
+    // 5-3. 파일 텍스트 추출 · 자동 폴더링 · 할루시네이션 0% AI 분석 엔진
+    // ========================================================================
     function arrayBufferToBase64(buf) {
         const bytes = new Uint8Array(buf);
         let binary = "";
@@ -1382,8 +1532,8 @@
         }
     }
 
-    async function extractDocumentTextForAi(firstItem, isDemo) {
-        if (isDemo || !firstItem) return "";
+    async function extractDocumentTextForAi(firstItem) {
+        if (!firstItem) return "";
         const rawFileName = String(firstItem.name || "").trim();
         const lower = rawFileName.toLowerCase();
 
@@ -1423,7 +1573,7 @@
             } catch { }
         }
 
-        // 4. 폴백: 바이너리/압축 문서(.docx, .hwpx, .zip, .pdf, .hwp, .xlsx, .pptx, .doc, .xls, .ppt, 이미지 등)는 생바이트(PK...) 깨짐 방지를 위해 firstItem.text() 금지
+        // 4. 바이너리/압축 문서는 생바이트(PK...) 깨짐 방지를 위해 firstItem.text() 금지
         if (/\.(docx|hwpx|zip|pdf|hwp|xlsx|pptx|doc|xls|ppt|png|jpg|jpeg|gif|webp|bmp|exe|dll)$/i.test(lower)) {
             return "";
         }
@@ -1438,7 +1588,7 @@
         return "";
     }
 
-    async function executeDiskAutoFoldering(list, modeKey, folderLabel, isDemo) {
+    async function executeDiskAutoFoldering(list, modeKey, folderLabel) {
         const categoryName = modeKey === "official" ? "공문" : modeKey === "memo" ? "쪽지" : "문서";
         const defaultFolderPath = `D:\\MY_Apps\\${categoryName}\\${folderLabel}`;
         const firstName = (Array.isArray(list) && list[0] && list[0].name) ? String(list[0].name).trim() : "문서.txt";
@@ -1457,13 +1607,10 @@
             for (let i = 0; i < maxFiles; i++) {
                 const item = list[i];
                 const name = String((item && item.name) || `문서_${i + 1}.txt`).trim();
-                const b64 = (!isDemo && item && typeof item.arrayBuffer === "function")
+                const b64 = (item && typeof item.arrayBuffer === "function")
                     ? await readFileAsBase64(item)
                     : "";
                 filesPayload.push({ name, base64: b64 });
-            }
-            if (filesPayload.length === 0) {
-                filesPayload.push({ name: firstName, base64: "" });
             }
 
             const res = await callDesktopBridgeRequest(
@@ -1553,7 +1700,7 @@
         });
     }
 
-    async function requestTimelyAiCompletion(apiKey, systemPrompt, userPrompt) {
+    async function requestTimelyAiCompletion(apiKey, preferredModelId, systemPrompt, userPrompt) {
         const trimmedKey = (apiKey || "").trim();
         if (!trimmedKey) {
             return {
@@ -1562,18 +1709,21 @@
             };
         }
 
+        const chosenModel = (preferredModelId || MYAI_DEFAULT_MODEL_ID).trim();
+
         if (isDesktopWebViewEnv()) {
             const res = await callDesktopBridgeRequest(
                 "timelyAiChatRequest",
                 {
                     apiKey: trimmedKey,
+                    model: chosenModel,
                     systemPrompt,
                     userPrompt
                 },
                 48000
             );
             if (res && res.ok && res.content) {
-                return { ok: true, content: res.content, model: res.model || "" };
+                return { ok: true, content: res.content, model: res.model || chosenModel };
             }
             return {
                 ok: false,
@@ -1581,29 +1731,27 @@
             };
         }
 
-        // 온라인 브라우저 fetch 호출 (1순위: OpenAI 호환 브릿지 / 2순위: Direct API)
-        const candidates = [
-            { url: "https://hello.timelyai.io/api/v2/chat/bridge/openai/chat/completions", model: "openai/gpt-4.1-mini" },
-            { url: "https://hello.timelyai.io/api/v2/chat/bridge/openai/chat/completions", model: "google/gemini-3-flash-preview" },
-            { url: "https://hello.timelyai.io/api/v2/chat/direct/openai/v1/chat/completions", model: "gpt-4.1-mini" }
-        ];
+        const candidateModels = [chosenModel];
+        for (const m of ["upstage/solar-pro4", "anthropic/claude-sonnet-5", "openai/gpt-5.6-sol", "google/gemini-3.8-flash"]) {
+            if (!candidateModels.includes(m)) candidateModels.push(m);
+        }
 
         let lastErr = "Timely AI 서버 응답 실패";
-        for (const cand of candidates) {
+        for (const modelName of candidateModels) {
             try {
-                const resp = await fetch(cand.url, {
+                const resp = await fetch("https://hello.timelyai.io/api/v2/chat/bridge/openai/chat/completions", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": `Bearer ${trimmedKey}`
                     },
                     body: JSON.stringify({
-                        model: cand.model,
+                        model: modelName,
                         messages: [
                             { role: "system", content: systemPrompt },
                             { role: "user", content: userPrompt }
                         ],
-                        temperature: 0.2
+                        temperature: 0.0
                     })
                 });
                 const data = await resp.json().catch(() => null);
@@ -1611,7 +1759,7 @@
                     return {
                         ok: true,
                         content: data.choices[0].message.content,
-                        model: cand.model
+                        model: modelName
                     };
                 }
                 if (data && data.error) {
@@ -1646,114 +1794,161 @@
         }
     }
 
-    function formatDateToZenDisplay(isoOrYmd, defaultParts) {
-        if (!isoOrYmd) return `${defaultParts.zenDate} 18:00까지`;
-        const m = String(isoOrYmd).match(/(\d{4})[.\-/]?(\d{2})[.\-/]?(\d{2})/);
-        if (!m) return String(isoOrYmd);
-        const y = parseInt(m[1], 10);
-        const mo = parseInt(m[2], 10);
-        const d = parseInt(m[3], 10);
-        const dt = new Date(y, mo - 1, d);
-        if (isNaN(dt.getTime())) return String(isoOrYmd);
-        const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-        const wk = weekdays[dt.getDay()];
-        const timeMatch = String(isoOrYmd).match(/(\d{1,2}:\d{2})/);
-        const timePart = timeMatch ? ` ${timeMatch[1]}` : "";
-        return `${y}.${pad2(mo)}.${pad2(d)}.(${wk})${timePart}까지`;
+    // 원문에 실제로 등장하는 날짜인지 검증하여 할루시네이션 날짜를 0%로 차단
+    function verifyDateExistsInSourceText(candidateDateStr, rawSourceText) {
+        const s = String(candidateDateStr || "").trim();
+        if (!s || !rawSourceText) return "";
+        if (/^(?:없음|미정|해당\s*없음|미기재|불명|null|none|n\/a|-)$/i.test(s)) return "";
+
+        const m = s.match(/(?:(\d{4})\s*[.\-/년]\s*)?(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/);
+        if (!m) {
+            return rawSourceText.includes(s) ? s : "";
+        }
+        const monthNum = parseInt(m[2], 10);
+        const dayNum = parseInt(m[3], 10);
+        if (isNaN(monthNum) || isNaN(dayNum)) return "";
+
+        const mmPad = pad2(monthNum);
+        const ddPad = pad2(dayNum);
+        const patterns = [
+            new RegExp(`${monthNum}\\s*[.\\-/월]\\s*${dayNum}`),
+            new RegExp(`${mmPad}\\s*[.\\-/월]\\s*${ddPad}`),
+            new RegExp(`${mmPad}${ddPad}`)
+        ];
+        const exists = patterns.some((re) => re.test(rawSourceText));
+        return exists ? s : "";
     }
 
-    function extractCompactYmd(isoOrYmd, fallbackCompact) {
-        if (!isoOrYmd) return fallbackCompact;
-        const m = String(isoOrYmd).match(/(\d{4})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
-        if (!m) return fallbackCompact;
-        return `${m[1]}${pad2(m[2])}${pad2(m[3])}`;
+    function cleanHallucinatedPlaceholder(val) {
+        const s = String(val || "").trim();
+        if (!s) return "";
+        if (/^(?:없음|미정|해당\s*없음|미기재|불명|명시되지\s*않음|확인\s*불가|자체\s*검토|null|none|n\/a|-)$/i.test(s)) {
+            return "";
+        }
+        return s;
     }
 
-    async function buildBlackHoleSummaryResult(list, modeKey, foldChecked, isDemo) {
-        const firstItem = (Array.isArray(list) && list[0]) ? list[0] : { name: "온나라_공문_시연.zip" };
+    function extractCompactYmdFromVerifiedDate(verifiedDateStr) {
+        if (!verifiedDateStr) return "";
+        const m = String(verifiedDateStr).match(/(\d{4})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/);
+        if (m) {
+            return `${m[1]}${pad2(m[2])}${pad2(m[3])}`;
+        }
+        return "";
+    }
+
+    async function buildBlackHoleSummaryResult(list, modeKey, foldChecked) {
+        const firstItem = (Array.isArray(list) && list[0]) ? list[0] : { name: "문서.txt" };
         const rawFileName = String(firstItem.name || "문서").trim();
         const baseName = rawFileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim() || "문서";
-        const dParts = getOffsetDateParts(5);
+        const selectedModelMeta = getSelectedMyAiModelMeta();
 
-        // 1. 문서 텍스트 추출
-        const rawFileText = await extractDocumentTextForAi(firstItem, isDemo);
-
-        // 2. Timely AI 실시간 분석 호출 (시연 모드가 아니고 API 키가 있을 때)
+        // 1. 문서 본문 텍스트 추출
+        const rawFileText = await extractDocumentTextForAi(firstItem);
         const savedApiKey = (localStorage.getItem(MYAI_KEY_STORAGE_KEY) || "").trim();
+
         let aiData = null;
         let aiErrorNotice = "";
 
-        if (!isDemo && savedApiKey) {
-            const modeDesc = modeKey === "official"
-                ? "행정기관 공문서 분석 (제출 기한, 제출처/담당부서, 핵심 과제, 실무 조치 체크리스트 도출)"
-                : modeKey === "memo"
-                    ? "업무용 수신 쪽지 분석 (회신 기한, 발신/제출처, 핵심 요청사항, 실행 체크리스트 도출)"
-                    : "일반 문서 핵심 요약 (문서 핵심 주제, 주요 일정/기한, 관련 부서/제출처, 핵심 요약 및 주요 포인트 도출)";
-
-            const systemPrompt = [
-                "당신은 대한민국 공공기관 및 기업의 행정·문서 분석 AI 비서 'MY AI'입니다.",
-                "사용자가 투입한 문서를 분석하여 반드시 아래 JSON 스키마 형식으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON 객체만 출력하세요.",
-                "{",
-                '  "subject": "문서 핵심 제목 (40자 이내, 명확하고 간결하게)",',
-                '  "dueDate": "문서에 명시된 마감일/기한/일시 (YYYY-MM-DD HH:mm 형식 권장, 없으면 빈 문자열)",',
-                '  "submitTarget": "장소 또는 제출처/담당부서/대상 (없으면 \'자체 검토 및 보관\')",',
-                '  "leadBeforeHighlight": "핵심 요약 도입부 문장 (1문장)",',
-                '  "highlightText": "가장 중요한 핵심 결론 또는 마감/조치 문구 (노란 형광펜으로 강조될 구절, 1문장)",',
-                '  "leadAfterHighlight": "마무리 보조 문구 (없으면 빈 문자열)",',
-                '  "coreTask": "표의 핵심 과제/핵심 요약 칸에 들어갈 한 줄 요약 (60자 이내)",',
-                '  "actionItems": ["실무 조치사항 또는 핵심 포인트 1", "항목 2", "항목 3", "항목 4"]',
-                "}"
+        if (!savedApiKey) {
+            aiErrorNotice = "환경설정 > MY AI 개인 API 키에 연동 키(tgpt_s...)를 먼저 저장해 주세요.";
+        } else if (!rawFileText) {
+            aiErrorNotice = "이 문서 형식에서 텍스트 본문을 추출할 수 없습니다.";
+        } else {
+            const zeroHallucinationRules = [
+                "[절대 불가침 할루시네이션 0% 규칙]",
+                "1. 제공된 [문서 원문]에 명시적으로 적혀 있는 사실만 100% 그대로 요약하세요.",
+                "2. 원문에 없는 날짜, 시간, 기한, 마감일, 장소, 제출처, 부서명, 담당자, 지시사항을 절대로 추측하거나 임의로 만들어내지 마세요.",
+                "3. 원문에 해당 정보가 없거나 불확실하면 반드시 빈 문자열(\"\")로 비워 두세요. ('없음', '미정', '자체 검토' 같은 임의 문구도 넣지 말고 완전히 빈 문자열 \"\"로 두세요.)",
+                "4. 원문이 매뉴얼·안내서·참고자료인 경우 억지로 업무 지시나 과제처럼 바꾸지 말고, 문서 본래의 핵심 내용만 객관적으로 요약하세요."
             ].join("\n");
 
-            const contentForPrompt = rawFileText
-                ? `파일명: ${rawFileName}\n분석 모드: ${modeDesc}\n\n[문서 본문 내용]\n${rawFileText}`
-                : `파일명: ${rawFileName}\n분석 모드: ${modeDesc}\n(참고: 텍스트를 직접 추출할 수 없는 바이너리 포맷이므로 파일명과 맥락을 바탕으로 실무 요약 초안을 작성해 주세요.)`;
+            const systemPrompt = modeKey === "summary"
+                ? [
+                    "당신은 정확하고 신뢰할 수 있는 문서 요약 AI입니다.",
+                    zeroHallucinationRules,
+                    "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
+                    "{",
+                    '  "title": "원문에 기반한 문서 제목 (원문 제목이 있으면 그대로 사용)",',
+                    '  "overview": "문서 전체의 핵심 목적과 내용을 1~2문장으로 요약 (원문 사실만 기재)",',
+                    '  "highlightSentence": "문서에서 가장 핵심이 되는 1문장 (원문 사실만 기재)",',
+                    '  "sections": [',
+                    '    { "heading": "핵심 주제/장절 제목", "points": ["원문에 있는 세부 핵심 내용 1", "세부 핵심 내용 2"] }',
+                    "  ]",
+                    "}"
+                ].join("\n")
+                : [
+                    `당신은 대한민국 행정·업무 ${modeKey === "official" ? "공문서" : "쪽지"} 분석 AI입니다.`,
+                    zeroHallucinationRules,
+                    "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
+                    "{",
+                    '  "title": "원문에 명시된 공문/쪽지 제목",',
+                    '  "dueDate": "원문에 명시된 제출/회신 마감일 또는 일시 (원문에 적힌 그대로 기재하되, 원문에 마감일/기한이 없으면 반드시 빈 문자열 \\"\\")",',
+                    '  "submitTarget": "원문에 명시된 제출처/회신처/장소 (원문에 제출처나 장소가 없으면 반드시 빈 문자열 \\"\\")",',
+                    '  "summaryLead": "공문/쪽지의 핵심 요지 (원문에 있는 사실만 1~2문장)",',
+                    '  "coreContent": "핵심 내용 한 줄 요약 (원문에 있는 사실만 기재)",',
+                    '  "keyPoints": ["원문에 명시된 세부 내용 또는 협조/조치 사항 1", "항목 2"]',
+                    "}"
+                ].join("\n");
 
-            const aiResp = await requestTimelyAiCompletion(savedApiKey, systemPrompt, contentForPrompt);
+            const userPrompt = `파일명: ${rawFileName}\n\n[문서 원문]\n${rawFileText}`;
+            const aiResp = await requestTimelyAiCompletion(savedApiKey, selectedModelMeta.id, systemPrompt, userPrompt);
+
             if (aiResp && aiResp.ok && aiResp.content) {
                 aiData = parseAiStructuredJson(aiResp.content);
                 if (!aiData) {
-                    // JSON 파싱에 실패한 경우 평문 응답을 요약으로 수용
                     const cleanLines = aiResp.content
                         .replace(/```[\s\S]*?```/g, "")
                         .split(/\r?\n/)
                         .map((l) => l.replace(/^[-*•\d.)\s]+/, "").trim())
                         .filter(Boolean);
-                    aiData = {
-                        subject: `${baseName} 요약`,
-                        dueDate: "",
-                        submitTarget: "자체 검토 및 보관",
-                        leadBeforeHighlight: cleanLines[0] || `${rawFileName} 문서의 AI 분석 결과입니다.`,
-                        highlightText: cleanLines[1] || cleanLines[0] || "핵심 내용을 확인해 주세요.",
-                        leadAfterHighlight: "",
-                        coreTask: cleanLines[0] || `${baseName} 핵심 요약`,
-                        actionItems: cleanLines.slice(1, 6)
-                    };
+                    if (modeKey === "summary") {
+                        aiData = {
+                            title: baseName,
+                            overview: cleanLines[0] || "",
+                            highlightSentence: cleanLines[1] || cleanLines[0] || "",
+                            sections: [{ heading: "주요 내용", points: cleanLines.slice(1) }]
+                        };
+                    } else {
+                        aiData = {
+                            title: baseName,
+                            dueDate: "",
+                            submitTarget: "",
+                            summaryLead: cleanLines[0] || "",
+                            coreContent: cleanLines[0] || "",
+                            keyPoints: cleanLines.slice(1)
+                        };
+                    }
                 }
-            } else if (aiResp && !aiResp.ok) {
-                aiErrorNotice = aiResp.error || "";
+            } else {
+                aiErrorNotice = (aiResp && aiResp.error) || "AI 응답을 가져오지 못했습니다.";
             }
-        } else if (!isDemo && !savedApiKey) {
-            aiErrorNotice = "환경설정 > MY AI 개인 API 키가 입력되지 않아 기본 요약 양식으로 생성되었습니다.";
         }
 
-        // 3. 날짜 및 폴더명 결정
-        const compactDue = aiData && aiData.dueDate
-            ? extractCompactYmd(aiData.dueDate, dParts.compact)
-            : dParts.compact;
-        const subjectForFolder = (aiData && aiData.subject ? aiData.subject : baseName)
+        // 2. 원문 대조를 통한 날짜·제출처 할루시네이션 2중 검증 (원문에 없는 날짜는 즉시 폐기)
+        const verifiedDueDate = (aiData && aiData.dueDate)
+            ? verifyDateExistsInSourceText(aiData.dueDate, rawFileText)
+            : "";
+        const verifiedSubmitTarget = (aiData && aiData.submitTarget)
+            ? cleanHallucinatedPlaceholder(aiData.submitTarget)
+            : "";
+        const compactDue = extractCompactYmdFromVerifiedDate(verifiedDueDate);
+
+        // 3. 자동 폴더링 실행 (원문에 기한이 있으면 기한 날짜, 없으면 오늘 보관일자로 폴더 생성)
+        const folderDatePrefix = compactDue || getLocalTodayCompact();
+        const rawSubj = cleanHallucinatedPlaceholder(aiData && aiData.title) || baseName;
+        const safeSubjForFolder = rawSubj
             .replace(/[\\/:*?"<>|]/g, "_")
             .replace(/\s+/g, "_")
             .slice(0, 48);
-        const folderLabel = `${compactDue}_${subjectForFolder}`;
+        const folderLabel = `${folderDatePrefix}_${safeSubjForFolder}`;
 
-        // 4. 자동 폴더링 실행 (AI 성공/실패와 무관하게 foldChecked 시 100% 보장 실행)
         let folderPath = "";
         let docFilePath = "";
         let targetNoteFolderId = null;
 
         if (foldChecked) {
-            const diskRes = await executeDiskAutoFoldering(list, modeKey, folderLabel, isDemo);
+            const diskRes = await executeDiskAutoFoldering(list, modeKey, folderLabel);
             folderPath = diskRes.folderPath;
             docFilePath = diskRes.docFilePath;
             targetNoteFolderId = await ensureBlackHoleTargetNoteFolder(modeKey);
@@ -1764,173 +1959,119 @@
             ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">${linkLabel}</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
             : "";
 
-        // 5. AI 응답 데이터가 있으면 실제 AI 분석 노트 생성
-        if (aiData) {
-            const subj = String(aiData.subject || baseName).trim();
-            const hasExplicitDue = !!(aiData.dueDate && String(aiData.dueDate).trim());
-            const noteTitle = (modeKey === "summary" && !hasExplicitDue)
-                ? subj
-                : `${subj} (${compactDue}까지)`;
-            const dueDisplay = hasExplicitDue
-                ? formatDateToZenDisplay(aiData.dueDate, dParts)
-                : `${dParts.zenDate} 18:00까지`;
-            const submitTarget = String(aiData.submitTarget || "자체 검토 및 보관").trim();
-            const coreTask = String(aiData.coreTask || subj).trim();
-            const leadBefore = escapeHtmlStr(String(aiData.leadBeforeHighlight || "").trim());
-            const highlightTxt = escapeHtmlStr(String(aiData.highlightText || coreTask).trim());
-            const leadAfter = escapeHtmlStr(String(aiData.leadAfterHighlight || "").trim());
+        // 4. [일반 문서 요약 모드] 억지 4칸 표(기한/제출처) 없이 문서 본연의 핵심만 깔끔하게 구성
+        if (modeKey === "summary") {
+            const noteTitle = rawSubj;
+            if (!aiData) {
+                const errHtml = [
+                    `<p><strong>[MY AI 문서 요약 · ${escapeHtmlStr(selectedModelMeta.name)}]</strong></p>`,
+                    `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 요약할 수 없습니다.")}</blockquote>`,
+                    linksHtml
+                ].join("");
+                return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice };
+            }
 
-            const headerBadge = modeKey === "official"
-                ? "[MY AI 공문 분석 요약]"
-                : modeKey === "memo"
-                    ? "[MY AI 수신 쪽지 분석 요약]"
-                    : "[MY AI 문서 핵심 요약]";
-            const row1Label = modeKey === "summary" ? "대상 문서" : "문서 구분";
-            const row1Val = modeKey === "official"
-                ? `정식 공문 (${rawFileName})`
-                : modeKey === "memo"
-                    ? `수신 쪽지 (${rawFileName})`
-                    : rawFileName;
-            const row2Label = modeKey === "summary" ? "검토 기한" : "제출 기한";
-            const row4Label = modeKey === "summary" ? "핵심 요약" : "핵심 과제";
-            const listTitle = modeKey === "official"
-                ? "주요 실무 조치 사항"
-                : modeKey === "memo"
-                    ? "체크리스트"
-                    : "핵심 포인트";
-            const listTypeAttr = modeKey === "summary" ? "bullet" : "unchecked";
+            const overview = cleanHallucinatedPlaceholder(aiData.overview);
+            const highlightSentence = cleanHallucinatedPlaceholder(aiData.highlightSentence);
+            const htmlParts = [
+                `<p><strong>[MY AI 문서 핵심 요약 · ${escapeHtmlStr(selectedModelMeta.name)}]</strong></p>`
+            ];
 
-            const itemsArr = Array.isArray(aiData.actionItems) && aiData.actionItems.length > 0
-                ? aiData.actionItems
-                : [coreTask];
-            const listItemsHtml = itemsArr
-                .map((it) => `<li data-list="${listTypeAttr}"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(String(it || "").trim())}</li>`)
-                .join("");
+            if (overview || highlightSentence) {
+                const qParts = [];
+                if (overview) qParts.push(escapeHtmlStr(overview));
+                if (highlightSentence && highlightSentence !== overview) {
+                    qParts.push(`<span style="background-color: rgb(254, 240, 138);">${escapeHtmlStr(highlightSentence)}</span>`);
+                } else if (qParts.length === 1) {
+                    qParts[0] = `<span style="background-color: rgb(254, 240, 138);">${qParts[0]}</span>`;
+                }
+                htmlParts.push(`<blockquote>${qParts.join(" ")}</blockquote>`);
+            }
 
-            const quoteInner = [
-                leadBefore ? `${leadBefore} ` : "",
-                `<span style="background-color: rgb(254, 240, 138);">${highlightTxt}</span>`,
-                leadAfter ? ` ${leadAfter}` : ""
-            ].join("");
+            const sections = Array.isArray(aiData.sections) ? aiData.sections : [];
+            sections.forEach((sec) => {
+                if (!sec) return;
+                const heading = cleanHallucinatedPlaceholder(sec.heading);
+                const points = Array.isArray(sec.points)
+                    ? sec.points.map((p) => cleanHallucinatedPlaceholder(p)).filter(Boolean)
+                    : [];
+                if (!heading && points.length === 0) return;
+                htmlParts.push(`<p><br></p>`);
+                if (heading) {
+                    htmlParts.push(`<p><strong>${escapeHtmlStr(heading)}</strong></p>`);
+                }
+                if (points.length > 0) {
+                    const liHtml = points
+                        .map((pt) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(pt)}</li>`)
+                        .join("");
+                    htmlParts.push(`<ol>${liHtml}</ol>`);
+                }
+            });
 
-            const html = [
-                `<p><strong>${headerBadge}</strong></p>`,
-                `<blockquote>${quoteInner}</blockquote>`,
-                `<p><br></p>`,
-                `<table><tbody>`,
-                `<tr><td><strong>${row1Label}</strong></td><td>${escapeHtmlStr(row1Val)}</td></tr>`,
-                `<tr><td><strong>${row2Label}</strong></td><td>${escapeHtmlStr(dueDisplay)}</td></tr>`,
-                `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
-                `<tr><td><strong>${row4Label}</strong></td><td>${escapeHtmlStr(coreTask)}</td></tr>`,
-                `</tbody></table>`,
-                `<p><br></p>`,
-                `<p><strong>${listTitle}</strong></p>`,
-                `<ol>${listItemsHtml}</ol>`,
-                linksHtml
-            ].join("");
+            if (linksHtml) htmlParts.push(linksHtml);
 
             return {
                 title: noteTitle,
-                html,
+                html: htmlParts.join(""),
                 targetFolderId: targetNoteFolderId,
                 usedRealAi: true
             };
         }
 
-        // 6. 시연(Demo) 또는 오프라인/키 미입력 시 폴백 템플릿
-        if (modeKey === "official") {
-            const docSubject = isDemo
-                ? "2026년 하반기 정보보안 및 개인정보 보호 점검 결과 제출"
-                : baseName;
-            const noteTitle = `${docSubject} (${dParts.compact}까지)`;
-            const submitTarget = "행정과 정보통신담당 (온나라 공문 회신)";
-            const html = [
-                `<p><strong>[MY AI 공문 분석 요약]</strong></p>`,
-                `<blockquote>전 부서 업무용 PC 및 내부망 단말기에 대한 <span style="background-color: rgb(254, 240, 138);">하반기 정보보안 점검 결과를 ${escapeHtmlStr(dParts.zenDate)} 18:00까지 제출</span> 요청하는 공문입니다.</blockquote>`,
-                `<p><br></p>`,
-                `<table><tbody>`,
-                `<tr><td><strong>문서 구분</strong></td><td>정식 공문 (${escapeHtmlStr(rawFileName)})</td></tr>`,
-                `<tr><td><strong>제출 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 18:00까지</td></tr>`,
-                `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
-                `<tr><td><strong>핵심 과제</strong></td><td>부서별 점검표(붙임1) 작성 및 미비 사항 조치 결과 회신</td></tr>`,
-                `</tbody></table>`,
-                `<p><br></p>`,
-                `<p><strong>주요 실무 조치 사항</strong></p>`,
-                `<ol>`,
-                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>백신 실시간 감시 및 최신 엔진 업데이트 상태 확인</li>`,
-                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>화면보호기 자동 잠금(10분 이내) 및 부팅 암호 설정 점검</li>`,
-                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>점검표 취합 후 기한 내 온나라 공문 회신</li>`,
-                `</ol>`,
+        // 5. [공문 분석 / 쪽지 분석 모드] 원문에 있는 사실만 표기하고, 없는 항목은 빈칸("")으로 유지
+        const noteTitle = compactDue ? `${rawSubj} (${compactDue}까지)` : rawSubj;
+        const headerBadge = modeKey === "official"
+            ? `[MY AI 공문 분석 · ${selectedModelMeta.name}]`
+            : `[MY AI 쪽지 분석 · ${selectedModelMeta.name}]`;
+
+        if (!aiData) {
+            const errHtml = [
+                `<p><strong>${escapeHtmlStr(headerBadge)}</strong></p>`,
+                `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 분석할 수 없습니다.")}</blockquote>`,
                 linksHtml
             ].join("");
-            return { title: noteTitle, html, targetFolderId: targetNoteFolderId, aiErrorNotice };
+            return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice };
         }
 
-        if (modeKey === "memo") {
-            const memoSubject = isDemo
-                ? "주간 주요업무 추진실적 및 계획 자료 협조 요청"
-                : baseName;
-            const noteTitle = `${memoSubject} (${dParts.compact}까지)`;
-            const submitTarget = "기획감사담당관 기획담당 (내부 메신저 쪽지 회신)";
-            const excerpt = rawFileText
-                ? escapeHtmlStr(rawFileText.trim().split(/\r?\n/).slice(0, 3).join(" ").slice(0, 220))
-                : "부서별 주간 주요업무 추진실적 및 차주 계획 핵심 항목을 서식에 맞춰 회신 요청합니다.";
-            const html = [
-                `<p><strong>[MY AI 수신 쪽지 분석 요약]</strong></p>`,
-                `<blockquote>${excerpt} <span style="background-color: rgb(254, 240, 138);">마감 기한은 ${escapeHtmlStr(dParts.zenDate)} 14:00까지</span>입니다.</blockquote>`,
-                `<p><br></p>`,
-                `<table><tbody>`,
-                `<tr><td><strong>문서 구분</strong></td><td>수신 쪽지 (${escapeHtmlStr(rawFileName)})</td></tr>`,
-                `<tr><td><strong>제출 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 14:00까지</td></tr>`,
-                `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
-                `<tr><td><strong>핵심 과제</strong></td><td>부서 주간 추진실적 3건 이내 요약 작성 및 쪽지 회신</td></tr>`,
-                `</tbody></table>`,
-                `<p><br></p>`,
-                `<p><strong>체크리스트</strong></p>`,
-                `<ol>`,
-                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>금주 추진실적 수치 및 일자 현행화</li>`,
-                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>담당자 검토 후 기한 내 회신 완료</li>`,
-                `</ol>`,
-                linksHtml
-            ].join("");
-            return { title: noteTitle, html, targetFolderId: targetNoteFolderId, aiErrorNotice };
-        }
-
-        // summary (문서 요약)
-        const sumSubject = isDemo
-            ? "2026년 스마트 행정업무 효율화 추진계획 요약"
-            : `${baseName} 요약`;
-        const noteTitle = `${sumSubject} (${dParts.compact}까지)`;
-        const submitTarget = "스마트행정추진단 (검토 보고)";
-        const textPreviewLines = rawFileText
-            ? rawFileText.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 4)
+        const summaryLead = cleanHallucinatedPlaceholder(aiData.summaryLead);
+        const coreContent = cleanHallucinatedPlaceholder(aiData.coreContent);
+        const keyPoints = Array.isArray(aiData.keyPoints)
+            ? aiData.keyPoints.map((p) => cleanHallucinatedPlaceholder(p)).filter(Boolean)
             : [];
-        const quoteHtml = textPreviewLines.length > 0
-            ? `<blockquote>${escapeHtmlStr(textPreviewLines[0].slice(0, 180))} <span style="background-color: rgb(254, 240, 138);">${escapeHtmlStr((textPreviewLines[1] || "핵심 본문 요약").slice(0, 120))}</span></blockquote>`
-            : `<blockquote>반복적인 공문·쪽지 분류와 일정 등록 업무를 <span style="background-color: rgb(254, 240, 138);">MY 노트 · MY 일정관리 · MY AI 연동으로 자동화</span>하여 행정 처리 시간을 단축하는 계획입니다.</blockquote>`;
-        const bulletHtml = textPreviewLines.length > 1
-            ? textPreviewLines.map((l) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(l.slice(0, 160))}</li>`).join("")
-            : [
-                `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>공문 및 쪽지 원본·첨부 자동 분류 보관으로 문서 탐색 시간 단축</li>`,
-                `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>본문 중심 AI 요약 후 새 노트 즉시 생성 및 일정관리 자동 연계</li>`
-            ].join("");
 
-        const html = [
-            `<p><strong>[MY AI 문서 핵심 요약]</strong></p>`,
-            quoteHtml,
-            `<p><br></p>`,
+        const htmlParts = [
+            `<p><strong>${escapeHtmlStr(headerBadge)}</strong></p>`
+        ];
+
+        if (summaryLead) {
+            htmlParts.push(`<blockquote><span style="background-color: rgb(254, 240, 138);">${escapeHtmlStr(summaryLead)}</span></blockquote>`);
+        }
+
+        htmlParts.push(`<p><br></p>`);
+        htmlParts.push([
             `<table><tbody>`,
-            `<tr><td><strong>대상 문서</strong></td><td>${escapeHtmlStr(rawFileName)}</td></tr>`,
-            `<tr><td><strong>검토 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 18:00까지</td></tr>`,
-            `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
-            `<tr><td><strong>핵심 요약</strong></td><td>${escapeHtmlStr(textPreviewLines[0] ? textPreviewLines[0].slice(0, 80) : "자동 폴더링 · 본문 AI 요약 · 일정관리 원클릭 연계")}</td></tr>`,
-            `</tbody></table>`,
-            `<p><br></p>`,
-            `<p><strong>핵심 포인트</strong></p>`,
-            `<ol>${bulletHtml}</ol>`,
-            linksHtml
-        ].join("");
-        return { title: noteTitle, html, targetFolderId: targetNoteFolderId, aiErrorNotice };
+            `<tr><td><strong>문서명</strong></td><td>${escapeHtmlStr(rawFileName)}</td></tr>`,
+            `<tr><td><strong>일정 / 기한</strong></td><td>${escapeHtmlStr(verifiedDueDate)}</td></tr>`,
+            `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(verifiedSubmitTarget)}</td></tr>`,
+            `<tr><td><strong>핵심 내용</strong></td><td>${escapeHtmlStr(coreContent)}</td></tr>`,
+            `</tbody></table>`
+        ].join(""));
+
+        if (keyPoints.length > 0) {
+            const liHtml = keyPoints
+                .map((pt) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(pt)}</li>`)
+                .join("");
+            htmlParts.push(`<p><br></p><p><strong>주요 내용</strong></p><ol>${liHtml}</ol>`);
+        }
+
+        if (linksHtml) htmlParts.push(linksHtml);
+
+        return {
+            title: noteTitle,
+            html: htmlParts.join(""),
+            targetFolderId: targetNoteFolderId,
+            usedRealAi: true
+        };
     }
 
     function openBlackHoleSummaryInNewNote(summaryResult) {
@@ -1972,13 +2113,18 @@
         setTimeout(applyContent, 35);
     }
 
-    async function triggerBlackHoleSwallow(items, isDemo = false) {
+    async function triggerBlackHoleSwallow(items) {
         if (!bhIsOpen || bhSwallowing) return;
-        const list = Array.isArray(items) && items.length > 0 ? items : [{ name: "테스트_공문.zip" }];
-        const meta = BH_MODE_META[bhCurrentMode] || BH_MODE_META.official;
+        const list = Array.isArray(items) ? items.filter(Boolean) : [];
+        if (list.length === 0) return;
+
+        const activeMode = bhCurrentMode || "official";
+        const meta = BH_MODE_META[activeMode] || BH_MODE_META.official;
         const foldChecked = !!document.getElementById("zen-bh-folding-toggle")?.checked;
         const pill = document.getElementById("zen-bh-status-pill");
+        const modelMeta = getSelectedMyAiModelMeta();
 
+        closeBlackHoleModelDropdown();
         clearTimeout(bhSwallowTimer1);
         clearTimeout(bhSwallowTimer2);
         if (bhAutoScheduleTimer) {
@@ -2003,21 +2149,20 @@
         }
 
         if (pill) {
-            pill.textContent = `${firstName}${extra} 투입 중 (${meta.label} · 폴더링 ${foldChecked ? "ON" : "OFF"})`;
+            pill.textContent = `${firstName}${extra} 투입 중 (${meta.label} · ${modelMeta.name})`;
         }
 
         const totalSwallowMs = duration + (count - 1) * stagger + 40;
-        // AI 응답이 일찍 도착하더라도 문서 흡수(1.2초) + 코어 분석 연출을 위한 기본 대기 시간 보장
         const minWaitMs = Math.max(2100, totalSwallowMs + 860);
 
         bhSwallowTimer1 = setTimeout(() => {
             if (!bhIsOpen) return;
             if (pill) {
-                pill.textContent = `${meta.label} AI 응답 수신 및 요약 노트 생성 중...`;
+                pill.textContent = `${modelMeta.name} 모델이 문서를 분석·요약하고 있습니다...`;
             }
         }, totalSwallowMs);
 
-        const analysisPromise = buildBlackHoleSummaryResult(list, bhCurrentMode, foldChecked, isDemo);
+        const analysisPromise = buildBlackHoleSummaryResult(list, activeMode, foldChecked);
         const minWaitPromise = new Promise((resolve) => {
             bhSwallowTimer2 = setTimeout(resolve, minWaitMs);
         });
@@ -2031,24 +2176,25 @@
 
         if (typeof showToast === "function") {
             if (summaryResult && summaryResult.aiErrorNotice) {
-                showToast(`${meta.label} 요약 노트 생성 (${summaryResult.aiErrorNotice})`);
+                showToast(`${meta.label}: ${summaryResult.aiErrorNotice}`);
             } else {
-                const prefix = isDemo ? "[블랙홀 시연] " : (summaryResult && summaryResult.usedRealAi ? "[MY AI 분석 완료] " : "");
-                showToast(`${prefix}${meta.label} 요약 노트가 생성되었습니다.`);
+                showToast(`[${modelMeta.name}] ${meta.label} 요약 노트가 생성되었습니다.`);
             }
         }
 
-        // 새 요약 문서가 나타난 뒤 정확히 1.2초 후에 'MY 일정관리로 보내기' 팝업 자동 실행
-        bhAutoScheduleTimer = setTimeout(() => {
-            bhAutoScheduleTimer = null;
-            openSendToScheduleModal();
-        }, 1200);
+        // 공문 분석(official)과 쪽지 분석(memo)일 때만 1.2초 후 'MY 일정관리로 보내기' 팝업 자동 실행 (일반 문서 요약은 띄우지 않음)
+        if (activeMode === "official" || activeMode === "memo") {
+            bhAutoScheduleTimer = setTimeout(() => {
+                bhAutoScheduleTimer = null;
+                openSendToScheduleModal();
+            }, 1200);
+        }
     }
 
     function handleBlackHoleDroppedFiles(files) {
         const arr = Array.from(files || []);
         if (arr.length === 0) return;
-        triggerBlackHoleSwallow(arr, false);
+        triggerBlackHoleSwallow(arr);
     }
 
     function triggerBlackHoleFilePick() {
@@ -2060,19 +2206,18 @@
         }
     }
 
-    function demoBlackHoleSwallow() {
-        const sampleName =
-            bhCurrentMode === "official"
-                ? "온나라_공문_시연.zip"
-                : bhCurrentMode === "memo"
-                    ? "수신쪽지_시연.txt"
-                    : "업무계획서_요약시연.pdf";
-        triggerBlackHoleSwallow([{ name: sampleName }], true);
-    }
-
     function bindBlackHoleEvents() {
         const dropZone = document.getElementById("zen-bh-orb-dropzone");
         const fileInput = document.getElementById("zen-bh-file-input");
+        const shell = document.getElementById("zen-blackhole-portal-shell");
+        if (shell && !shell._bhOutsideClickBound) {
+            shell._bhOutsideClickBound = true;
+            shell.addEventListener("click", (e) => {
+                if (!e.target.closest(".zen-bh-model-picker-wrap")) {
+                    closeBlackHoleModelDropdown();
+                }
+            });
+        }
         if (dropZone && !dropZone._bhBound) {
             dropZone._bhBound = true;
             dropZone.addEventListener("dragenter", (e) => {
@@ -2108,6 +2253,7 @@
         window.addEventListener("resize", () => {
             if (bhIsOpen) updateBlackHoleButtonOriginVars();
         });
+        syncBlackHoleModelPickerUI();
     }
 
     // 전역 노출
@@ -2132,9 +2278,10 @@
     window.closeBlackHolePortal = closeBlackHolePortal;
     window.isBlackHolePortalOpen = isBlackHolePortalOpen;
     window.setBlackHoleMode = setBlackHoleMode;
+    window.toggleBlackHoleModelDropdown = toggleBlackHoleModelDropdown;
+    window.selectBlackHoleAiModel = selectBlackHoleAiModel;
     window.handleBlackHoleDroppedFiles = handleBlackHoleDroppedFiles;
     window.triggerBlackHoleFilePick = triggerBlackHoleFilePick;
-    window.demoBlackHoleSwallow = demoBlackHoleSwallow;
 
     window.addEventListener("DOMContentLoaded", () => {
         bindBlackHoleEvents();
