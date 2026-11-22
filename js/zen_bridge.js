@@ -784,11 +784,178 @@
         closeSendToScheduleModal();
     }
 
-    function sendNoteToScheduleDirectStub() {
+    // ========================================================================
+    // 4-2. 데스크톱 C# 브릿지 요청/응답 Promise 헬퍼 & 온라인 일정관리 직접 등록
+    // ========================================================================
+    const pendingDesktopReqMap = new Map();
+
+    function bindDesktopBridgeResponseListener() {
+        if (!isDesktopWebViewEnv() || window._zenDesktopBridgeRespBound) return;
+        window._zenDesktopBridgeRespBound = true;
+        window.chrome.webview.addEventListener("message", (event) => {
+            try {
+                const payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+                if (!payload || !payload.reqId) return;
+                const entry = pendingDesktopReqMap.get(payload.reqId);
+                if (entry) {
+                    clearTimeout(entry.timer);
+                    pendingDesktopReqMap.delete(payload.reqId);
+                    entry.resolve(payload);
+                }
+            } catch { }
+        });
+    }
+
+    function callDesktopBridgeRequest(type, bodyObj, timeoutMs = 48000) {
+        if (!isDesktopWebViewEnv()) {
+            return Promise.resolve({ ok: false, error: "NOT_DESKTOP" });
+        }
+        bindDesktopBridgeResponseListener();
+        const reqId = "req_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                pendingDesktopReqMap.delete(reqId);
+                resolve({ ok: false, error: "TIMEOUT", message: "요청 시간이 초과되었습니다." });
+            }, timeoutMs);
+            pendingDesktopReqMap.set(reqId, { resolve, timer });
+            try {
+                window.chrome.webview.postMessage(
+                    JSON.stringify(Object.assign({}, bodyObj, { type, reqId }))
+                );
+            } catch (err) {
+                clearTimeout(timer);
+                pendingDesktopReqMap.delete(reqId);
+                resolve({ ok: false, error: String(err && err.message ? err.message : err) });
+            }
+        });
+    }
+
+    async function registerScheduleInBrowserMyTodoDB(ddayPayload) {
+        try {
+            const incomingTasks = Array.isArray(ddayPayload && ddayPayload.tasks) ? ddayPayload.tasks : [];
+            if (incomingTasks.length === 0) return false;
+
+            const activeStoreId = localStorage.getItem("todoCalendar.activeStoreId") || "default";
+            const storeKey = activeStoreId === "default"
+                ? "todoCalendar.v1"
+                : `todoCalendar.store.${activeStoreId}`;
+
+            let currentStoreObj = null;
+            const rawLocal = localStorage.getItem(storeKey);
+            if (rawLocal) {
+                try {
+                    currentStoreObj = JSON.parse(rawLocal);
+                } catch { }
+            }
+
+            // MyTodoDB_V1 IndexedDB에서도 조회 및 동기화
+            const idbStoreObj = await new Promise((resolve) => {
+                try {
+                    const req = indexedDB.open("MyTodoDB_V1", 1);
+                    req.onupgradeneeded = (e) => {
+                        const idb = e.target.result;
+                        if (!idb.objectStoreNames.contains("kv")) idb.createObjectStore("kv");
+                        if (!idb.objectStoreNames.contains("handles")) idb.createObjectStore("handles");
+                    };
+                    req.onsuccess = (e) => {
+                        try {
+                            const idb = e.target.result;
+                            if (!idb.objectStoreNames.contains("kv")) {
+                                resolve(null);
+                                return;
+                            }
+                            const tx = idb.transaction("kv", "readonly");
+                            const g = tx.objectStore("kv").get(storeKey);
+                            g.onsuccess = () => {
+                                try {
+                                    const val = g.result;
+                                    if (!val) resolve(null);
+                                    else resolve(typeof val === "string" ? JSON.parse(val) : val);
+                                } catch {
+                                    resolve(null);
+                                }
+                            };
+                            g.onerror = () => resolve(null);
+                        } catch {
+                            resolve(null);
+                        }
+                    };
+                    req.onerror = () => resolve(null);
+                } catch {
+                    resolve(null);
+                }
+            });
+
+            const baseStore = idbStoreObj || currentStoreObj || { version: 1, tasks: [], recurrings: [], holidays: {} };
+            if (!Array.isArray(baseStore.tasks)) baseStore.tasks = [];
+
+            incomingTasks.forEach((t) => {
+                baseStore.tasks.push(Object.assign({}, t));
+            });
+            baseStore.updatedAt = new Date().toISOString();
+
+            const serialized = JSON.stringify(baseStore);
+            try {
+                if (serialized.length < 200 * 1024) {
+                    localStorage.setItem(storeKey, serialized);
+                }
+            } catch { }
+
+            await new Promise((resolve) => {
+                try {
+                    const req = indexedDB.open("MyTodoDB_V1", 1);
+                    req.onsuccess = (e) => {
+                        try {
+                            const idb = e.target.result;
+                            const tx = idb.transaction("kv", "readwrite");
+                            tx.objectStore("kv").put(serialized, storeKey);
+                            tx.oncomplete = () => resolve(true);
+                            tx.onerror = () => resolve(false);
+                        } catch {
+                            resolve(false);
+                        }
+                    };
+                    req.onerror = () => resolve(false);
+                } catch {
+                    resolve(false);
+                }
+            });
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async function sendNoteToScheduleDirectStub() {
         const ddayPayload = collectSendToSchedulePayload();
         if (!ddayPayload) return;
-        if (typeof showToast === "function") {
-            showToast("MY 일정관리 직접 등록 연동은 3단계에서 연결될 예정입니다.");
+
+        if (isDesktopWebViewEnv()) {
+            const payloadJson = JSON.stringify(ddayPayload);
+            const res = await callDesktopBridgeRequest("sendScheduleToMyTodo", { payloadJson }, 12000);
+            if (res && res.ok) {
+                closeSendToScheduleModal();
+                if (typeof showToast === "function") {
+                    showToast(res.message || "MY 일정관리에 일정이 등록되었습니다.");
+                }
+            } else {
+                if (typeof showToast === "function") {
+                    showToast((res && res.message) ? res.message : "MY 일정관리 전송 중 오류가 발생했습니다.");
+                }
+            }
+            return;
+        }
+
+        // 온라인 / 브라우저 환경: 동일 브라우저 MyTodoDB_V1 / localStorage 직접 등록 후 안내
+        const ok = await registerScheduleInBrowserMyTodoDB(ddayPayload);
+        closeSendToScheduleModal();
+        if (ok) {
+            if (typeof showToast === "function") {
+                showToast("일정관리에 일정이 등록되었습니다.");
+            }
+        } else {
+            await exportNoteAsDdaySchedule();
         }
     }
 
@@ -1164,23 +1331,509 @@
         return !!bhIsOpen;
     }
 
+    function arrayBufferToBase64(buf) {
+        const bytes = new Uint8Array(buf);
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+    }
+
+    async function readFileAsBase64(fileObj) {
+        if (!fileObj || typeof fileObj.arrayBuffer !== "function") return "";
+        try {
+            const buf = await fileObj.arrayBuffer();
+            return arrayBufferToBase64(buf);
+        } catch {
+            return "";
+        }
+    }
+
+    async function extractPdfTextFromFile(fileObj) {
+        if (!fileObj || typeof fileObj.arrayBuffer !== "function") return "";
+        const pdfLib = window.pdfjsLib;
+        if (!pdfLib || typeof pdfLib.getDocument !== "function") return "";
+        try {
+            const buf = await fileObj.arrayBuffer();
+            const loadingTask = pdfLib.getDocument({ data: new Uint8Array(buf) });
+            const pdfDoc = await loadingTask.promise;
+            const maxPages = Math.min(pdfDoc.numPages || 1, 25);
+            const pageTexts = [];
+            let totalLen = 0;
+            for (let p = 1; p <= maxPages; p++) {
+                const page = await pdfDoc.getPage(p);
+                const textContent = await page.getTextContent();
+                const lineStr = (textContent.items || [])
+                    .map((it) => (it && typeof it.str === "string" ? it.str : ""))
+                    .join(" ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+                if (lineStr) {
+                    pageTexts.push(`[${p}페이지] ${lineStr}`);
+                    totalLen += lineStr.length;
+                    if (totalLen >= 18000) break;
+                }
+            }
+            return pageTexts.join("\n").slice(0, 18000);
+        } catch {
+            return "";
+        }
+    }
+
+    async function extractDocumentTextForAi(firstItem, isDemo) {
+        if (isDemo || !firstItem) return "";
+        const rawFileName = String(firstItem.name || "").trim();
+        const lower = rawFileName.toLowerCase();
+
+        // 1. PDF 파일: 내장 pdf.js로 페이지 텍스트 추출
+        if (lower.endsWith(".pdf")) {
+            const pdfTxt = await extractPdfTextFromFile(firstItem);
+            if (pdfTxt) return pdfTxt;
+        }
+
+        // 2. 일반 텍스트 계열 (.txt, .md, .csv, .json, .html, .xml)
+        if (/\.(txt|md|csv|json|html|htm|xml|log)$/i.test(lower) && typeof firstItem.text === "function") {
+            try {
+                let txt = (await firstItem.text()) || "";
+                if (/\.(html|htm|xml)$/i.test(lower)) {
+                    const tmp = document.createElement("div");
+                    tmp.innerHTML = txt;
+                    txt = (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
+                }
+                if (txt.trim()) return txt.trim().slice(0, 18000);
+            } catch { }
+        }
+
+        // 3. 데스크톱 C# 브릿지로 .docx / .hwpx / .zip / 기타 파일 텍스트 추출
+        if (isDesktopWebViewEnv() && typeof firstItem.arrayBuffer === "function") {
+            try {
+                const b64 = await readFileAsBase64(firstItem);
+                if (b64) {
+                    const res = await callDesktopBridgeRequest(
+                        "extractBlackHoleFileText",
+                        { fileName: rawFileName, base64: b64 },
+                        15000
+                    );
+                    if (res && res.ok && res.text && String(res.text).trim()) {
+                        return String(res.text).trim().slice(0, 18000);
+                    }
+                }
+            } catch { }
+        }
+
+        // 4. 폴백: firstItem.text() 시도
+        if (typeof firstItem.text === "function") {
+            try {
+                const fallbackTxt = (await firstItem.text()) || "";
+                const cleaned = fallbackTxt.replace(/\0/g, "").trim();
+                if (cleaned) return cleaned.slice(0, 18000);
+            } catch { }
+        }
+        return "";
+    }
+
+    async function executeDiskAutoFoldering(list, modeKey, folderLabel, isDemo) {
+        const categoryName = modeKey === "official" ? "공문" : modeKey === "memo" ? "쪽지" : "문서";
+        const defaultFolderPath = `D:\\MY_Apps\\${categoryName}\\${folderLabel}`;
+        const firstName = (Array.isArray(list) && list[0] && list[0].name) ? String(list[0].name).trim() : "문서.txt";
+        const defaultDocPath = `${defaultFolderPath}\\${firstName}`;
+
+        if (!isDesktopWebViewEnv()) {
+            return {
+                folderPath: defaultFolderPath,
+                docFilePath: defaultDocPath
+            };
+        }
+
+        try {
+            const filesPayload = [];
+            const maxFiles = Math.min(Array.isArray(list) ? list.length : 0, 8);
+            for (let i = 0; i < maxFiles; i++) {
+                const item = list[i];
+                const name = String((item && item.name) || `문서_${i + 1}.txt`).trim();
+                const b64 = (!isDemo && item && typeof item.arrayBuffer === "function")
+                    ? await readFileAsBase64(item)
+                    : "";
+                filesPayload.push({ name, base64: b64 });
+            }
+            if (filesPayload.length === 0) {
+                filesPayload.push({ name: firstName, base64: "" });
+            }
+
+            const res = await callDesktopBridgeRequest(
+                "saveBlackHoleAutoFoldering",
+                {
+                    modeKey,
+                    folderLabel,
+                    files: filesPayload
+                },
+                18000
+            );
+            if (res && res.ok && res.folderPath) {
+                return {
+                    folderPath: res.folderPath,
+                    docFilePath: res.primaryFilePath || `${res.folderPath}\\${firstName}`
+                };
+            }
+        } catch { }
+
+        return {
+            folderPath: defaultFolderPath,
+            docFilePath: defaultDocPath
+        };
+    }
+
+    async function ensureBlackHoleTargetNoteFolder(modeKey) {
+        if (typeof db === "undefined" || !db) return null;
+        const folderTitle = modeKey === "official" ? "공문" : modeKey === "memo" ? "쪽지" : "문서";
+
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction(["memos"], "readwrite");
+                const store = tx.objectStore("memos");
+                const req = store.getAll();
+                let resolvedId = null;
+
+                req.onsuccess = (e) => {
+                    const all = Array.isArray(e.target.result) ? e.target.result : [];
+                    const existing = all.find(
+                        (m) =>
+                            m &&
+                            m.type === "folder" &&
+                            !m.isDeleted &&
+                            !m.isPermanentlyDeleted &&
+                            !m.isSystem &&
+                            (m.parentId === null || m.parentId === undefined) &&
+                            String(m.title || "").trim() === folderTitle
+                    );
+                    if (existing && existing.id !== undefined && existing.id !== null) {
+                        resolvedId = existing.id;
+                        return;
+                    }
+                    const addReq = store.add({
+                        title: folderTitle,
+                        type: "folder",
+                        parentId: null,
+                        parentSyncId: null,
+                        syncId: typeof generateSyncId === "function" ? generateSyncId() : Date.now().toString(36),
+                        updatedAt: Date.now(),
+                        isDeleted: false
+                    });
+                    addReq.onsuccess = (ev) => {
+                        resolvedId = ev.target.result;
+                    };
+                };
+
+                tx.oncomplete = () => {
+                    try {
+                        if (resolvedId !== null && resolvedId !== undefined) {
+                            if (typeof ensureSidebarExpandedInitialized === "function") {
+                                ensureSidebarExpandedInitialized();
+                            }
+                            if (typeof sidebarExpandedSet !== "undefined" && sidebarExpandedSet && typeof sidebarExpandedSet.add === "function") {
+                                sidebarExpandedSet.add(resolvedId);
+                            }
+                            if (typeof saveSidebarExpandedState === "function") {
+                                saveSidebarExpandedState();
+                            }
+                        }
+                    } catch { }
+                    resolve(resolvedId);
+                };
+                tx.onerror = () => resolve(null);
+            } catch {
+                resolve(null);
+            }
+        });
+    }
+
+    async function requestTimelyAiCompletion(apiKey, systemPrompt, userPrompt) {
+        const trimmedKey = (apiKey || "").trim();
+        if (!trimmedKey) {
+            return {
+                ok: false,
+                error: "환경설정 > MY AI 개인 API 키에 연동 키(tgpt_s...)가 저장되어 있지 않습니다."
+            };
+        }
+
+        if (isDesktopWebViewEnv()) {
+            const res = await callDesktopBridgeRequest(
+                "timelyAiChatRequest",
+                {
+                    apiKey: trimmedKey,
+                    systemPrompt,
+                    userPrompt
+                },
+                48000
+            );
+            if (res && res.ok && res.content) {
+                return { ok: true, content: res.content, model: res.model || "" };
+            }
+            return {
+                ok: false,
+                error: (res && (res.error || res.message)) || "Timely AI 호출에 실패했습니다."
+            };
+        }
+
+        // 온라인 브라우저 fetch 호출 (1순위: OpenAI 호환 브릿지 / 2순위: Direct API)
+        const candidates = [
+            { url: "https://hello.timelyai.io/api/v2/chat/bridge/openai/chat/completions", model: "openai/gpt-4.1-mini" },
+            { url: "https://hello.timelyai.io/api/v2/chat/bridge/openai/chat/completions", model: "google/gemini-3-flash-preview" },
+            { url: "https://hello.timelyai.io/api/v2/chat/direct/openai/v1/chat/completions", model: "gpt-4.1-mini" }
+        ];
+
+        let lastErr = "Timely AI 서버 응답 실패";
+        for (const cand of candidates) {
+            try {
+                const resp = await fetch(cand.url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${trimmedKey}`
+                    },
+                    body: JSON.stringify({
+                        model: cand.model,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: userPrompt }
+                        ],
+                        temperature: 0.2
+                    })
+                });
+                const data = await resp.json().catch(() => null);
+                if (resp.ok && data && Array.isArray(data.choices) && data.choices[0]?.message?.content) {
+                    return {
+                        ok: true,
+                        content: data.choices[0].message.content,
+                        model: cand.model
+                    };
+                }
+                if (data && data.error) {
+                    lastErr = typeof data.error === "string" ? data.error : (data.error.message || lastErr);
+                }
+                if (resp.status === 401 || resp.status === 402) break;
+            } catch (err) {
+                lastErr = String(err && err.message ? err.message : err);
+            }
+        }
+        return { ok: false, error: lastErr };
+    }
+
+    function parseAiStructuredJson(rawContent) {
+        if (!rawContent || typeof rawContent !== "string") return null;
+        let text = rawContent.trim();
+        const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fenced && fenced[1]) {
+            text = fenced[1].trim();
+        } else {
+            const firstBrace = text.indexOf("{");
+            const lastBrace = text.lastIndexOf("}");
+            if (firstBrace >= 0 && lastBrace > firstBrace) {
+                text = text.slice(firstBrace, lastBrace + 1);
+            }
+        }
+        try {
+            const obj = JSON.parse(text);
+            return obj && typeof obj === "object" ? obj : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function formatDateToZenDisplay(isoOrYmd, defaultParts) {
+        if (!isoOrYmd) return `${defaultParts.zenDate} 18:00까지`;
+        const m = String(isoOrYmd).match(/(\d{4})[.\-/]?(\d{2})[.\-/]?(\d{2})/);
+        if (!m) return String(isoOrYmd);
+        const y = parseInt(m[1], 10);
+        const mo = parseInt(m[2], 10);
+        const d = parseInt(m[3], 10);
+        const dt = new Date(y, mo - 1, d);
+        if (isNaN(dt.getTime())) return String(isoOrYmd);
+        const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+        const wk = weekdays[dt.getDay()];
+        const timeMatch = String(isoOrYmd).match(/(\d{1,2}:\d{2})/);
+        const timePart = timeMatch ? ` ${timeMatch[1]}` : "";
+        return `${y}.${pad2(mo)}.${pad2(d)}.(${wk})${timePart}까지`;
+    }
+
+    function extractCompactYmd(isoOrYmd, fallbackCompact) {
+        if (!isoOrYmd) return fallbackCompact;
+        const m = String(isoOrYmd).match(/(\d{4})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
+        if (!m) return fallbackCompact;
+        return `${m[1]}${pad2(m[2])}${pad2(m[3])}`;
+    }
+
     async function buildBlackHoleSummaryResult(list, modeKey, foldChecked, isDemo) {
         const firstItem = (Array.isArray(list) && list[0]) ? list[0] : { name: "온나라_공문_시연.zip" };
         const rawFileName = String(firstItem.name || "문서").trim();
         const baseName = rawFileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim() || "문서";
         const dParts = getOffsetDateParts(5);
 
-        let rawFileText = "";
-        try {
-            if (!isDemo && firstItem && typeof firstItem.text === "function" && /\.(txt|md|html|csv|json)$/i.test(rawFileName)) {
-                rawFileText = (await firstItem.text()) || "";
+        // 1. 문서 텍스트 추출
+        const rawFileText = await extractDocumentTextForAi(firstItem, isDemo);
+
+        // 2. Timely AI 실시간 분석 호출 (시연 모드가 아니고 API 키가 있을 때)
+        const savedApiKey = (localStorage.getItem(MYAI_KEY_STORAGE_KEY) || "").trim();
+        let aiData = null;
+        let aiErrorNotice = "";
+
+        if (!isDemo && savedApiKey) {
+            const modeDesc = modeKey === "official"
+                ? "행정기관 공문서 분석 (제출 기한, 제출처/담당부서, 핵심 과제, 실무 조치 체크리스트 도출)"
+                : modeKey === "memo"
+                    ? "업무용 수신 쪽지 분석 (회신 기한, 발신/제출처, 핵심 요청사항, 실행 체크리스트 도출)"
+                    : "일반 문서 핵심 요약 (문서 핵심 주제, 주요 일정/기한, 관련 부서/제출처, 핵심 요약 및 주요 포인트 도출)";
+
+            const systemPrompt = [
+                "당신은 대한민국 공공기관 및 기업의 행정·문서 분석 AI 비서 'MY AI'입니다.",
+                "사용자가 투입한 문서를 분석하여 반드시 아래 JSON 스키마 형식으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON 객체만 출력하세요.",
+                "{",
+                '  "subject": "문서 핵심 제목 (40자 이내, 명확하고 간결하게)",',
+                '  "dueDate": "문서에 명시된 마감일/기한/일시 (YYYY-MM-DD HH:mm 형식 권장, 없으면 빈 문자열)",',
+                '  "submitTarget": "장소 또는 제출처/담당부서/대상 (없으면 \'자체 검토 및 보관\')",',
+                '  "leadBeforeHighlight": "핵심 요약 도입부 문장 (1문장)",',
+                '  "highlightText": "가장 중요한 핵심 결론 또는 마감/조치 문구 (노란 형광펜으로 강조될 구절, 1문장)",',
+                '  "leadAfterHighlight": "마무리 보조 문구 (없으면 빈 문자열)",',
+                '  "coreTask": "표의 핵심 과제/핵심 요약 칸에 들어갈 한 줄 요약 (60자 이내)",',
+                '  "actionItems": ["실무 조치사항 또는 핵심 포인트 1", "항목 2", "항목 3", "항목 4"]',
+                "}"
+            ].join("\n");
+
+            const contentForPrompt = rawFileText
+                ? `파일명: ${rawFileName}\n분석 모드: ${modeDesc}\n\n[문서 본문 내용]\n${rawFileText}`
+                : `파일명: ${rawFileName}\n분석 모드: ${modeDesc}\n(참고: 텍스트를 직접 추출할 수 없는 바이너리 포맷이므로 파일명과 맥락을 바탕으로 실무 요약 초안을 작성해 주세요.)`;
+
+            const aiResp = await requestTimelyAiCompletion(savedApiKey, systemPrompt, contentForPrompt);
+            if (aiResp && aiResp.ok && aiResp.content) {
+                aiData = parseAiStructuredJson(aiResp.content);
+                if (!aiData) {
+                    // JSON 파싱에 실패한 경우 평문 응답을 요약으로 수용
+                    const cleanLines = aiResp.content
+                        .replace(/```[\s\S]*?```/g, "")
+                        .split(/\r?\n/)
+                        .map((l) => l.replace(/^[-*•\d.)\s]+/, "").trim())
+                        .filter(Boolean);
+                    aiData = {
+                        subject: `${baseName} 요약`,
+                        dueDate: "",
+                        submitTarget: "자체 검토 및 보관",
+                        leadBeforeHighlight: cleanLines[0] || `${rawFileName} 문서의 AI 분석 결과입니다.`,
+                        highlightText: cleanLines[1] || cleanLines[0] || "핵심 내용을 확인해 주세요.",
+                        leadAfterHighlight: "",
+                        coreTask: cleanLines[0] || `${baseName} 핵심 요약`,
+                        actionItems: cleanLines.slice(1, 6)
+                    };
+                }
+            } else if (aiResp && !aiResp.ok) {
+                aiErrorNotice = aiResp.error || "";
             }
-        } catch { }
+        } else if (!isDemo && !savedApiKey) {
+            aiErrorNotice = "환경설정 > MY AI 개인 API 키가 입력되지 않아 기본 요약 양식으로 생성되었습니다.";
+        }
 
-        const folderBasePath = modeKey === "memo" ? "D:\\MY_Apps\\쪽지\\" : "D:\\MY_Apps\\공문\\";
-        const folderPath = `${folderBasePath}${dParts.compact}_${baseName.replace(/\s+/g, "_")}`;
-        const docFilePath = `${folderPath}\\${rawFileName}`;
+        // 3. 날짜 및 폴더명 결정
+        const compactDue = aiData && aiData.dueDate
+            ? extractCompactYmd(aiData.dueDate, dParts.compact)
+            : dParts.compact;
+        const subjectForFolder = (aiData && aiData.subject ? aiData.subject : baseName)
+            .replace(/[\\/:*?"<>|]/g, "_")
+            .replace(/\s+/g, "_")
+            .slice(0, 48);
+        const folderLabel = `${compactDue}_${subjectForFolder}`;
 
+        // 4. 자동 폴더링 실행 (AI 성공/실패와 무관하게 foldChecked 시 100% 보장 실행)
+        let folderPath = "";
+        let docFilePath = "";
+        let targetNoteFolderId = null;
+
+        if (foldChecked) {
+            const diskRes = await executeDiskAutoFoldering(list, modeKey, folderLabel, isDemo);
+            folderPath = diskRes.folderPath;
+            docFilePath = diskRes.docFilePath;
+            targetNoteFolderId = await ensureBlackHoleTargetNoteFolder(modeKey);
+        }
+
+        const linkLabel = modeKey === "official" ? "공문 열기" : modeKey === "memo" ? "쪽지 열기" : "문서 열기";
+        const linksHtml = foldChecked && folderPath
+            ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">${linkLabel}</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
+            : "";
+
+        // 5. AI 응답 데이터가 있으면 실제 AI 분석 노트 생성
+        if (aiData) {
+            const subj = String(aiData.subject || baseName).trim();
+            const hasExplicitDue = !!(aiData.dueDate && String(aiData.dueDate).trim());
+            const noteTitle = (modeKey === "summary" && !hasExplicitDue)
+                ? subj
+                : `${subj} (${compactDue}까지)`;
+            const dueDisplay = hasExplicitDue
+                ? formatDateToZenDisplay(aiData.dueDate, dParts)
+                : `${dParts.zenDate} 18:00까지`;
+            const submitTarget = String(aiData.submitTarget || "자체 검토 및 보관").trim();
+            const coreTask = String(aiData.coreTask || subj).trim();
+            const leadBefore = escapeHtmlStr(String(aiData.leadBeforeHighlight || "").trim());
+            const highlightTxt = escapeHtmlStr(String(aiData.highlightText || coreTask).trim());
+            const leadAfter = escapeHtmlStr(String(aiData.leadAfterHighlight || "").trim());
+
+            const headerBadge = modeKey === "official"
+                ? "[MY AI 공문 분석 요약]"
+                : modeKey === "memo"
+                    ? "[MY AI 수신 쪽지 분석 요약]"
+                    : "[MY AI 문서 핵심 요약]";
+            const row1Label = modeKey === "summary" ? "대상 문서" : "문서 구분";
+            const row1Val = modeKey === "official"
+                ? `정식 공문 (${rawFileName})`
+                : modeKey === "memo"
+                    ? `수신 쪽지 (${rawFileName})`
+                    : rawFileName;
+            const row2Label = modeKey === "summary" ? "검토 기한" : "제출 기한";
+            const row4Label = modeKey === "summary" ? "핵심 요약" : "핵심 과제";
+            const listTitle = modeKey === "official"
+                ? "주요 실무 조치 사항"
+                : modeKey === "memo"
+                    ? "체크리스트"
+                    : "핵심 포인트";
+            const listTypeAttr = modeKey === "summary" ? "bullet" : "unchecked";
+
+            const itemsArr = Array.isArray(aiData.actionItems) && aiData.actionItems.length > 0
+                ? aiData.actionItems
+                : [coreTask];
+            const listItemsHtml = itemsArr
+                .map((it) => `<li data-list="${listTypeAttr}"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(String(it || "").trim())}</li>`)
+                .join("");
+
+            const quoteInner = [
+                leadBefore ? `${leadBefore} ` : "",
+                `<span style="background-color: rgb(254, 240, 138);">${highlightTxt}</span>`,
+                leadAfter ? ` ${leadAfter}` : ""
+            ].join("");
+
+            const html = [
+                `<p><strong>${headerBadge}</strong></p>`,
+                `<blockquote>${quoteInner}</blockquote>`,
+                `<p><br></p>`,
+                `<table><tbody>`,
+                `<tr><td><strong>${row1Label}</strong></td><td>${escapeHtmlStr(row1Val)}</td></tr>`,
+                `<tr><td><strong>${row2Label}</strong></td><td>${escapeHtmlStr(dueDisplay)}</td></tr>`,
+                `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
+                `<tr><td><strong>${row4Label}</strong></td><td>${escapeHtmlStr(coreTask)}</td></tr>`,
+                `</tbody></table>`,
+                `<p><br></p>`,
+                `<p><strong>${listTitle}</strong></p>`,
+                `<ol>${listItemsHtml}</ol>`,
+                linksHtml
+            ].join("");
+
+            return {
+                title: noteTitle,
+                html,
+                targetFolderId: targetNoteFolderId,
+                usedRealAi: true
+            };
+        }
+
+        // 6. 시연(Demo) 또는 오프라인/키 미입력 시 폴백 템플릿
         if (modeKey === "official") {
             const docSubject = isDemo
                 ? "2026년 하반기 정보보안 및 개인정보 보호 점검 결과 제출"
@@ -1194,7 +1847,7 @@
                 `<table><tbody>`,
                 `<tr><td><strong>문서 구분</strong></td><td>정식 공문 (${escapeHtmlStr(rawFileName)})</td></tr>`,
                 `<tr><td><strong>제출 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 18:00까지</td></tr>`,
-                `<tr><td><strong>제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
+                `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
                 `<tr><td><strong>핵심 과제</strong></td><td>부서별 점검표(붙임1) 작성 및 미비 사항 조치 결과 회신</td></tr>`,
                 `</tbody></table>`,
                 `<p><br></p>`,
@@ -1204,11 +1857,9 @@
                 `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>화면보호기 자동 잠금(10분 이내) 및 부팅 암호 설정 점검</li>`,
                 `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>점검표 취합 후 기한 내 온나라 공문 회신</li>`,
                 `</ol>`,
-                foldChecked
-                    ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">공문 열기</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
-                    : ""
+                linksHtml
             ].join("");
-            return { title: noteTitle, html };
+            return { title: noteTitle, html, targetFolderId: targetNoteFolderId, aiErrorNotice };
         }
 
         if (modeKey === "memo") {
@@ -1218,7 +1869,7 @@
             const noteTitle = `${memoSubject} (${dParts.compact}까지)`;
             const submitTarget = "기획감사담당관 기획담당 (내부 메신저 쪽지 회신)";
             const excerpt = rawFileText
-                ? escapeHtmlStr(rawFileText.trim().split(/\r?\n/).slice(0, 3).join(" "))
+                ? escapeHtmlStr(rawFileText.trim().split(/\r?\n/).slice(0, 3).join(" ").slice(0, 220))
                 : "부서별 주간 주요업무 추진실적 및 차주 계획 핵심 항목을 서식에 맞춰 회신 요청합니다.";
             const html = [
                 `<p><strong>[MY AI 수신 쪽지 분석 요약]</strong></p>`,
@@ -1227,7 +1878,7 @@
                 `<table><tbody>`,
                 `<tr><td><strong>문서 구분</strong></td><td>수신 쪽지 (${escapeHtmlStr(rawFileName)})</td></tr>`,
                 `<tr><td><strong>제출 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 14:00까지</td></tr>`,
-                `<tr><td><strong>제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
+                `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
                 `<tr><td><strong>핵심 과제</strong></td><td>부서 주간 추진실적 3건 이내 요약 작성 및 쪽지 회신</td></tr>`,
                 `</tbody></table>`,
                 `<p><br></p>`,
@@ -1236,11 +1887,9 @@
                 `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>금주 추진실적 수치 및 일자 현행화</li>`,
                 `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>담당자 검토 후 기한 내 회신 완료</li>`,
                 `</ol>`,
-                foldChecked
-                    ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">쪽지 열기</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
-                    : ""
+                linksHtml
             ].join("");
-            return { title: noteTitle, html };
+            return { title: noteTitle, html, targetFolderId: targetNoteFolderId, aiErrorNotice };
         }
 
         // summary (문서 요약)
@@ -1249,27 +1898,35 @@
             : `${baseName} 요약`;
         const noteTitle = `${sumSubject} (${dParts.compact}까지)`;
         const submitTarget = "스마트행정추진단 (검토 보고)";
+        const textPreviewLines = rawFileText
+            ? rawFileText.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 4)
+            : [];
+        const quoteHtml = textPreviewLines.length > 0
+            ? `<blockquote>${escapeHtmlStr(textPreviewLines[0].slice(0, 180))} <span style="background-color: rgb(254, 240, 138);">${escapeHtmlStr((textPreviewLines[1] || "핵심 본문 요약").slice(0, 120))}</span></blockquote>`
+            : `<blockquote>반복적인 공문·쪽지 분류와 일정 등록 업무를 <span style="background-color: rgb(254, 240, 138);">MY 노트 · MY 일정관리 · MY AI 연동으로 자동화</span>하여 행정 처리 시간을 단축하는 계획입니다.</blockquote>`;
+        const bulletHtml = textPreviewLines.length > 1
+            ? textPreviewLines.map((l) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(l.slice(0, 160))}</li>`).join("")
+            : [
+                `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>공문 및 쪽지 원본·첨부 자동 분류 보관으로 문서 탐색 시간 단축</li>`,
+                `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>본문 중심 AI 요약 후 새 노트 즉시 생성 및 일정관리 자동 연계</li>`
+            ].join("");
+
         const html = [
             `<p><strong>[MY AI 문서 핵심 요약]</strong></p>`,
-            `<blockquote>반복적인 공문·쪽지 분류와 일정 등록 업무를 <span style="background-color: rgb(254, 240, 138);">MY 노트 · MY 일정관리 · MY AI 연동으로 자동화</span>하여 행정 처리 시간을 단축하는 계획입니다.</blockquote>`,
+            quoteHtml,
             `<p><br></p>`,
             `<table><tbody>`,
             `<tr><td><strong>대상 문서</strong></td><td>${escapeHtmlStr(rawFileName)}</td></tr>`,
             `<tr><td><strong>검토 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 18:00까지</td></tr>`,
-            `<tr><td><strong>제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
-            `<tr><td><strong>핵심 요약</strong></td><td>자동 폴더링 · 본문 AI 요약 · 일정관리 원클릭 연계</td></tr>`,
+            `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
+            `<tr><td><strong>핵심 요약</strong></td><td>${escapeHtmlStr(textPreviewLines[0] ? textPreviewLines[0].slice(0, 80) : "자동 폴더링 · 본문 AI 요약 · 일정관리 원클릭 연계")}</td></tr>`,
             `</tbody></table>`,
             `<p><br></p>`,
             `<p><strong>핵심 포인트</strong></p>`,
-            `<ol>`,
-            `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>공문 및 쪽지 원본·첨부 자동 분류 보관으로 문서 탐색 시간 단축</li>`,
-            `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>본문 중심 AI 요약 후 새 노트 즉시 생성 및 일정관리 자동 연계</li>`,
-            `</ol>`,
-            foldChecked
-                ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">문서 열기</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
-                : ""
+            `<ol>${bulletHtml}</ol>`,
+            linksHtml
         ].join("");
-        return { title: noteTitle, html };
+        return { title: noteTitle, html, targetFolderId: targetNoteFolderId, aiErrorNotice };
     }
 
     function openBlackHoleSummaryInNewNote(summaryResult) {
@@ -1280,7 +1937,10 @@
             closeFileManager();
         }
 
-        if (typeof createNewMemoSmart === "function") {
+        const hasTargetFolder = summaryResult.targetFolderId !== null && summaryResult.targetFolderId !== undefined;
+        if (hasTargetFolder && typeof createNewMemo === "function") {
+            createNewMemo(summaryResult.targetFolderId);
+        } else if (typeof createNewMemoSmart === "function") {
             createNewMemoSmart();
         } else if (typeof createNewMemo === "function") {
             const fallbackFolder = typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null;
@@ -1366,8 +2026,12 @@
         openBlackHoleSummaryInNewNote(summaryResult);
 
         if (typeof showToast === "function") {
-            const prefix = isDemo ? "[블랙홀 시연] " : "";
-            showToast(`${prefix}${meta.label} 요약 노트가 생성되었습니다.`);
+            if (summaryResult && summaryResult.aiErrorNotice) {
+                showToast(`${meta.label} 요약 노트 생성 (${summaryResult.aiErrorNotice})`);
+            } else {
+                const prefix = isDemo ? "[블랙홀 시연] " : (summaryResult && summaryResult.usedRealAi ? "[MY AI 분석 완료] " : "");
+                showToast(`${prefix}${meta.label} 요약 노트가 생성되었습니다.`);
+            }
         }
 
         // 새 요약 문서가 나타난 뒤 정확히 1.2초 후에 'MY 일정관리로 보내기' 팝업 자동 실행

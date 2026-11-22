@@ -319,12 +319,12 @@ function showToast(msg, undoData = null) {
     "position:fixed; bottom:calc(36px + env(safe-area-inset-bottom, 0px)); left:50%; transform:translateX(-50%); " +
     "background:var(--toast-bg); color:var(--toast-text); border:1px solid var(--border); " +
     (isMobile ? "padding:8px 16px; font-size:12.5px; border-radius:24px; gap:12px; " : "padding:10px 20px; font-size:13.5px; border-radius:28px; gap:16px; ") +
-    "font-weight:600; z-index:99999 !important; opacity:0; transition:opacity 0.25s ease-in-out; " +
+    "font-weight:600; z-index:2000000 !important; opacity:0; transition:opacity 0.25s ease-in-out; " +
     "text-align:center; line-height:1.35; box-shadow:0 12px 32px rgba(0,0,0,0.35); " +
     "width:max-content; max-width:calc(100vw - 32px); box-sizing:border-box; display:flex; align-items:center; justify-content:center; " +
     (hasNewline ? "white-space:pre-wrap; word-break:break-word; " : "white-space:nowrap; word-break:normal; ") +
     "pointer-events:none;";
-  toast.style.zIndex = "99999";
+  toast.style.zIndex = "2000000";
 
   let html = `<span>${msg}</span>`;
 
