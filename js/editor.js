@@ -219,7 +219,7 @@ const icons = Quill.import('ui/icons');
 // 1. 커스텀 기능 아이콘 (엔진이 모르는 기능들)
 icons['special-char'] = '<i class="fa-regular fa-face-smile" style="font-size: 14px; color: var(--text-muted);" title="특수문자 / 이모티콘 (Ctrl+F10)"></i>';
 icons['strike-line'] = '<i class="fa-solid fa-pen-slash" style="font-size: 14px; color: var(--text-muted);"></i>';
-icons['highlight'] = '<span class="ql-highlight-icon">H</span>';
+icons['highlight'] = '<svg viewBox="0 0 18 18"><line class="ql-stroke" x1="5" x2="5" y1="3" y2="12"></line><line class="ql-stroke" x1="13" x2="13" y1="3" y2="12"></line><line class="ql-stroke" x1="5" x2="13" y1="7.5" y2="7.5"></line><rect class="ql-highlight-bar" x="3" y="14.5" width="12" height="2.4" rx="1.2" fill="#facc15"></rect></svg>';
 icons['divider'] = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['markdown-help'] = '<i class="fa-brands fa-markdown" style="font-size: 15px; color: var(--text-muted);" title="마크다운 문법 (MD)"></i>';
 

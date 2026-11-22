@@ -1491,24 +1491,9 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     color: #CCAA66 !important;
 }
 
-.ql-toolbar.ql-snow button.ql-highlight .ql-highlight-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-    background: #fef08a;
-    color: #854d0e;
-    font-weight: 800;
-    font-size: 11px;
-    line-height: 1;
-    border: 1px solid rgba(133, 77, 14, 0.2);
-}
-
-.ql-toolbar.ql-snow button.ql-highlight.ql-active .ql-highlight-icon,
-.ql-toolbar.ql-snow button.ql-highlight:hover .ql-highlight-icon {
-    border-color: var(--accent);
+.ql-toolbar.ql-snow button.ql-highlight .ql-highlight-bar {
+    fill: #facc15 !important;
+    transition: opacity 0.15s ease;
 }
 
 body:not(.light-theme) .ql-editor span[style*="rgb(254, 240, 138)"],
