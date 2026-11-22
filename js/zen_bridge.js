@@ -760,28 +760,29 @@
         const ddayPayload = collectSendToSchedulePayload();
         if (!ddayPayload) return;
         if (typeof showToast === "function") {
-            showToast("MY 일정관리 직접 등록 연동은 3단계에서 연결됩니다. 지금은 '.dday 파일로 내보내기'를 이용해 주세요.");
+            showToast("MY 일정관리 직접 등록 연동은 3단계에서 연결될 예정입니다.");
         }
     }
 
     // ========================================================================
     // 5. 좌측 상단 블랙홀 버튼 + NASA 골드 블랙홀 등장/꿀꺽/퇴장 껍데기
     // ========================================================================
+    const BH_DEFAULT_PROMPT = "다운 받은 공문(zip파일), 쪽지, 요약하고 싶은 문서를 블랙홀에 던져 넣으세요.";
     const BH_MODE_META = {
         official: {
-            label: "정식 공문",
+            label: "공문 분석",
             defaultFolding: true,
-            hint: "주 공문 본문만 AI 전송 (첨부 제외) · 자동 폴더링 기본 켜짐"
+            hint: "공문 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         memo: {
-            label: "수신 쪽지",
+            label: "쪽지 분석",
             defaultFolding: true,
-            hint: "쪽지 본문만 AI 전송 (첨부 제외) · 자동 폴더링 기본 켜짐"
+            hint: "쪽지 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         summary: {
-            label: "일반 문서 요약",
+            label: "문서 요약",
             defaultFolding: false,
-            hint: "긴 문서(HWP/HWPX/PDF/TXT/DOCX) 본문 요약 · 자동 폴더링 기본 꺼짐"
+            hint: "AI가 문서를 요약해 줍니다."
         }
     };
 
@@ -796,6 +797,9 @@
     let bhShockActive = false;
     let bhHoverLevel = 0;
     let bhTargetHover = 0;
+    let bhSwallowTimer1 = null;
+    let bhSwallowTimer2 = null;
+    let bhRetractTimer = null;
 
     function initBlackHoleParticles() {
         bhOrbitDots = [];
@@ -829,36 +833,80 @@
         shell.style.setProperty("--bh-origin-y", `${dy}px`);
     }
 
-    function renderBlackHoleCanvasFrame() {
+    function drawBlackHoleDocPacket(ctx, w, h, alpha) {
+        const hw = w / 2;
+        const hh = h / 2;
+        const fold = Math.min(w, h) * 0.24;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.moveTo(-hw, -hh);
+        ctx.lineTo(hw - fold, -hh);
+        ctx.lineTo(hw, -hh + fold);
+        ctx.lineTo(hw, hh);
+        ctx.lineTo(-hw, hh);
+        ctx.closePath();
+        ctx.fillStyle = "#fef9c3";
+        ctx.fill();
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = Math.max(1.5, w * 0.028);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(hw - fold, -hh);
+        ctx.lineTo(hw - fold, -hh + fold);
+        ctx.lineTo(hw, -hh + fold);
+        ctx.fillStyle = "#fde047";
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(180, 83, 9, 0.55)";
+        ctx.lineWidth = Math.max(1.1, h * 0.032);
+        ctx.lineCap = "round";
+        const padX = w * 0.18;
+        const ys = [-hh * 0.28, 0, hh * 0.28, hh * 0.54];
+        ys.forEach((yy, idx) => {
+            ctx.beginPath();
+            ctx.moveTo(-hw + padX, yy);
+            ctx.lineTo(hw - padX * (idx === 0 ? 1.8 : idx === 3 ? 1.5 : 1), yy);
+            ctx.stroke();
+        });
+        ctx.restore();
+    }
+
+    function renderBlackHoleCanvasFrame(now) {
         const canvas = document.getElementById("zen-bh-canvas");
         if (!canvas || !bhIsOpen) {
             bhRafId = null;
             return;
         }
+        const ts = typeof now === "number" ? now : performance.now();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = canvas.getBoundingClientRect();
-        const size = Math.max(220, Math.round(rect.width || 300));
-        if (canvas.width !== size * dpr || canvas.height !== size * dpr) {
-            canvas.width = size * dpr;
-            canvas.height = size * dpr;
+        const cw = Math.max(300, Math.round(rect.width || 400));
+        const ch = Math.max(260, Math.round(rect.height || 284));
+        if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
+            canvas.width = cw * dpr;
+            canvas.height = ch * dpr;
         }
         const ctx = canvas.getContext("2d");
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        const cx = size / 2;
-        const cy = size / 2;
-        const maxR = size * 0.48;
+        const cx = cw / 2;
+        const cy = ch / 2;
+        const maxR = Math.min(cw, ch) * 0.44;
 
         bhHoverLevel += (bhTargetHover - bhHoverLevel) * 0.14;
         bhFlashLevel *= 0.91;
 
-        ctx.clearRect(0, 0, size, size);
+        ctx.clearRect(0, 0, cw, ch);
 
         // 1. 외곽 깊은 우주 헤일로
-        const halo = ctx.createRadialGradient(cx, cy, maxR * 0.25, cx, cy, maxR);
+        const halo = ctx.createRadialGradient(cx, cy, maxR * 0.24, cx, cy, maxR);
         halo.addColorStop(0, "rgba(0, 0, 0, 0.96)");
         halo.addColorStop(0.45, "rgba(18, 12, 5, 0.86)");
-        halo.addColorStop(0.75, `rgba(217, 119, 6, ${0.22 + bhHoverLevel * 0.14 + bhFlashLevel * 0.28})`);
+        halo.addColorStop(0.75, `rgba(217, 119, 6, ${0.24 + bhHoverLevel * 0.14 + bhFlashLevel * 0.28})`);
         halo.addColorStop(1, "rgba(15, 23, 42, 0)");
         ctx.fillStyle = halo;
         ctx.beginPath();
@@ -872,7 +920,7 @@
         for (const side of [-1, 1]) {
             const lensGrad = ctx.createLinearGradient(-maxR * 0.55, 0, maxR * 0.55, 0);
             lensGrad.addColorStop(0, "rgba(251, 191, 36, 0)");
-            lensGrad.addColorStop(0.5, `rgba(253, 224, 71, ${0.42 + bhHoverLevel * 0.25})`);
+            lensGrad.addColorStop(0.5, `rgba(253, 224, 71, ${0.44 + bhHoverLevel * 0.25})`);
             lensGrad.addColorStop(1, "rgba(251, 191, 36, 0)");
             ctx.strokeStyle = lensGrad;
             ctx.lineWidth = 3.2;
@@ -887,7 +935,7 @@
         ctx.translate(cx, cy);
         ctx.rotate(-0.26);
         const diskScaleY = 0.31;
-        const speedBoost = 1 + bhHoverLevel * 1.9 + (bhSwallowing ? 3.2 : 0);
+        const speedBoost = 1 + bhHoverLevel * 1.9 + (bhSwallowing ? 1.4 : 0);
 
         for (const p of bhOrbitDots) {
             p.angle += p.speed * speedBoost;
@@ -934,26 +982,27 @@
         ctx.stroke();
         ctx.restore();
 
-        // 5. 투입 나선 패킷(꿀꺽 애니메이션)
+        // 5. 투입 문서 (시작 5배: 80x100 -> 끝 2배: 32x40, 1.2초, 2차함수 t^2 가속)
         for (let i = bhParticles.length - 1; i >= 0; i--) {
             const pk = bhParticles[i];
-            pk.progress += 0.032;
-            const t = Math.min(1, pk.progress);
-            const r = pk.startR * (1 - Math.pow(t, 1.35));
-            const a = pk.startAngle + t * Math.PI * 3.4;
+            if (ts < pk.startTime) continue;
+            const elapsed = ts - pk.startTime;
+            const t = Math.min(1, Math.max(0, elapsed / pk.duration));
+            const eased = t * t;
+            const r = pk.startR * (1 - eased);
+            const a = pk.startAngle + eased * Math.PI * 2.15;
             const px = cx + Math.cos(a) * r;
             const py = cy + Math.sin(a) * r * 0.72;
-            const scale = Math.max(0.05, 1 - t * 0.9);
+            const docW = 80 - (80 - 32) * eased;
+            const docH = 100 - (100 - 40) * eased;
+            const alpha = t < 0.88 ? 0.96 : Math.max(0, 0.96 * (1 - (t - 0.88) / 0.12));
+
             ctx.save();
             ctx.translate(px, py);
-            ctx.rotate(a + Math.PI / 2);
-            ctx.scale(scale, scale);
-            ctx.fillStyle = `rgba(254, 240, 138, ${1 - t * 0.6})`;
-            ctx.fillRect(-10, -7, 20, 14);
-            ctx.strokeStyle = "#f59e0b";
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(-10, -7, 20, 14);
+            ctx.rotate(eased * 1.45 - 0.18);
+            drawBlackHoleDocPacket(ctx, docW, docH, alpha);
             ctx.restore();
+
             if (t >= 1) {
                 bhParticles.splice(i, 1);
                 bhFlashLevel = 1.0;
@@ -964,12 +1013,12 @@
 
         // 6. 충격파 링
         if (bhShockActive) {
-            bhShockProgress += 0.045;
+            bhShockProgress += 0.038;
             if (bhShockProgress >= 1) {
                 bhShockActive = false;
             } else {
                 const sr = coreR + bhShockProgress * (maxR - coreR);
-                ctx.strokeStyle = `rgba(254, 240, 138, ${(1 - bhShockProgress) * 0.72})`;
+                ctx.strokeStyle = `rgba(254, 240, 138, ${(1 - bhShockProgress) * 0.75})`;
                 ctx.lineWidth = 2.4 * (1 - bhShockProgress) + 0.6;
                 ctx.beginPath();
                 ctx.arc(cx, cy, sr, 0, Math.PI * 2);
@@ -995,12 +1044,22 @@
         if (hintEl) hintEl.textContent = meta.hint;
     }
 
+    function clearBlackHoleTimers() {
+        clearTimeout(bhSwallowTimer1);
+        clearTimeout(bhSwallowTimer2);
+        clearTimeout(bhRetractTimer);
+        bhSwallowTimer1 = null;
+        bhSwallowTimer2 = null;
+        bhRetractTimer = null;
+    }
+
     function openBlackHolePortal() {
         const layer = document.getElementById("zen-blackhole-portal-layer");
         const shell = document.getElementById("zen-blackhole-portal-shell");
         const btn = document.getElementById("zen-blackhole-btn");
         if (!layer || !shell) return;
 
+        clearBlackHoleTimers();
         if (bhOrbitDots.length === 0) initBlackHoleParticles();
         bhSwallowing = false;
         bhParticles = [];
@@ -1010,7 +1069,7 @@
 
         setBlackHoleMode(bhCurrentMode || "official");
         const pill = document.getElementById("zen-bh-status-pill");
-        if (pill) pill.textContent = "공문 .zip 또는 문서를 끌어다 놓거나 클릭해 선택하세요";
+        if (pill) pill.textContent = BH_DEFAULT_PROMPT;
 
         updateBlackHoleButtonOriginVars();
         shell.classList.remove("is-retracting");
@@ -1034,6 +1093,11 @@
         const btn = document.getElementById("zen-blackhole-btn");
         if (!layer || layer.style.display === "none") return;
 
+        clearTimeout(bhSwallowTimer1);
+        clearTimeout(bhSwallowTimer2);
+        bhSwallowTimer1 = null;
+        bhSwallowTimer2 = null;
+        bhSwallowing = false;
         bhIsOpen = false;
         if (bhRafId) {
             cancelAnimationFrame(bhRafId);
@@ -1044,12 +1108,13 @@
         if (shell) {
             updateBlackHoleButtonOriginVars();
             shell.classList.add("is-retracting");
-            setTimeout(() => {
+            clearTimeout(bhRetractTimer);
+            bhRetractTimer = setTimeout(() => {
                 if (!bhIsOpen) {
                     layer.style.display = "none";
                     shell.classList.remove("is-retracting");
                 }
-            }, 310);
+            }, 560);
         } else {
             layer.style.display = "none";
         }
@@ -1078,15 +1143,22 @@
         const foldChecked = !!document.getElementById("zen-bh-folding-toggle")?.checked;
         const pill = document.getElementById("zen-bh-status-pill");
 
+        clearTimeout(bhSwallowTimer1);
+        clearTimeout(bhSwallowTimer2);
         bhSwallowing = true;
         const firstName = list[0] && list[0].name ? list[0].name : "문서";
         const extra = list.length > 1 ? ` 외 ${list.length - 1}건` : "";
 
-        for (let i = 0; i < Math.min(list.length, 5); i++) {
+        const count = Math.min(list.length, 5);
+        const nowTs = performance.now();
+        const duration = 1200;
+        const stagger = 90;
+        for (let i = 0; i < count; i++) {
             bhParticles.push({
-                startAngle: -0.7 + i * 0.9,
-                startR: 138 + i * 14,
-                progress: 0
+                startTime: nowTs + i * stagger,
+                duration,
+                startAngle: -2.35 + i * 0.85,
+                startR: 138 + i * 10
             });
         }
 
@@ -1094,20 +1166,21 @@
             pill.textContent = `${firstName}${extra} 투입 중 (${meta.label} · 폴더링 ${foldChecked ? "ON" : "OFF"})`;
         }
 
-        setTimeout(() => {
+        const totalSwallowMs = duration + (count - 1) * stagger + 40;
+        bhSwallowTimer1 = setTimeout(() => {
             if (!bhIsOpen) return;
             if (pill) {
-                pill.textContent = `${meta.label} 접수 완료 (실제 MY AI · 폴더링 연동은 3단계 연결 예정)`;
+                pill.textContent = `${meta.label} 접수 완료 (3단계에서 실제 MY AI·폴더링이 연결됩니다)`;
             }
-            setTimeout(() => {
+            bhSwallowTimer2 = setTimeout(() => {
                 bhSwallowing = false;
                 closeBlackHolePortal();
                 if (typeof showToast === "function") {
                     const prefix = isDemo ? "[블랙홀 시연] " : "";
-                    showToast(`${prefix}'${firstName}${extra}' (${meta.label} / 폴더링 ${foldChecked ? "ON" : "OFF"}) 투입 동작 확인 — 3단계에서 실제 AI·폴더링이 연결됩니다.`);
+                    showToast(`${prefix}'${firstName}${extra}' (${meta.label} / 폴더링 ${foldChecked ? "ON" : "OFF"}) 투입 완료 — 3단계에서 실제 AI·폴더링이 연결됩니다.`);
                 }
-            }, 650);
-        }, 720);
+            }, 2200);
+        }, totalSwallowMs);
     }
 
     function handleBlackHoleDroppedFiles(files) {

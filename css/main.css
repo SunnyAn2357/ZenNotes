@@ -272,9 +272,10 @@ button:hover {
 
 .status-container {
     position: fixed;
-    top: 35px;
-    right: 55px;
-    /* 상태알림과 상태점의 오른쪽 여백, 모바일에서도 고쳐야 함 */
+    top: 24px;
+    height: 36px;
+    right: 50px;
+    /* 상태알림과 상태점, 일정 아이콘을 우측 상단 삼점 가운데 높이와 일치 (모바일 별도) */
     z-index: 999;
     display: flex;
     align-items: center;
@@ -315,6 +316,8 @@ button:hover {
     opacity: 0;
     font-weight: 500;
     letter-spacing: 0.5px;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .mobile-only {
@@ -6840,6 +6843,10 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-blackhole-trigger-btn svg {
+    width: 17px;
+    height: 17px;
+    display: block;
+    flex-shrink: 0;
     transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -6863,29 +6870,31 @@ body.light-theme .tree-folder-icon.is-trash {
     transform: rotate(180deg);
 }
 
-/* 우측 상단 상태 표시줄 좌측: MY 일정관리로 보내기 (단색 Zen 스타일) */
+/* 우측 상단 상태 표시줄 우측(삼점 왼쪽): MY 일정관리로 보내기 (무테두리 단색 Zen 아이콘) */
 .zen-send-schedule-btn {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     padding: 0;
-    margin-right: 4px;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    background: var(--surface);
+    margin: 0 0 0 4px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
     color: var(--text-muted);
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     cursor: pointer;
     user-select: none;
     caret-color: transparent;
-    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+    transition: color 0.16s ease, transform 0.12s ease;
 }
 
 .zen-send-schedule-btn:hover {
-    background: var(--surface-hover);
-    color: var(--text-main);
-    border-color: var(--text-muted);
+    background: transparent;
+    color: var(--accent);
+    border: none;
 }
 
 .zen-send-schedule-btn:active {
@@ -7008,7 +7017,7 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-sts-card {
-    max-width: 580px !important;
+    max-width: 660px !important;
     width: calc(100vw - 28px) !important;
     max-height: 90vh;
     display: flex;
@@ -7052,6 +7061,16 @@ body.light-theme .tree-folder-icon.is-trash {
     font-size: 11.5px;
     font-weight: 600;
     color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.sts-req-star {
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1;
 }
 
 .zen-sts-input,
@@ -7074,9 +7093,9 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-sts-textarea {
-    min-height: 110px;
+    min-height: 240px;
     resize: vertical;
-    line-height: 1.5;
+    line-height: 1.55;
 }
 
 .zen-sts-rem-row {
@@ -7120,16 +7139,52 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-sts-footer {
-    justify-content: space-between !important;
+    justify-content: flex-end !important;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
 }
 
 .zen-sts-footer-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     margin-left: auto;
+}
+
+.zen-sts-btn-cancel,
+.zen-sts-btn-primary {
+    min-width: 144px;
+    height: 38px;
+    padding: 0 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.zen-sts-btn-cancel {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+.zen-sts-btn-cancel:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+}
+
+.zen-sts-btn-primary {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: var(--accent-contrast, #ffffff);
+}
+
+.zen-sts-btn-primary:hover {
+    opacity: 0.92;
 }
 
 .zen-settings-secondary-btn {
@@ -7157,7 +7212,7 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 /* ============================================================================
-   [V1.6.0] NASA 골드 블랙홀 포털 오버레이 (버튼 원점 출현 -> 꿀꺽 -> 원점 복귀)
+   [V1.6.0 / V1.6.1] NASA 골드 블랙홀 포털 오버레이 (버튼 원점 출현 -> 꿀꺽 -> 원점 복귀)
    ============================================================================ */
 .zen-bh-portal-layer {
     position: fixed;
@@ -7175,7 +7230,7 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-bh-portal-shell {
     width: 100%;
-    max-width: 440px;
+    max-width: 452px;
     border-radius: 22px;
     padding: 20px 22px 18px;
     background: rgba(12, 16, 28, 0.94);
@@ -7189,6 +7244,10 @@ body.light-theme .tree-folder-icon.is-trash {
     transform: translate(0, 0) scale(1);
     opacity: 1;
     transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease;
+}
+
+.zen-bh-portal-shell.is-retracting {
+    transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.48s ease;
 }
 
 .zen-bh-portal-shell.is-origin,
@@ -7241,13 +7300,17 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-mode-btn {
-    height: 30px;
-    border: none;
+    height: 31px;
+    border: 1px solid transparent;
     border-radius: 7px;
     background: transparent;
     color: #cbd5e1;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     cursor: pointer;
     transition: all 0.16s ease;
 }
@@ -7260,9 +7323,9 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-bh-orb-dropzone {
     position: relative;
-    width: 268px;
-    height: 268px;
-    border-radius: 50%;
+    width: 100%;
+    height: 284px;
+    border-radius: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -7276,25 +7339,27 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-canvas {
-    width: 268px;
-    height: 268px;
-    border-radius: 50%;
+    width: 100%;
+    height: 284px;
+    border-radius: 0;
     display: block;
     pointer-events: none;
 }
 
 .zen-bh-status-pill {
     width: 100%;
-    padding: 7px 12px;
-    border-radius: 9px;
+    padding: 9px 14px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(251, 191, 36, 0.22);
     color: #fef3c7;
-    font-size: 12px;
+    font-size: 12.5px;
+    line-height: 1.48;
     text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-break: keep-all;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .zen-bh-options-box {
@@ -7322,13 +7387,17 @@ body.light-theme .tree-folder-icon.is-trash {
     accent-color: #f59e0b;
     width: 15px;
     height: 15px;
+    margin: 0;
+    flex-shrink: 0;
     cursor: pointer;
 }
 
 .zen-bh-mode-hint {
-    font-size: 11px;
+    font-size: 11.5px;
     color: #94a3b8;
-    line-height: 1.35;
+    line-height: 1.4;
+    padding-left: 22px;
+    word-break: keep-all;
 }
 
 .zen-bh-shell-actions {

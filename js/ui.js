@@ -2058,7 +2058,6 @@ function openSettingsModal() {
   // 1. 현재 LocalStorage 설정값 동기화
   const autoList = localStorage.getItem('zen_setting_auto_list') !== 'false';
   const smartUndo = localStorage.getItem('zen_setting_smart_undo') !== 'false';
-  const cursorTarget = localStorage.getItem('zen_setting_cursor_target') || 'title';
   const fontSize = localStorage.getItem('zen_setting_editor_font_size') || 'normal';
   const recentCount = getMaxRecentNotesCount();
 
@@ -2068,7 +2067,6 @@ function openSettingsModal() {
   const smartUndoToggle = document.getElementById('setting-smart-undo-toggle');
   if (smartUndoToggle) smartUndoToggle.checked = smartUndo;
 
-  updateSegmentedActive('setting-cursor-segmented', cursorTarget);
   updateSegmentedActive('setting-fontsize-segmented', fontSize);
   updateSegmentedActive('setting-recent-count-segmented', String(recentCount));
   if (typeof updateExportLocationUI === 'function') updateExportLocationUI();
@@ -2120,14 +2118,6 @@ function handleSettingSmartUndoChange(checked) {
   }
 }
 
-function setSettingCursorTarget(val) {
-  localStorage.setItem('zen_setting_cursor_target', val);
-  updateSegmentedActive('setting-cursor-segmented', val);
-  if (typeof showToast === 'function') {
-    showToast(val === 'body' ? '새 노트 작성 시 본문부터 시작합니다.' : '새 노트 작성 시 제목부터 시작합니다.');
-  }
-}
-
 function setSettingEditorFontSize(val) {
   localStorage.setItem('zen_setting_editor_font_size', val);
   updateSegmentedActive('setting-fontsize-segmented', val);
@@ -2161,7 +2151,6 @@ window.openSettingsModal = openSettingsModal;
 window.closeSettingsModal = closeSettingsModal;
 window.handleSettingAutoListChange = handleSettingAutoListChange;
 window.handleSettingSmartUndoChange = handleSettingSmartUndoChange;
-window.setSettingCursorTarget = setSettingCursorTarget;
 window.setSettingEditorFontSize = setSettingEditorFontSize;
 window.setSettingRecentNotesCount = setSettingRecentNotesCount;
 window.applyEditorFontSize = applyEditorFontSize;

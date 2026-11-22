@@ -2432,16 +2432,10 @@ function createNewMemo(folderId = null) {
   setTimeout(() => {
     isLoading = false;
     if (typeof window.isAppScreenLocked === 'function' && window.isAppScreenLocked()) return;
-    // 🎯 [V4.6.0] 새 노트 작성 시작 커서 설정 반영 (제목 vs 본문)
-    const cursorTarget = localStorage.getItem('zen_setting_cursor_target') || 'title';
-    if (cursorTarget === 'body') {
-      quill.focus();
-      quill.setSelection(0, 0);
-    } else {
-      const titleInput = document.getElementById("memo-title-input");
-      if (titleInput && window.innerWidth > 768) {
-        titleInput.focus();
-      }
+    // [V1.6.1] 새 노트 작성 시 항상 제목 입력란을 기본 포커스로 고정
+    const titleInput = document.getElementById("memo-title-input");
+    if (titleInput && window.innerWidth > 768) {
+      titleInput.focus();
     }
   }, 10);
 }

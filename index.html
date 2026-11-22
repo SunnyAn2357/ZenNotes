@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.6.0">
-    <link rel="manifest" href="manifest.json?v=1.6.0">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.6.1">
+    <link rel="manifest" href="manifest.json?v=1.6.1">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.6.0">
+    <link rel="stylesheet" href="css/main.css?v=1.6.1">
 
 </head>
 
@@ -174,12 +174,15 @@
                     style="color: var(--text-main); font-weight: 600;">
                     <i class="fa-solid fa-pen-to-square"></i> <span class="btn-text">새 노트 작성</span>
                 </button>
-                <button type="button" id="zen-blackhole-btn" class="zen-blackhole-trigger-btn" onclick="toggleBlackHolePortal()" title="MY AI 블랙홀 (공문 · 쪽지 · 문서 요약)" aria-label="MY AI 블랙홀">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <ellipse cx="12" cy="12" rx="10" ry="3.8" transform="rotate(-24 12 12)" />
-                        <circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none" />
-                        <path d="M8.4 9.6a4.4 4.4 0 0 1 7.2 0" />
-                        <circle cx="19.2" cy="8.2" r="1" fill="currentColor" stroke="none" />
+                <button type="button" id="zen-blackhole-btn" class="zen-blackhole-trigger-btn" onclick="toggleBlackHolePortal()" title="MY AI 문서 분석·요약" aria-label="MY AI 문서 분석·요약">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
+                        <path d="M12 9.6c0-3.2 2.9-5.8 6.4-5.4" />
+                        <path d="M14.1 13.2c2.8 1.6 3.5 5.4 1.5 8.1" />
+                        <path d="M9.9 13.2c-2.8 1.6-6.2.4-7.4-2.7" />
+                        <path d="M10.2 10.2C7.4 8.6 6.7 4.8 8.7 2.1" />
+                        <path d="M14.2 10.6c2.7-1.5 6.1-.3 7.3 2.8" />
+                        <path d="M11.8 14.4c0 3.2-2.9 5.8-6.4 5.4" />
                     </svg>
                 </button>
             </div>
@@ -298,8 +301,10 @@
             <input type="text" id="memo-title-input" placeholder="제목 없는 노트">
             <div class="editor-actions">
                 <div class="status-container">
+                    <span id="status-text" class="status-text" data-ns-text="미동기: 0">미동기: 0</span>
+                    <div id="status-dot" class="status-dot logged-out"></div>
                     <button type="button" id="btn-send-to-schedule" class="zen-send-schedule-btn" onclick="openSendToScheduleModal()" title="MY 일정관리로 보내기" aria-label="MY 일정관리로 보내기">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <rect x="3" y="4" width="18" height="18" rx="3" ry="3" />
                             <line x1="16" y1="2" x2="16" y2="6" />
                             <line x1="8" y1="2" x2="8" y2="6" />
@@ -307,8 +312,6 @@
                             <path d="M9 15.5l2 2 4-4" />
                         </svg>
                     </button>
-                    <span id="status-text" class="status-text" data-ns-text="미동기: 0">미동기: 0</span>
-                    <div id="status-dot" class="status-dot logged-out"></div>
                 </div>
             </div>
         </div>
@@ -762,7 +765,38 @@
                 </button>
             </div>
             <div class="zen-settings-body">
-                <!-- 설정 1: 마크다운 자동 목록 변환 -->
+                <!-- 설정 1: [V1.2.0] 비밀번호 입력 및 화면 자동 잠금 -->
+                <div class="zen-settings-item">
+                    <div class="zen-settings-item-info">
+                        <div class="zen-settings-item-label">비밀번호 입력</div>
+                        <div class="zen-settings-item-desc">앱을 열 때 비밀번호로 화면을 가립니다 (보안 폴더와 별도)</div>
+                    </div>
+                    <label class="zen-switch" title="비밀번호 입력 켜기/끄기">
+                        <input type="checkbox" id="setting-app-lock-toggle" onchange="handleSettingAppLockToggle(this.checked)">
+                        <span class="zen-slider"></span>
+                    </label>
+                </div>
+
+                <div id="setting-app-lock-details" class="zen-settings-lock-details" style="display: none;">
+                    <div class="zen-settings-item zen-settings-sub-item">
+                        <div class="zen-settings-item-info">
+                            <div class="zen-settings-item-label">화면 자동 잠금</div>
+                            <div class="zen-settings-item-desc">창 이탈·최소화·화면 꺼짐 시 즉시 잠금</div>
+                        </div>
+                        <label class="zen-switch" title="화면 자동 잠금 켜기/끄기">
+                            <input type="checkbox" id="setting-app-lock-auto-toggle" onchange="handleSettingAppLockAutoChange(this.checked)">
+                            <span class="zen-slider"></span>
+                        </label>
+                    </div>
+                    <div class="zen-settings-lock-actions">
+                        <span id="setting-app-lock-hint-preview" class="zen-settings-lock-hint-preview">힌트 미설정</span>
+                        <button type="button" class="zen-settings-sub-btn" onclick="openAppLockSetupModal('change')">비밀번호 변경</button>
+                    </div>
+                </div>
+
+                <div class="zen-settings-divider"></div>
+
+                <!-- 설정 2: 자동 글머리·목록 변환 -->
                 <div class="zen-settings-item">
                     <div class="zen-settings-item-info">
                         <div class="zen-settings-item-label">자동 글머리·목록 변환</div>
@@ -774,7 +808,7 @@
                     </label>
                 </div>
 
-                <!-- 설정 2: 스마트 백스페이스 복원 -->
+                <!-- 설정 3: 글머리기호 즉시 취소 -->
                 <div class="zen-settings-item">
                     <div class="zen-settings-item-info">
                         <div class="zen-settings-item-label">글머리기호 즉시 취소</div>
@@ -788,19 +822,7 @@
 
                 <div class="zen-settings-divider"></div>
 
-                <!-- 설정 3: 새 노트 커서 위치 -->
-                <div class="zen-settings-item">
-                    <div class="zen-settings-item-info">
-                        <div class="zen-settings-item-label">새 노트 작성 시작 위치</div>
-                        <div class="zen-settings-item-desc">새 노트 작성 버튼을 누를 때 첫 커서 포커스</div>
-                    </div>
-                    <div class="zen-segmented" id="setting-cursor-segmented">
-                        <button type="button" class="zen-segmented-btn active" data-value="title" onclick="setSettingCursorTarget('title')">제목</button>
-                        <button type="button" class="zen-segmented-btn" data-value="body" onclick="setSettingCursorTarget('body')">본문</button>
-                    </div>
-                </div>
-
-                <!-- 설정 4: 본문 글자 크기 -->
+                <!-- 설정 4: 본문 기본 글자 크기 -->
                 <div class="zen-settings-item">
                     <div class="zen-settings-item-info">
                         <div class="zen-settings-item-label">본문 기본 글자 크기</div>
@@ -844,7 +866,7 @@
 
                 <div class="zen-settings-divider"></div>
 
-                <!-- 설정 6B: [V1.6.0] 1시간 주기 조용한 자동 전체 백업 -->
+                <!-- 설정 7: [V1.6.0] 1시간 주기 조용한 자동 전체 백업 -->
                 <div class="zen-settings-item zen-settings-stack-item">
                     <div class="zen-settings-inline-head">
                         <div class="zen-settings-item-label">자동 전체 백업 <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">(30일 보관)</span></div>
@@ -872,7 +894,7 @@
 
                 <div class="zen-settings-divider"></div>
 
-                <!-- 설정 6C: [V1.6.0] MY AI (TimelyGPT) 개인 API 키 -->
+                <!-- 설정 8: [V1.6.0] MY AI (TimelyGPT) 개인 API 키 -->
                 <div class="zen-settings-item zen-settings-stack-item">
                     <div class="zen-settings-inline-head">
                         <div class="zen-settings-item-label">MY AI 개인 API 키</div>
@@ -886,37 +908,6 @@
                         <button type="button" class="zen-settings-sub-btn" onclick="saveMyAiApiKey()">저장</button>
                     </div>
                     <div class="zen-settings-item-desc">공문 · 쪽지 · 문서 요약 시 TimelyGPT(MY AI) 호출에 사용할 개인 인증 키입니다.</div>
-                </div>
-
-                <div class="zen-settings-divider"></div>
-
-                <!-- 설정 7: [V1.2.0] 비밀번호 입력 및 화면 자동 잠금 -->
-                <div class="zen-settings-item">
-                    <div class="zen-settings-item-info">
-                        <div class="zen-settings-item-label">비밀번호 입력</div>
-                        <div class="zen-settings-item-desc">앱을 열 때 비밀번호로 화면을 가립니다 (보안 폴더와 별도)</div>
-                    </div>
-                    <label class="zen-switch" title="비밀번호 입력 켜기/끄기">
-                        <input type="checkbox" id="setting-app-lock-toggle" onchange="handleSettingAppLockToggle(this.checked)">
-                        <span class="zen-slider"></span>
-                    </label>
-                </div>
-
-                <div id="setting-app-lock-details" class="zen-settings-lock-details" style="display: none;">
-                    <div class="zen-settings-item zen-settings-sub-item">
-                        <div class="zen-settings-item-info">
-                            <div class="zen-settings-item-label">화면 자동 잠금</div>
-                            <div class="zen-settings-item-desc">창 이탈·최소화·화면 꺼짐 시 즉시 잠금</div>
-                        </div>
-                        <label class="zen-switch" title="화면 자동 잠금 켜기/끄기">
-                            <input type="checkbox" id="setting-app-lock-auto-toggle" onchange="handleSettingAppLockAutoChange(this.checked)">
-                            <span class="zen-slider"></span>
-                        </label>
-                    </div>
-                    <div class="zen-settings-lock-actions">
-                        <span id="setting-app-lock-hint-preview" class="zen-settings-lock-hint-preview">힌트 미설정</span>
-                        <button type="button" class="zen-settings-sub-btn" onclick="openAppLockSetupModal('change')">비밀번호 변경</button>
-                    </div>
                 </div>
             </div>
 
@@ -1063,7 +1054,7 @@
             <div class="zen-sts-body">
                 <div class="zen-sts-row-top">
                     <div class="zen-sts-field">
-                        <label class="zen-sts-label" for="sts-title-input">일정 제목 (필수)</label>
+                        <label class="zen-sts-label" for="sts-title-input">일정 제목 <span class="sts-req-star">*</span></label>
                         <input type="text" id="sts-title-input" class="zen-sts-input" placeholder="일정 제목 입력">
                     </div>
                     <div class="zen-sts-field">
@@ -1081,7 +1072,7 @@
                         <input type="date" id="sts-start-date" class="zen-sts-input">
                     </div>
                     <div class="zen-sts-field">
-                        <label class="zen-sts-label" for="sts-due-date">마감일 (필수)</label>
+                        <label class="zen-sts-label" for="sts-due-date">마감일 <span class="sts-req-star">*</span></label>
                         <input type="date" id="sts-due-date" class="zen-sts-input">
                     </div>
                     <div class="zen-sts-field">
@@ -1091,7 +1082,7 @@
                 </div>
                 <div class="zen-sts-row-meta">
                     <div class="zen-sts-field">
-                        <label class="zen-sts-label" for="sts-location-input">장소 / 담당</label>
+                        <label class="zen-sts-label" for="sts-location-input">장소 / 제출처</label>
                         <input type="text" id="sts-location-input" class="zen-sts-input" placeholder="장소 또는 제출처 입력">
                     </div>
                     <div class="zen-sts-field" style="justify-content: flex-end;">
@@ -1116,40 +1107,39 @@
                 </div>
             </div>
             <div class="zen-settings-footer zen-sts-footer">
-                <button type="button" class="zen-settings-secondary-btn" onclick="exportNoteAsDdaySchedule()">.dday 파일로 내보내기</button>
                 <div class="zen-sts-footer-actions">
-                    <button type="button" class="zen-settings-secondary-btn" onclick="closeSendToScheduleModal()">취소</button>
-                    <button type="button" class="zen-settings-done-btn" onclick="sendNoteToScheduleDirectStub()">일정관리로 보내기</button>
+                    <button type="button" class="zen-sts-btn-cancel" onclick="closeSendToScheduleModal()">취소</button>
+                    <button type="button" class="zen-sts-btn-primary" onclick="sendNoteToScheduleDirectStub()">일정관리로 보내기</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- [V1.6.0] 좌측 블랙홀 버튼 원점 출현 · 투입 꿀꺽 · 복귀 포털 껍데기 -->
+    <!-- [V1.6.1] 좌측 블랙홀 버튼 원점 출현 · 투입 꿀꺽 · 복귀 포털 -->
     <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
         <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
             <div class="zen-bh-shell-head">
-                <span class="zen-bh-shell-title">MY AI 블랙홀 투입</span>
+                <span class="zen-bh-shell-title">MY AI 문서 분석·요약</span>
                 <button type="button" class="zen-bh-close-btn" onclick="closeBlackHolePortal()" aria-label="닫기" title="닫기 (Esc)">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             <div class="zen-bh-mode-tabs" role="tablist" aria-label="투입 유형">
-                <button type="button" class="zen-bh-mode-btn active" data-bh-mode="official" onclick="setBlackHoleMode('official')">정식 공문</button>
-                <button type="button" class="zen-bh-mode-btn" data-bh-mode="memo" onclick="setBlackHoleMode('memo')">수신 쪽지</button>
-                <button type="button" class="zen-bh-mode-btn" data-bh-mode="summary" onclick="setBlackHoleMode('summary')">일반 문서 요약</button>
+                <button type="button" class="zen-bh-mode-btn active" data-bh-mode="official" onclick="setBlackHoleMode('official')">공문 분석</button>
+                <button type="button" class="zen-bh-mode-btn" data-bh-mode="memo" onclick="setBlackHoleMode('memo')">쪽지 분석</button>
+                <button type="button" class="zen-bh-mode-btn" data-bh-mode="summary" onclick="setBlackHoleMode('summary')">문서 요약</button>
             </div>
             <div id="zen-bh-orb-dropzone" class="zen-bh-orb-dropzone" onclick="triggerBlackHoleFilePick()" title="파일을 끌어다 놓거나 클릭해 선택하세요">
                 <canvas id="zen-bh-canvas" class="zen-bh-canvas"></canvas>
                 <input type="file" id="zen-bh-file-input" multiple style="display: none;">
             </div>
-            <div id="zen-bh-status-pill" class="zen-bh-status-pill">공문 .zip 또는 문서를 끌어다 놓거나 클릭해 선택하세요</div>
+            <div id="zen-bh-status-pill" class="zen-bh-status-pill">다운 받은 공문(zip파일), 쪽지, 요약하고 싶은 문서를 블랙홀에 던져 넣으세요.</div>
             <div class="zen-bh-options-box">
                 <label class="zen-bh-fold-check">
                     <input type="checkbox" id="zen-bh-folding-toggle" checked>
-                    <span>자동 폴더링 실행 (원본 및 첨부 분류 보관)</span>
+                    <span>자동 폴더링(폴더를 만들고 공문과 첨부 문서 저장)</span>
                 </label>
-                <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">주 공문 본문만 AI 전송 (첨부 제외) · 자동 폴더링 기본 켜짐</div>
+                <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">공문 본문만 AI 전송·분석합니다(첨부 제외).</div>
             </div>
             <div class="zen-bh-shell-actions">
                 <button type="button" class="zen-bh-act-btn is-gold" onclick="demoBlackHoleSwallow()">투입 시연</button>
@@ -1158,20 +1148,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.6.0"></script>
-    <script src="js/db.js?v=1.6.0"></script>
-    <script src="js/ui.js?v=1.6.0"></script>
-    <script src="js/editor.js?v=1.6.0"></script>
-    <script src="js/file_manager.js?v=1.6.0"></script>
-    <script src="js/io.js?v=1.6.0"></script>
-    <script src="js/auth.js?v=1.6.0"></script>
-    <script src="js/zen_bridge.js?v=1.6.0"></script>
+    <script src="js/globals.js?v=1.6.1"></script>
+    <script src="js/db.js?v=1.6.1"></script>
+    <script src="js/ui.js?v=1.6.1"></script>
+    <script src="js/editor.js?v=1.6.1"></script>
+    <script src="js/file_manager.js?v=1.6.1"></script>
+    <script src="js/io.js?v=1.6.1"></script>
+    <script src="js/auth.js?v=1.6.1"></script>
+    <script src="js/zen_bridge.js?v=1.6.1"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.6.0");
+            console.log("[ZenNotes] 현재 버전: V1.6.1");
             console.log("=========================================");
         });
     </script>
