@@ -1423,10 +1423,14 @@
             } catch { }
         }
 
-        // 4. 폴백: firstItem.text() 시도
+        // 4. 폴백: 바이너리/압축 문서(.docx, .hwpx, .zip, .pdf, .hwp, .xlsx, .pptx, .doc, .xls, .ppt, 이미지 등)는 생바이트(PK...) 깨짐 방지를 위해 firstItem.text() 금지
+        if (/\.(docx|hwpx|zip|pdf|hwp|xlsx|pptx|doc|xls|ppt|png|jpg|jpeg|gif|webp|bmp|exe|dll)$/i.test(lower)) {
+            return "";
+        }
         if (typeof firstItem.text === "function") {
             try {
                 const fallbackTxt = (await firstItem.text()) || "";
+                if (/^PK[\x03\x05\x07]/.test(fallbackTxt)) return "";
                 const cleaned = fallbackTxt.replace(/\0/g, "").trim();
                 if (cleaned) return cleaned.slice(0, 18000);
             } catch { }
