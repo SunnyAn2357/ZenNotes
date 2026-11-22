@@ -7303,10 +7303,10 @@ body.light-theme .tree-folder-icon.is-trash {
     max-width: 452px;
     border-radius: 22px;
     padding: 20px 22px 18px;
-    background: rgba(12, 16, 28, 0.94);
-    border: 1px solid rgba(251, 191, 36, 0.28);
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 42px rgba(245, 158, 11, 0.14);
-    color: #f8fafc;
+    background: rgba(16, 19, 27, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 36px rgba(0, 0, 0, 0.25);
+    color: #f1f5f9;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -7345,7 +7345,7 @@ body.light-theme .tree-folder-icon.is-trash {
     font-size: 13.5px;
     font-weight: 700;
     letter-spacing: -0.01em;
-    color: #fef3c7;
+    color: #f1f5f9;
     white-space: nowrap;
 }
 
@@ -7359,9 +7359,9 @@ body.light-theme .tree-folder-icon.is-trash {
     height: 26px;
     padding: 0 9px 0 8px;
     border-radius: 7px;
-    border: 1px solid rgba(251, 191, 36, 0.34);
-    background: rgba(255, 255, 255, 0.07);
-    color: #fef3c7;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
     font-size: 11.5px;
     font-weight: 600;
     display: inline-flex;
@@ -7372,8 +7372,8 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-model-btn:hover {
-    background: rgba(245, 158, 11, 0.2);
-    border-color: rgba(251, 191, 36, 0.55);
+    background: rgba(255, 255, 255, 0.11);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 .zen-bh-model-icon {
@@ -7393,7 +7393,7 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-bh-model-caret {
     font-size: 10px;
-    color: #fcd34d;
+    color: #94a3b8;
     margin-left: 1px;
 }
 
@@ -7405,11 +7405,11 @@ body.light-theme .tree-folder-icon.is-trash {
     max-height: min(410px, 68vh);
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(251, 191, 36, 0.35) transparent;
+    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
     padding: 8px 8px 10px;
     border-radius: 12px;
-    background: rgba(15, 20, 34, 0.98);
-    border: 1px solid rgba(251, 191, 36, 0.32);
+    background: rgba(20, 24, 34, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 18px 42px rgba(0, 0, 0, 0.65);
     z-index: 30;
     display: flex;
@@ -7423,7 +7423,7 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-model-dropdown::-webkit-scrollbar-thumb {
-    background: rgba(251, 191, 36, 0.35);
+    background: rgba(148, 163, 184, 0.35);
     border-radius: 999px;
 }
 
@@ -7456,8 +7456,8 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-model-option.is-selected {
-    background: rgba(245, 158, 11, 0.18);
-    border-color: rgba(251, 191, 36, 0.42);
+    background: rgba(254, 240, 138, 0.12);
+    border-color: rgba(254, 240, 138, 0.28);
 }
 
 .zen-bh-model-opt-icon {
@@ -7492,7 +7492,7 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-model-option.is-selected .zen-bh-model-opt-name {
-    color: #fef08a;
+    color: #fef9c3;
 }
 
 .zen-bh-model-opt-desc {
@@ -7548,9 +7548,9 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-mode-btn.active {
-    background: rgba(245, 158, 11, 0.24);
-    color: #fef08a;
-    border: 1px solid rgba(251, 191, 36, 0.45);
+    background: rgba(254, 249, 195, 0.13);
+    color: #fef9c3;
+    border: 1px solid rgba(254, 240, 138, 0.28);
 }
 
 .zen-bh-orb-dropzone {
@@ -7582,9 +7582,9 @@ body.light-theme .tree-folder-icon.is-trash {
     width: 100%;
     padding: 9px 14px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(251, 191, 36, 0.22);
-    color: #fef3c7;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
     font-size: 12.5px;
     line-height: 1.48;
     text-align: center;
@@ -7601,7 +7601,7 @@ body.light-theme .tree-folder-icon.is-trash {
     gap: 5px;
     padding: 10px 12px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -7611,12 +7611,12 @@ body.light-theme .tree-folder-icon.is-trash {
     gap: 7px;
     font-size: 12.5px;
     font-weight: 600;
-    color: #f8fafc;
+    color: #e2e8f0;
     cursor: pointer;
 }
 
 .zen-bh-fold-check input[type="checkbox"] {
-    accent-color: #f59e0b;
+    accent-color: #94a3b8;
     width: 15px;
     height: 15px;
     margin: 0;
@@ -7669,4 +7669,137 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-bh-act-btn.is-gold:hover {
     background: rgba(245, 158, 11, 0.34);
+}
+
+/* ============================================================================
+   [V1.6.7] 화이트 테마 (body.light-theme) 블랙홀 포털 Zen 스타일
+   ============================================================================ */
+body.light-theme .zen-bh-portal-layer {
+    background: rgba(15, 23, 42, 0.28);
+}
+
+body.light-theme .zen-bh-portal-shell {
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16), 0 4px 16px rgba(15, 23, 42, 0.06);
+    color: #191c20;
+}
+
+body.light-theme .zen-bh-shell-title {
+    color: #191c20;
+}
+
+body.light-theme .zen-bh-model-btn {
+    border: 1px solid #d0d5dd;
+    background: #f8fafc;
+    color: #334155;
+}
+
+body.light-theme .zen-bh-model-btn:hover {
+    background: #eef2f6;
+    border-color: #cbd5e1;
+}
+
+body.light-theme .zen-bh-model-caret {
+    color: #64748b;
+}
+
+body.light-theme .zen-bh-model-dropdown {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.14);
+    scrollbar-color: rgba(100, 116, 139, 0.35) transparent;
+}
+
+body.light-theme .zen-bh-model-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.35);
+}
+
+body.light-theme .zen-bh-model-section-label {
+    color: #64748b;
+    border-bottom-color: #f1f5f9;
+}
+
+body.light-theme .zen-bh-model-option {
+    color: #1e293b;
+}
+
+body.light-theme .zen-bh-model-option:hover {
+    background: #f8fafc;
+}
+
+body.light-theme .zen-bh-model-option.is-selected {
+    background: #fefce8;
+    border-color: #fde68a;
+}
+
+body.light-theme .zen-bh-model-opt-name {
+    color: #191c20;
+}
+
+body.light-theme .zen-bh-model-option.is-selected .zen-bh-model-opt-name {
+    color: #191c20;
+}
+
+body.light-theme .zen-bh-model-opt-desc {
+    color: #64748b;
+}
+
+body.light-theme .zen-bh-close-btn {
+    color: #64748b;
+}
+
+body.light-theme .zen-bh-close-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+body.light-theme .zen-bh-mode-tabs {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+body.light-theme .zen-bh-mode-btn {
+    color: #475569;
+}
+
+body.light-theme .zen-bh-mode-btn.active {
+    background: #ffffff;
+    color: #191c20;
+    border: 1px solid #d0d5dd;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+body.light-theme .zen-bh-status-pill {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+}
+
+body.light-theme .zen-bh-options-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+body.light-theme .zen-bh-fold-check {
+    color: #1e293b;
+}
+
+body.light-theme .zen-bh-fold-check input[type="checkbox"] {
+    accent-color: #2563eb;
+}
+
+body.light-theme .zen-bh-mode-hint {
+    color: #64748b;
+}
+
+body.light-theme .zen-bh-act-btn {
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #334155;
+}
+
+body.light-theme .zen-bh-act-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
 }

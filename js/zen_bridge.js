@@ -1087,13 +1087,21 @@
         bhFlashLevel *= 0.91;
 
         ctx.clearRect(0, 0, cw, ch);
+        const isLightTheme = !!(document.body && document.body.classList.contains("light-theme"));
 
-        // 1. 외곽 깊은 우주 헤일로
+        // 1. 외곽 헤일로 (화이트 모드는 탁한 검은 안개를 걷어내고 맑은 샴페인 코로나 적용)
         const halo = ctx.createRadialGradient(cx, cy, maxR * 0.24, cx, cy, maxR);
-        halo.addColorStop(0, "rgba(0, 0, 0, 0.96)");
-        halo.addColorStop(0.45, "rgba(18, 12, 5, 0.86)");
-        halo.addColorStop(0.75, `rgba(217, 119, 6, ${0.24 + bhHoverLevel * 0.14 + bhFlashLevel * 0.28})`);
-        halo.addColorStop(1, "rgba(15, 23, 42, 0)");
+        if (isLightTheme) {
+            halo.addColorStop(0, "rgba(15, 23, 42, 0.12)");
+            halo.addColorStop(0.45, `rgba(217, 165, 72, ${0.14 + bhHoverLevel * 0.08 + bhFlashLevel * 0.14})`);
+            halo.addColorStop(0.76, `rgba(226, 200, 145, ${0.08 + bhHoverLevel * 0.05})`);
+            halo.addColorStop(1, "rgba(255, 255, 255, 0)");
+        } else {
+            halo.addColorStop(0, "rgba(0, 0, 0, 0.94)");
+            halo.addColorStop(0.48, "rgba(16, 18, 26, 0.78)");
+            halo.addColorStop(0.76, `rgba(180, 130, 55, ${0.16 + bhHoverLevel * 0.1 + bhFlashLevel * 0.2})`);
+            halo.addColorStop(1, "rgba(15, 23, 42, 0)");
+        }
         ctx.fillStyle = halo;
         ctx.beginPath();
         ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
@@ -1105,18 +1113,24 @@
         ctx.rotate(-0.22);
         for (const side of [-1, 1]) {
             const lensGrad = ctx.createLinearGradient(-maxR * 0.55, 0, maxR * 0.55, 0);
-            lensGrad.addColorStop(0, "rgba(251, 191, 36, 0)");
-            lensGrad.addColorStop(0.5, `rgba(253, 224, 71, ${0.44 + bhHoverLevel * 0.25})`);
-            lensGrad.addColorStop(1, "rgba(251, 191, 36, 0)");
+            if (isLightTheme) {
+                lensGrad.addColorStop(0, "rgba(180, 130, 50, 0)");
+                lensGrad.addColorStop(0.5, `rgba(180, 128, 42, ${0.38 + bhHoverLevel * 0.2})`);
+                lensGrad.addColorStop(1, "rgba(180, 130, 50, 0)");
+            } else {
+                lensGrad.addColorStop(0, "rgba(253, 230, 138, 0)");
+                lensGrad.addColorStop(0.5, `rgba(254, 240, 138, ${0.34 + bhHoverLevel * 0.22})`);
+                lensGrad.addColorStop(1, "rgba(253, 230, 138, 0)");
+            }
             ctx.strokeStyle = lensGrad;
-            ctx.lineWidth = 3.2;
+            ctx.lineWidth = isLightTheme ? 2.6 : 3.0;
             ctx.beginPath();
             ctx.arc(0, side * 1.5, maxR * 0.42, side > 0 ? 0.18 : Math.PI + 0.18, side > 0 ? Math.PI - 0.18 : Math.PI * 2 - 0.18);
             ctx.stroke();
         }
         ctx.restore();
 
-        // 3. 기울어진 NASA 골드 강착원반 & 궤도 입자
+        // 3. 기울어진 샴페인 골드 강착원반 & 궤도 입자
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(-0.26);
@@ -1129,22 +1143,35 @@
             const py = Math.sin(p.angle) * (maxR * p.radius * diskScaleY);
             const isFront = Math.sin(p.angle) >= 0;
             if (!isFront && Math.hypot(px, py) < maxR * 0.34) continue;
-            const bright = Math.min(1, p.alpha + bhFlashLevel * 0.4);
-            ctx.fillStyle = p.hueMix > 0.38
-                ? `rgba(253, 224, 71, ${bright})`
-                : `rgba(245, 158, 11, ${bright * 0.9})`;
+            const bright = Math.min(1, p.alpha + bhFlashLevel * 0.35);
+            if (isLightTheme) {
+                ctx.fillStyle = p.hueMix > 0.42
+                    ? `rgba(180, 128, 44, ${bright * 0.78})`
+                    : `rgba(120, 113, 108, ${bright * 0.52})`;
+            } else {
+                ctx.fillStyle = p.hueMix > 0.42
+                    ? `rgba(254, 243, 199, ${bright * 0.88})`
+                    : `rgba(217, 165, 72, ${bright * 0.78})`;
+            }
             ctx.beginPath();
-            ctx.arc(px, py, p.size * (isFront ? 1.15 : 0.85), 0, Math.PI * 2);
+            ctx.arc(px, py, p.size * (isFront ? 1.1 : 0.82), 0, Math.PI * 2);
             ctx.fill();
         }
 
         // 강착원반 밝은 링 레이어
         ctx.scale(1, diskScaleY);
         const diskRing = ctx.createRadialGradient(0, 0, maxR * 0.36, 0, 0, maxR * 0.9);
-        diskRing.addColorStop(0, "rgba(254, 240, 138, 0)");
-        diskRing.addColorStop(0.24, `rgba(254, 243, 199, ${0.72 + bhFlashLevel * 0.25})`);
-        diskRing.addColorStop(0.55, `rgba(245, 158, 11, ${0.46 + bhHoverLevel * 0.18})`);
-        diskRing.addColorStop(1, "rgba(180, 83, 9, 0)");
+        if (isLightTheme) {
+            diskRing.addColorStop(0, "rgba(217, 175, 95, 0)");
+            diskRing.addColorStop(0.24, `rgba(217, 165, 72, ${0.44 + bhFlashLevel * 0.22})`);
+            diskRing.addColorStop(0.55, `rgba(180, 130, 55, ${0.24 + bhHoverLevel * 0.14})`);
+            diskRing.addColorStop(1, "rgba(180, 130, 55, 0)");
+        } else {
+            diskRing.addColorStop(0, "rgba(254, 249, 195, 0)");
+            diskRing.addColorStop(0.24, `rgba(254, 243, 199, ${0.56 + bhFlashLevel * 0.22})`);
+            diskRing.addColorStop(0.55, `rgba(217, 155, 58, ${0.34 + bhHoverLevel * 0.16})`);
+            diskRing.addColorStop(1, "rgba(180, 83, 9, 0)");
+        }
         ctx.fillStyle = diskRing;
         ctx.beginPath();
         ctx.arc(0, 0, maxR * 0.92, 0, Math.PI * 2);
@@ -1154,15 +1181,19 @@
         // 4. 사상의 지평선(중앙 블랙 코어) + 광자 링
         const coreR = maxR * 0.33;
         ctx.save();
-        ctx.fillStyle = "#03050a";
-        ctx.shadowColor = `rgba(253, 224, 71, ${0.85 + bhFlashLevel * 0.15})`;
-        ctx.shadowBlur = 16 + bhHoverLevel * 10 + bhFlashLevel * 18;
+        ctx.fillStyle = isLightTheme ? "#111827" : "#04060c";
+        ctx.shadowColor = isLightTheme
+            ? `rgba(180, 130, 50, ${0.48 + bhFlashLevel * 0.2})`
+            : `rgba(254, 240, 138, ${0.65 + bhFlashLevel * 0.2})`;
+        ctx.shadowBlur = (isLightTheme ? 12 : 15) + bhHoverLevel * 8 + bhFlashLevel * 14;
         ctx.beginPath();
         ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.strokeStyle = `rgba(254, 240, 138, ${0.88 + bhFlashLevel * 0.12})`;
-        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = isLightTheme
+            ? `rgba(217, 165, 72, ${0.72 + bhFlashLevel * 0.2})`
+            : `rgba(254, 243, 199, ${0.75 + bhFlashLevel * 0.18})`;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(cx, cy, coreR + 0.6, 0, Math.PI * 2);
         ctx.stroke();
