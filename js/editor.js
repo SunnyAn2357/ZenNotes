@@ -219,6 +219,7 @@ const icons = Quill.import('ui/icons');
 // 1. 커스텀 기능 아이콘 (엔진이 모르는 기능들)
 icons['special-char'] = '<i class="fa-regular fa-face-smile" style="font-size: 14px; color: var(--text-muted);" title="특수문자 / 이모티콘 (Ctrl+F10)"></i>';
 icons['strike-line'] = '<i class="fa-solid fa-pen-slash" style="font-size: 14px; color: var(--text-muted);"></i>';
+icons['highlight'] = '<span class="ql-highlight-icon">H</span>';
 icons['divider'] = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['markdown-help'] = '<i class="fa-brands fa-markdown" style="font-size: 15px; color: var(--text-muted);" title="마크다운 문법 (MD)"></i>';
 
@@ -546,7 +547,7 @@ const quill = new Quill('#editor', {
                 // --- 1행 ---
                 ['undo', 'redo'],
                 [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike', 'strike-line', { 'color': [] }, { 'background': [] }],
+                ['bold', 'italic', 'underline', 'strike', 'strike-line', 'highlight', { 'color': [] }, { 'background': [] }],
                 [{ 'list': 'check' }, { 'list': 'ordered' }, { 'list': 'bullet' }],
                 [{ 'align': [] }],
                 ['table', 'table-insert-row', 'table-delete-row', 'table-insert-column', 'table-delete-column'],
@@ -717,6 +718,14 @@ const quill = new Quill('#editor', {
                 },
 
                 // 🎯 줄 전체 글자(Inline)에 취소선을 긋고 투명 방어막 전개
+                'highlight': function () {
+                    const range = this.quill.getSelection(true);
+                    if (!range) return;
+                    const curFmt = this.quill.getFormat(range);
+                    const curBg = curFmt && curFmt.background ? String(curFmt.background).toLowerCase() : '';
+                    const isYellow = curBg === '#fef08a' || curBg === 'rgb(254, 240, 138)';
+                    this.quill.format('background', isYellow ? false : '#fef08a', Quill.sources.USER);
+                },
                 'strike-line': function () {
                     const range = this.quill.getSelection();
                     if (!range) return;
@@ -840,6 +849,7 @@ function initToolbarTooltips() {
         '.ql-toolbar button.ql-underline': '밑줄 (Ctrl+U / __텍스트__)',
         '.ql-toolbar button.ql-strike': '취소선 (~~텍스트~~)',
         '.ql-toolbar button.ql-strike-line': '취소선 블록',
+        '.ql-toolbar button.ql-highlight': '형광펜 (==텍스트==)',
         '.ql-toolbar .ql-color': '글자 색상',
         '.ql-toolbar .ql-background': '형광펜 / 배경색',
 
@@ -1714,7 +1724,7 @@ quill.on('text-change', function (delta, oldDelta, source) {
         const fullText = quill.getText(lineStart, offset);
 
         // 🎯 [K-마크다운 하이브리드 엔진] 스페이스 역주행 및 커서 튕김 완벽 해결 버전
-        function applyInlineFormat(matchText, content, formatName) {
+        function applyInlineFormat(matchText, content, formatName, formatValue = true) {
             const start = lineStart + offset - matchText.length;
             const hasKorean = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(content);
 
@@ -1724,7 +1734,7 @@ quill.on('text-change', function (delta, oldDelta, source) {
                 quill.deleteText(start, matchText.length, Quill.sources.USER);
 
                 // 2. 본문 삽입 및 서식 적용
-                quill.insertText(start, content, { [formatName]: true }, Quill.sources.USER);
+                quill.insertText(start, content, { [formatName]: formatValue }, Quill.sources.USER);
 
                 if (hasKorean) {
                     // [한국어 전용 로직]
@@ -1753,6 +1763,10 @@ quill.on('text-change', function (delta, oldDelta, source) {
         // 2. 취소선 (~~내용~~)
         const strikeMatch = fullText.match(/~~(.+?)~~ $/);
         if (strikeMatch) { applyInlineFormat(strikeMatch[0], strikeMatch[1], 'strike'); return; }
+
+        // 2-1. 형광펜 (==내용==)
+        const highlightMatch = fullText.match(/==(.+?)== $/);
+        if (highlightMatch) { applyInlineFormat(highlightMatch[0], highlightMatch[1], 'background', '#fef08a'); return; }
 
         // 3. 밑줄 (__내용__)
         const underMatch = fullText.match(/__(.+?)__ $/);

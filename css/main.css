@@ -1491,6 +1491,33 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     color: #CCAA66 !important;
 }
 
+.ql-toolbar.ql-snow button.ql-highlight .ql-highlight-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    background: #fef08a;
+    color: #854d0e;
+    font-weight: 800;
+    font-size: 11px;
+    line-height: 1;
+    border: 1px solid rgba(133, 77, 14, 0.2);
+}
+
+.ql-toolbar.ql-snow button.ql-highlight.ql-active .ql-highlight-icon,
+.ql-toolbar.ql-snow button.ql-highlight:hover .ql-highlight-icon {
+    border-color: var(--accent);
+}
+
+body:not(.light-theme) .ql-editor span[style*="rgb(254, 240, 138)"],
+body:not(.light-theme) .ql-editor span[style*="#fef08a"] {
+    color: #1e293b !important;
+    border-radius: 3px;
+    padding: 0 2px;
+}
+
 /* 3. 호버(Hover) 및 활성화(Active) 상태 통합 */
 /* 3-1. 텍스트 및 폰트 아이콘 색상 변경 */
 .ql-toolbar.ql-snow button.ql-strike-line:hover::before,
