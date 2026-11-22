@@ -4149,6 +4149,8 @@ body.light-theme {
     #mobile-left-menu-btn,
     #mobile-overlay,
     .status-container,
+    #send-to-schedule-modal,
+    #zen-blackhole-portal-layer,
     .modal-overlay,
     .ql-tooltip,
     .custom-table-menu {
@@ -7011,8 +7013,11 @@ body.light-theme .tree-folder-icon.is-trash {
 
 #send-to-schedule-modal input,
 #send-to-schedule-modal textarea,
-#send-to-schedule-modal select {
+#send-to-schedule-modal select,
+#send-to-schedule-modal [contenteditable="true"],
+#send-to-schedule-modal [contenteditable="true"] * {
     user-select: text !important;
+    -webkit-user-select: text !important;
     caret-color: auto !important;
 }
 
@@ -7046,7 +7051,7 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-sts-row-meta {
     display: grid;
-    grid-template-columns: 1fr 130px;
+    grid-template-columns: 1fr;
     gap: 8px;
 }
 
@@ -7096,6 +7101,47 @@ body.light-theme .tree-folder-icon.is-trash {
     min-height: 240px;
     resize: vertical;
     line-height: 1.55;
+}
+
+.zen-sts-rich-wrap.ql-container.ql-snow {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    background: var(--bg) !important;
+    color: var(--text-main) !important;
+    min-height: 240px !important;
+    max-height: 360px !important;
+    overflow-y: auto !important;
+    scrollbar-width: thin !important;
+    -ms-overflow-style: auto !important;
+    flex: none !important;
+}
+
+.zen-sts-rich-wrap.ql-container.ql-snow:focus-within {
+    border-color: var(--accent) !important;
+}
+
+.zen-sts-rich-wrap.ql-container.ql-snow::-webkit-scrollbar {
+    display: block !important;
+    width: 6px;
+}
+
+.zen-sts-rich-wrap.ql-container.ql-snow::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.45);
+    border-radius: 999px;
+}
+
+#send-to-schedule-modal #sts-memo-editor.ql-editor {
+    min-height: 238px !important;
+    height: auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 12px 14px !important;
+    font-size: 14.5px !important;
+    line-height: 1.6 !important;
+    overflow-y: visible !important;
+    outline: none !important;
 }
 
 .zen-sts-rem-row {

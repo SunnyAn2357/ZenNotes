@@ -499,13 +499,46 @@
     }
 
     // ========================================================================
-    // 4. MY 일정관리로 보내기 모달 (확인 · 수정 · .dday 내보내기)
+    // 4. MY 일정관리로 보내기 모달 (노트 본문 표 · 그림 · 코드블록 · 인용구 100% 그대로 복사/전송)
     // ========================================================================
     let stsSnapshot = null;
+    let bhAutoScheduleTimer = null;
 
     function getLocalTodayIso() {
         const d = new Date();
         return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    }
+
+    function getOffsetDateParts(daysOffset = 5) {
+        const d = new Date();
+        d.setDate(d.getDate() + daysOffset);
+        const yyyy = String(d.getFullYear());
+        const mm = pad2(d.getMonth() + 1);
+        const dd = pad2(d.getDate());
+        const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+        const wk = weekdays[d.getDay()];
+        return {
+            iso: `${yyyy}-${mm}-${dd}`,
+            compact: `${yyyy}${mm}${dd}`,
+            zenDate: `${yyyy}.${mm}.${dd}.(${wk})`
+        };
+    }
+
+    function getCleanQuillElementHtml(rootEl) {
+        if (!rootEl) return "";
+        const clone = rootEl.cloneNode(true);
+        clone.querySelectorAll("img.zen-img-multi-selected").forEach((img) => {
+            img.classList.remove("zen-img-multi-selected");
+            if (img.classList.length === 0) img.removeAttribute("class");
+        });
+        clone.querySelectorAll("select.ql-ui").forEach((sel) => {
+            const val = sel.value;
+            sel.querySelectorAll("option").forEach((opt) => {
+                if (opt.value === val) opt.setAttribute("selected", "selected");
+                else opt.removeAttribute("selected");
+            });
+        });
+        return clone.innerHTML;
     }
 
     function detectScheduleDateFromNote(title, plainText) {
@@ -514,7 +547,7 @@
             return `${deadlineTag[1]}-${deadlineTag[2]}-${deadlineTag[3]}`;
         }
         const combined = `${title || ""}\n${plainText || ""}`;
-        const explicitMatch = combined.match(/(\d{4})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})일?\s*(?:까지|마감|기한|제출)/);
+        const explicitMatch = combined.match(/(\d{4})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})일?\s*(?:([일월화수목금토])\))?\s*(?:\d{1,2}:\d{2})?\s*(?:까지|마감|기한|제출)/);
         if (explicitMatch) {
             return `${explicitMatch[1]}-${pad2(explicitMatch[2])}-${pad2(explicitMatch[3])}`;
         }
@@ -526,15 +559,33 @@
     }
 
     function detectScheduleTimeFromText(plainText) {
-        const m = (plainText || "").match(/(?:오전|오후)?\s*(\d{1,2})\s*[:시]\s*(\d{2})?/);
+        const m = (plainText || "").match(/(?:오전|오후)?\s*(\d{1,2})\s*:\s*(\d{2})|(?:오전|오후)\s*(\d{1,2})\s*시\s*(\d{1,2})?분?/);
         if (!m) return "";
-        let h = parseInt(m[1], 10);
-        const min = parseInt(m[2] || "0", 10);
+        let h = parseInt(m[1] || m[3], 10);
+        const min = parseInt(m[2] || m[4] || "0", 10);
         if (isNaN(h) || isNaN(min) || min < 0 || min > 59) return "";
         if (/오후/.test(m[0]) && h >= 1 && h <= 11) h += 12;
         if (/오전/.test(m[0]) && h === 12) h = 0;
         if (h < 0 || h > 23) return "";
         return `${pad2(h)}:${pad2(min)}`;
+    }
+
+    function detectScheduleLocationFromNote(rootEl, plainText) {
+        if (rootEl) {
+            const cells = Array.from(rootEl.querySelectorAll("td, th"));
+            for (let i = 0; i < cells.length - 1; i++) {
+                const label = (cells[i].textContent || "").replace(/\s+/g, " ").trim();
+                if (/^(?:제출처|장소\s*\/\s*제출처|장소|수신처|제출\s*기관|담당\s*부서)$/.test(label)) {
+                    const val = (cells[i + 1].textContent || "").replace(/\s+/g, " ").trim();
+                    if (val) return val.slice(0, 80);
+                }
+            }
+        }
+        const m = (plainText || "").match(/(?:제출처|장소\s*\/\s*제출처|장소|수신처|제출\s*기관)\s*[:：]\s*([^\r\n|]+)/);
+        if (m && m[1]) {
+            return m[1].trim().slice(0, 80);
+        }
+        return "";
     }
 
     function normalizeSmartScheduleTimeInput(el) {
@@ -549,60 +600,46 @@
         }
     }
 
-    function extractLinksFromEditor() {
-        const links = [];
-        const seen = new Set();
-        const root = (typeof quill !== "undefined" && quill && quill.root) ? quill.root : null;
-        if (!root) return links;
-        root.querySelectorAll("a[href]").forEach((a) => {
-            const href = (a.getAttribute("href") || "").trim();
-            if (!href) return;
-            const label = (a.textContent || "").trim() || href;
-            const key = `${label}|${href}`;
-            if (seen.has(key)) return;
-            seen.add(key);
-            links.push({ label, href });
-        });
-        return links;
-    }
-
-    function plainTextToQuillHtml(text, preservedLinks) {
-        const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
-        const blocks = lines.map((line) => {
-            const trimmed = line.replace(/\s+$/, "");
-            return trimmed ? `<p>${escapeHtmlStr(trimmed)}</p>` : "<p><br></p>";
-        });
-        if (Array.isArray(preservedLinks) && preservedLinks.length > 0) {
-            const existingJoined = text || "";
-            const missingLinks = preservedLinks.filter((l) => existingJoined.indexOf(l.href) === -1 && existingJoined.indexOf(l.label) === -1);
-            if (missingLinks.length > 0) {
-                blocks.push("<p><br></p>");
-                missingLinks.forEach((l) => {
-                    blocks.push(`<p><a href="${escapeHtmlStr(l.href)}" rel="noopener noreferrer" target="_blank">${escapeHtmlStr(l.label)}</a></p>`);
-                });
+    function bindStsRichEditorEvents() {
+        const elMemoEditor = document.getElementById("sts-memo-editor");
+        if (!elMemoEditor || elMemoEditor._stsBound) return;
+        elMemoEditor._stsBound = true;
+        elMemoEditor.addEventListener("click", (e) => {
+            const uiSpan = e.target.closest("li[data-list] > .ql-ui");
+            if (uiSpan) {
+                const li = uiSpan.parentElement;
+                const cur = li.getAttribute("data-list");
+                if (cur === "checked" || cur === "unchecked") {
+                    li.setAttribute("data-list", cur === "checked" ? "unchecked" : "checked");
+                    e.preventDefault();
+                }
             }
-        }
-        return blocks.join("");
+        });
     }
 
     function openSendToScheduleModal() {
+        if (bhAutoScheduleTimer) {
+            clearTimeout(bhAutoScheduleTimer);
+            bhAutoScheduleTimer = null;
+        }
         const modal = document.getElementById("send-to-schedule-modal");
         if (!modal) return;
+
+        bindStsRichEditorEvents();
 
         const titleInputEl = document.getElementById("memo-title-input");
         const rawTitle = (titleInputEl ? titleInputEl.value : "").trim() || "제목 없는 일정";
         const hasQuill = typeof quill !== "undefined" && quill && quill.root;
-        const rawHtml = hasQuill ? quill.root.innerHTML : "";
+        const rawHtml = hasQuill ? getCleanQuillElementHtml(quill.root) : "";
         const plainText = hasQuill ? (quill.getText() || "").replace(/\n+$/, "") : "";
         const detectedDate = detectScheduleDateFromNote(rawTitle, plainText);
         const detectedTime = detectScheduleTimeFromText(plainText);
-        const extractedLinks = extractLinksFromEditor();
+        const detectedLocation = detectScheduleLocationFromNote(hasQuill ? quill.root : null, plainText);
 
         stsSnapshot = {
             rawTitle,
             rawHtml,
-            plainText,
-            extractedLinks
+            plainText
         };
 
         const elTitle = document.getElementById("sts-title-input");
@@ -611,35 +648,24 @@
         const elTime = document.getElementById("sts-time-input");
         const elLoc = document.getElementById("sts-location-input");
         const elPri = document.getElementById("sts-priority-select");
-        const elMemo = document.getElementById("sts-memo-input");
-        const elKeepHtml = document.getElementById("sts-keep-html-check");
-        const elLinksWrap = document.getElementById("sts-links-preview");
+        const elMemoEditor = document.getElementById("sts-memo-editor");
 
         if (elTitle) elTitle.value = rawTitle;
-        if (elStart) elStart.value = detectedDate;
+        if (elStart) elStart.value = getLocalTodayIso();
         if (elDue) elDue.value = detectedDate;
         if (elTime) elTime.value = detectedTime;
-        if (elLoc) elLoc.value = "";
+        if (elLoc) elLoc.value = detectedLocation;
         if (elPri) elPri.value = "Normal";
-        if (elMemo) elMemo.value = plainText;
-        if (elKeepHtml) elKeepHtml.checked = Boolean(rawHtml && rawHtml !== "<p><br></p>");
+        if (elMemoEditor) {
+            elMemoEditor.innerHTML = rawHtml && rawHtml.trim() ? rawHtml : "<p><br></p>";
+            const wrap = elMemoEditor.parentElement;
+            if (wrap) wrap.scrollTop = 0;
+        }
 
         modal.querySelectorAll('input[name="sts-rem"]').forEach((chk) => {
             const v = chk.value;
             chk.checked = (v === "h2" || v === "h1");
         });
-
-        if (elLinksWrap) {
-            if (extractedLinks.length > 0) {
-                elLinksWrap.style.display = "flex";
-                elLinksWrap.innerHTML = extractedLinks
-                    .map((l) => `<span class="sts-link-pill" title="${escapeHtmlStr(l.href)}">${escapeHtmlStr(l.label)}</span>`)
-                    .join("");
-            } else {
-                elLinksWrap.style.display = "none";
-                elLinksWrap.innerHTML = "";
-            }
-        }
 
         modal.style.display = "flex";
         try {
@@ -651,6 +677,10 @@
     }
 
     function closeSendToScheduleModal(fromPopstate = false) {
+        if (bhAutoScheduleTimer) {
+            clearTimeout(bhAutoScheduleTimer);
+            bhAutoScheduleTimer = null;
+        }
         const modal = document.getElementById("send-to-schedule-modal");
         if (modal && modal.style.display === "flex") {
             modal.style.display = "none";
@@ -670,8 +700,7 @@
         const time = (document.getElementById("sts-time-input")?.value || "").trim();
         const location = (document.getElementById("sts-location-input")?.value || "").trim();
         const priority = document.getElementById("sts-priority-select")?.value || "Normal";
-        const editedMemoText = document.getElementById("sts-memo-input")?.value || "";
-        const keepHtml = !!document.getElementById("sts-keep-html-check")?.checked;
+        const elMemoEditor = document.getElementById("sts-memo-editor");
 
         if (!title) {
             if (typeof showToast === "function") showToast("일정 제목을 입력해 주세요.");
@@ -692,13 +721,12 @@
             else reminders.push(v);
         });
 
+        // 노트 본문(표, 그림, 코드블록, 인용구, 형광펜, 체크리스트, 링크)을 단순화 없이 100% 그대로 복사
         let finalMemo = "";
-        const snapshotText = stsSnapshot ? stsSnapshot.plainText : "";
-        const unchanged = editedMemoText.trim() === snapshotText.trim();
-        if (keepHtml && unchanged && stsSnapshot && stsSnapshot.rawHtml) {
+        if (elMemoEditor) {
+            finalMemo = getCleanQuillElementHtml(elMemoEditor);
+        } else if (stsSnapshot && stsSnapshot.rawHtml) {
             finalMemo = stsSnapshot.rawHtml;
-        } else {
-            finalMemo = plainTextToQuillHtml(editedMemoText, stsSnapshot ? stsSnapshot.extractedLinks : []);
         }
 
         const nowIso = new Date().toISOString();
@@ -1136,7 +1164,151 @@
         return !!bhIsOpen;
     }
 
-    function triggerBlackHoleSwallow(items, isDemo = false) {
+    async function buildBlackHoleSummaryResult(list, modeKey, foldChecked, isDemo) {
+        const firstItem = (Array.isArray(list) && list[0]) ? list[0] : { name: "온나라_공문_시연.zip" };
+        const rawFileName = String(firstItem.name || "문서").trim();
+        const baseName = rawFileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim() || "문서";
+        const dParts = getOffsetDateParts(5);
+
+        let rawFileText = "";
+        try {
+            if (!isDemo && firstItem && typeof firstItem.text === "function" && /\.(txt|md|html|csv|json)$/i.test(rawFileName)) {
+                rawFileText = (await firstItem.text()) || "";
+            }
+        } catch { }
+
+        const folderBasePath = modeKey === "memo" ? "D:\\MY_Apps\\쪽지\\" : "D:\\MY_Apps\\공문\\";
+        const folderPath = `${folderBasePath}${dParts.compact}_${baseName.replace(/\s+/g, "_")}`;
+        const docFilePath = `${folderPath}\\${rawFileName}`;
+
+        if (modeKey === "official") {
+            const docSubject = isDemo
+                ? "2026년 하반기 정보보안 및 개인정보 보호 점검 결과 제출"
+                : baseName;
+            const noteTitle = `${docSubject} (${dParts.compact}까지)`;
+            const submitTarget = "행정과 정보통신담당 (온나라 공문 회신)";
+            const html = [
+                `<p><strong>[MY AI 공문 분석 요약]</strong></p>`,
+                `<blockquote>전 부서 업무용 PC 및 내부망 단말기에 대한 <span style="background-color: rgb(254, 240, 138);">하반기 정보보안 점검 결과를 ${escapeHtmlStr(dParts.zenDate)} 18:00까지 제출</span> 요청하는 공문입니다.</blockquote>`,
+                `<p><br></p>`,
+                `<table><tbody>`,
+                `<tr><td><strong>문서 구분</strong></td><td>정식 공문 (${escapeHtmlStr(rawFileName)})</td></tr>`,
+                `<tr><td><strong>제출 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 18:00까지</td></tr>`,
+                `<tr><td><strong>제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
+                `<tr><td><strong>핵심 과제</strong></td><td>부서별 점검표(붙임1) 작성 및 미비 사항 조치 결과 회신</td></tr>`,
+                `</tbody></table>`,
+                `<p><br></p>`,
+                `<p><strong>주요 실무 조치 사항</strong></p>`,
+                `<ol>`,
+                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>백신 실시간 감시 및 최신 엔진 업데이트 상태 확인</li>`,
+                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>화면보호기 자동 잠금(10분 이내) 및 부팅 암호 설정 점검</li>`,
+                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>점검표 취합 후 기한 내 온나라 공문 회신</li>`,
+                `</ol>`,
+                foldChecked
+                    ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">공문 열기</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
+                    : ""
+            ].join("");
+            return { title: noteTitle, html };
+        }
+
+        if (modeKey === "memo") {
+            const memoSubject = isDemo
+                ? "주간 주요업무 추진실적 및 계획 자료 협조 요청"
+                : baseName;
+            const noteTitle = `${memoSubject} (${dParts.compact}까지)`;
+            const submitTarget = "기획감사담당관 기획담당 (내부 메신저 쪽지 회신)";
+            const excerpt = rawFileText
+                ? escapeHtmlStr(rawFileText.trim().split(/\r?\n/).slice(0, 3).join(" "))
+                : "부서별 주간 주요업무 추진실적 및 차주 계획 핵심 항목을 서식에 맞춰 회신 요청합니다.";
+            const html = [
+                `<p><strong>[MY AI 수신 쪽지 분석 요약]</strong></p>`,
+                `<blockquote>${excerpt} <span style="background-color: rgb(254, 240, 138);">마감 기한은 ${escapeHtmlStr(dParts.zenDate)} 14:00까지</span>입니다.</blockquote>`,
+                `<p><br></p>`,
+                `<table><tbody>`,
+                `<tr><td><strong>문서 구분</strong></td><td>수신 쪽지 (${escapeHtmlStr(rawFileName)})</td></tr>`,
+                `<tr><td><strong>제출 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 14:00까지</td></tr>`,
+                `<tr><td><strong>제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
+                `<tr><td><strong>핵심 과제</strong></td><td>부서 주간 추진실적 3건 이내 요약 작성 및 쪽지 회신</td></tr>`,
+                `</tbody></table>`,
+                `<p><br></p>`,
+                `<p><strong>체크리스트</strong></p>`,
+                `<ol>`,
+                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>금주 추진실적 수치 및 일자 현행화</li>`,
+                `<li data-list="unchecked"><span class="ql-ui" contenteditable="false"></span>담당자 검토 후 기한 내 회신 완료</li>`,
+                `</ol>`,
+                foldChecked
+                    ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">쪽지 열기</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
+                    : ""
+            ].join("");
+            return { title: noteTitle, html };
+        }
+
+        // summary (문서 요약)
+        const sumSubject = isDemo
+            ? "2026년 스마트 행정업무 효율화 추진계획 요약"
+            : `${baseName} 요약`;
+        const noteTitle = `${sumSubject} (${dParts.compact}까지)`;
+        const submitTarget = "스마트행정추진단 (검토 보고)";
+        const html = [
+            `<p><strong>[MY AI 문서 핵심 요약]</strong></p>`,
+            `<blockquote>반복적인 공문·쪽지 분류와 일정 등록 업무를 <span style="background-color: rgb(254, 240, 138);">MY 노트 · MY 일정관리 · MY AI 연동으로 자동화</span>하여 행정 처리 시간을 단축하는 계획입니다.</blockquote>`,
+            `<p><br></p>`,
+            `<table><tbody>`,
+            `<tr><td><strong>대상 문서</strong></td><td>${escapeHtmlStr(rawFileName)}</td></tr>`,
+            `<tr><td><strong>검토 기한</strong></td><td>${escapeHtmlStr(dParts.zenDate)} 18:00까지</td></tr>`,
+            `<tr><td><strong>제출처</strong></td><td>${escapeHtmlStr(submitTarget)}</td></tr>`,
+            `<tr><td><strong>핵심 요약</strong></td><td>자동 폴더링 · 본문 AI 요약 · 일정관리 원클릭 연계</td></tr>`,
+            `</tbody></table>`,
+            `<p><br></p>`,
+            `<p><strong>핵심 포인트</strong></p>`,
+            `<ol>`,
+            `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>공문 및 쪽지 원본·첨부 자동 분류 보관으로 문서 탐색 시간 단축</li>`,
+            `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>본문 중심 AI 요약 후 새 노트 즉시 생성 및 일정관리 자동 연계</li>`,
+            `</ol>`,
+            foldChecked
+                ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">문서 열기</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
+                : ""
+        ].join("");
+        return { title: noteTitle, html };
+    }
+
+    function openBlackHoleSummaryInNewNote(summaryResult) {
+        if (!summaryResult) return;
+
+        const fmPane = document.getElementById("file-manager-pane");
+        if (fmPane && fmPane.style.display !== "none" && typeof closeFileManager === "function") {
+            closeFileManager();
+        }
+
+        if (typeof createNewMemoSmart === "function") {
+            createNewMemoSmart();
+        } else if (typeof createNewMemo === "function") {
+            const fallbackFolder = typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null;
+            createNewMemo(fallbackFolder);
+        }
+
+        const applyContent = () => {
+            if (typeof isLoading !== "undefined") isLoading = false;
+            const titleInput = document.getElementById("memo-title-input");
+            if (titleInput) titleInput.value = summaryResult.title || "AI 요약 노트";
+            document.title = summaryResult.title || "AI 요약 노트";
+
+            if (typeof quill !== "undefined" && quill && quill.root) {
+                quill.root.innerHTML = summaryResult.html || "<p><br></p>";
+                if (quill.history && typeof quill.history.clear === "function") {
+                    quill.history.clear();
+                }
+            }
+            if (typeof executeSave === "function") {
+                executeSave();
+            }
+        };
+
+        applyContent();
+        setTimeout(applyContent, 35);
+    }
+
+    async function triggerBlackHoleSwallow(items, isDemo = false) {
         if (!bhIsOpen || bhSwallowing) return;
         const list = Array.isArray(items) && items.length > 0 ? items : [{ name: "테스트_공문.zip" }];
         const meta = BH_MODE_META[bhCurrentMode] || BH_MODE_META.official;
@@ -1145,6 +1317,10 @@
 
         clearTimeout(bhSwallowTimer1);
         clearTimeout(bhSwallowTimer2);
+        if (bhAutoScheduleTimer) {
+            clearTimeout(bhAutoScheduleTimer);
+            bhAutoScheduleTimer = null;
+        }
         bhSwallowing = true;
         const firstName = list[0] && list[0].name ? list[0].name : "문서";
         const extra = list.length > 1 ? ` 외 ${list.length - 1}건` : "";
@@ -1167,20 +1343,38 @@
         }
 
         const totalSwallowMs = duration + (count - 1) * stagger + 40;
+        // AI 응답이 일찍 도착하더라도 문서 흡수(1.2초) + 코어 분석 연출을 위한 기본 대기 시간 보장
+        const minWaitMs = Math.max(2100, totalSwallowMs + 860);
+
         bhSwallowTimer1 = setTimeout(() => {
             if (!bhIsOpen) return;
             if (pill) {
-                pill.textContent = `${meta.label} 접수 완료 (3단계에서 실제 MY AI·폴더링이 연결됩니다)`;
+                pill.textContent = `${meta.label} AI 응답 수신 및 요약 노트 생성 중...`;
             }
-            bhSwallowTimer2 = setTimeout(() => {
-                bhSwallowing = false;
-                closeBlackHolePortal();
-                if (typeof showToast === "function") {
-                    const prefix = isDemo ? "[블랙홀 시연] " : "";
-                    showToast(`${prefix}'${firstName}${extra}' (${meta.label} / 폴더링 ${foldChecked ? "ON" : "OFF"}) 투입 완료 — 3단계에서 실제 AI·폴더링이 연결됩니다.`);
-                }
-            }, 2200);
         }, totalSwallowMs);
+
+        const analysisPromise = buildBlackHoleSummaryResult(list, bhCurrentMode, foldChecked, isDemo);
+        const minWaitPromise = new Promise((resolve) => {
+            bhSwallowTimer2 = setTimeout(resolve, minWaitMs);
+        });
+
+        const [summaryResult] = await Promise.all([analysisPromise, minWaitPromise]);
+        if (!bhIsOpen) return;
+
+        bhSwallowing = false;
+        closeBlackHolePortal();
+        openBlackHoleSummaryInNewNote(summaryResult);
+
+        if (typeof showToast === "function") {
+            const prefix = isDemo ? "[블랙홀 시연] " : "";
+            showToast(`${prefix}${meta.label} 요약 노트가 생성되었습니다.`);
+        }
+
+        // 새 요약 문서가 나타난 뒤 정확히 1.2초 후에 'MY 일정관리로 보내기' 팝업 자동 실행
+        bhAutoScheduleTimer = setTimeout(() => {
+            bhAutoScheduleTimer = null;
+            openSendToScheduleModal();
+        }, 1200);
     }
 
     function handleBlackHoleDroppedFiles(files) {

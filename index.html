@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.6.1">
-    <link rel="manifest" href="manifest.json?v=1.6.1">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.6.2">
+    <link rel="manifest" href="manifest.json?v=1.6.2">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.6.1">
+    <link rel="stylesheet" href="css/main.css?v=1.6.2">
 
 </head>
 
@@ -1085,11 +1085,6 @@
                         <label class="zen-sts-label" for="sts-location-input">장소 / 제출처</label>
                         <input type="text" id="sts-location-input" class="zen-sts-input" placeholder="장소 또는 제출처 입력">
                     </div>
-                    <div class="zen-sts-field" style="justify-content: flex-end;">
-                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-main); cursor: pointer; padding: 7px 2px;">
-                            <input type="checkbox" id="sts-keep-html-check" checked style="accent-color: var(--accent);"> 원본 서식 유지
-                        </label>
-                    </div>
                 </div>
                 <div class="zen-sts-field">
                     <span class="zen-sts-label">알림 주기</span>
@@ -1100,10 +1095,11 @@
                         <label><input type="checkbox" name="sts-rem" value="h1" checked> 1시간 전</label>
                     </div>
                 </div>
-                <div id="sts-links-preview" class="zen-sts-links-preview" style="display: none;"></div>
                 <div class="zen-sts-field">
-                    <label class="zen-sts-label" for="sts-memo-input">내용 (수정 가능)</label>
-                    <textarea id="sts-memo-input" class="zen-sts-textarea" placeholder="일정관리로 보낼 요약 내용 및 링크"></textarea>
+                    <label class="zen-sts-label" for="sts-memo-editor">내용 (수정 가능)</label>
+                    <div class="ql-container ql-snow zen-sts-rich-wrap">
+                        <div id="sts-memo-editor" class="ql-editor zen-sts-rich-editor" contenteditable="true" spellcheck="false" data-placeholder="노트 본문(표, 그림, 코드블록, 인용구, 서식)이 그대로 복사되어 전송됩니다."></div>
+                    </div>
                 </div>
             </div>
             <div class="zen-settings-footer zen-sts-footer">
@@ -1148,20 +1144,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.6.1"></script>
-    <script src="js/db.js?v=1.6.1"></script>
-    <script src="js/ui.js?v=1.6.1"></script>
-    <script src="js/editor.js?v=1.6.1"></script>
-    <script src="js/file_manager.js?v=1.6.1"></script>
-    <script src="js/io.js?v=1.6.1"></script>
-    <script src="js/auth.js?v=1.6.1"></script>
-    <script src="js/zen_bridge.js?v=1.6.1"></script>
+    <script src="js/globals.js?v=1.6.2"></script>
+    <script src="js/db.js?v=1.6.2"></script>
+    <script src="js/ui.js?v=1.6.2"></script>
+    <script src="js/editor.js?v=1.6.2"></script>
+    <script src="js/file_manager.js?v=1.6.2"></script>
+    <script src="js/io.js?v=1.6.2"></script>
+    <script src="js/auth.js?v=1.6.2"></script>
+    <script src="js/zen_bridge.js?v=1.6.2"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.6.1");
+            console.log("[ZenNotes] 현재 버전: V1.6.2");
             console.log("=========================================");
         });
     </script>
