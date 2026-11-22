@@ -1172,21 +1172,24 @@
     // ========================================================================
     // 5. 좌측 상단 블랙홀 버튼 + NASA 골드 블랙홀 등장/꿀꺽/퇴장 껍데기
     // ========================================================================
-    const BH_DEFAULT_PROMPT = "다운 받은 공문(zip파일), 쪽지, 요약하고 싶은 문서를 블랙홀에 던져 넣으세요.";
+    const BH_DEFAULT_PROMPT = "다운 받은 공문(zip 파일)을 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).";
     const BH_MODE_META = {
         official: {
             label: "공문 분석",
             defaultFolding: true,
+            prompt: "다운 받은 공문(zip 파일)을 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
             hint: "공문 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         memo: {
             label: "쪽지 분석",
             defaultFolding: true,
+            prompt: "쪽지를 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
             hint: "쪽지 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         summary: {
             label: "문서 요약",
             defaultFolding: false,
+            prompt: "요약하고 싶은 문서를 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
             hint: "AI가 문서를 요약해 줍니다."
         }
     };
@@ -1486,6 +1489,11 @@
         }
         const hintEl = document.getElementById("zen-bh-mode-hint");
         if (hintEl) hintEl.textContent = meta.hint;
+        if (!bhSwallowing) {
+            const pill = document.getElementById("zen-bh-status-pill");
+            if (pill) pill.textContent = meta.prompt || BH_DEFAULT_PROMPT;
+        }
+        setBlackHoleSendingUi(bhSwallowing);
     }
 
     function clearBlackHoleTimers() {
@@ -1499,9 +1507,12 @@
 
     function setBlackHoleSendingUi(isSending) {
         const sendBtn = document.getElementById("zen-bh-prompt-send-btn");
-        if (sendBtn) {
-            sendBtn.disabled = !!isSending;
-        }
+        if (!sendBtn) return;
+        const isSummaryMode = bhCurrentMode === "summary";
+        sendBtn.disabled = !!isSending || !isSummaryMode;
+        sendBtn.title = isSummaryMode
+            ? "문서 없이 프롬프트만 AI에 전송 (Ctrl+Enter)"
+            : "문서 없이 프롬프트 전송은 '문서 요약' 탭에서 사용할 수 있습니다.";
     }
 
     function openBlackHolePortal() {
@@ -1513,7 +1524,6 @@
         clearBlackHoleTimers();
         if (bhOrbitDots.length === 0) initBlackHoleParticles();
         bhSwallowing = false;
-        setBlackHoleSendingUi(false);
         bhParticles = [];
         bhFlashLevel = 0;
         bhShockActive = false;
@@ -1523,8 +1533,7 @@
         syncBlackHoleModelPickerUI();
         syncTimelyAiLiveModels(false);
         setBlackHoleMode(bhCurrentMode || "official");
-        const pill = document.getElementById("zen-bh-status-pill");
-        if (pill) pill.textContent = BH_DEFAULT_PROMPT;
+        setBlackHoleSendingUi(false);
 
         updateBlackHoleButtonOriginVars();
         shell.classList.remove("is-retracting");
@@ -3012,6 +3021,12 @@
 
     async function submitBlackHolePromptOnly() {
         if (!bhIsOpen || bhSwallowing) return;
+        if (bhCurrentMode !== "summary") {
+            if (typeof showToast === "function") {
+                showToast("문서 없이 프롬프트 전송은 '문서 요약' 탭에서 사용할 수 있습니다.");
+            }
+            return;
+        }
 
         const promptEl = document.getElementById("zen-bh-user-prompt");
         const userPromptText = (promptEl && promptEl.value ? promptEl.value : "").trim();
