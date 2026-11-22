@@ -579,6 +579,27 @@
         return "";
     }
 
+    function normalizeSmartScheduleDateInput(el) {
+        if (!el) return;
+        const raw = String(el.value || "");
+        const digits = raw.replace(/\D/g, "").slice(0, 8);
+        if (digits.length === 8) {
+            const yyyy = parseInt(digits.slice(0, 4), 10);
+            const mm = parseInt(digits.slice(4, 6), 10);
+            const dd = parseInt(digits.slice(6, 8), 10);
+            if (yyyy >= 1900 && yyyy <= 2199 && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+                const dt = new Date(yyyy, mm - 1, dd);
+                if (dt.getFullYear() === yyyy && dt.getMonth() === mm - 1 && dt.getDate() === dd) {
+                    el.value = `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
+                    return;
+                }
+            }
+        }
+        if (/[^\d-]/.test(raw)) {
+            el.value = raw.replace(/[^\d-]/g, "");
+        }
+    }
+
     function normalizeSmartScheduleTimeInput(el) {
         if (!el) return;
         const digits = (el.value || "").replace(/\D/g, "").slice(0, 4);
@@ -589,6 +610,31 @@
                 el.value = `${pad2(hh)}:${pad2(mm)}`;
             }
         }
+    }
+
+    function bindStsInputAutoSelectEvents() {
+        const ids = ["sts-title-input", "sts-start-date", "sts-due-date", "sts-time-input", "sts-location-input"];
+        ids.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el || el._stsAutoSelectBound) return;
+            el._stsAutoSelectBound = true;
+            el.addEventListener("focus", () => {
+                el._stsJustFocused = true;
+                setTimeout(() => {
+                    try { el.select(); } catch { }
+                }, 0);
+            });
+            el.addEventListener("mouseup", (e) => {
+                if (el._stsJustFocused) {
+                    e.preventDefault();
+                    el._stsJustFocused = false;
+                    try { el.select(); } catch { }
+                }
+            });
+            el.addEventListener("blur", () => {
+                el._stsJustFocused = false;
+            });
+        });
     }
 
     function bindStsRichEditorEvents() {
@@ -617,6 +663,7 @@
         if (!modal) return;
 
         bindStsRichEditorEvents();
+        bindStsInputAutoSelectEvents();
 
         const titleInputEl = document.getElementById("memo-title-input");
         const rawTitle = (titleInputEl ? titleInputEl.value : "").trim() || "제목 없는 일정";
@@ -686,9 +733,16 @@
 
     function collectSendToSchedulePayload() {
         const title = (document.getElementById("sts-title-input")?.value || "").trim();
-        const startDate = (document.getElementById("sts-start-date")?.value || "").trim();
-        const dueDate = (document.getElementById("sts-due-date")?.value || "").trim() || startDate;
-        const time = (document.getElementById("sts-time-input")?.value || "").trim();
+        const elStart = document.getElementById("sts-start-date");
+        const elDue = document.getElementById("sts-due-date");
+        const elTime = document.getElementById("sts-time-input");
+        if (elStart) normalizeSmartScheduleDateInput(elStart);
+        if (elDue) normalizeSmartScheduleDateInput(elDue);
+        if (elTime) normalizeSmartScheduleTimeInput(elTime);
+
+        const startDate = (elStart?.value || "").trim();
+        const dueDate = (elDue?.value || "").trim() || startDate;
+        const time = (elTime?.value || "").trim();
         const location = (document.getElementById("sts-location-input")?.value || "").trim();
         const priority = document.getElementById("sts-priority-select")?.value || "Normal";
         const elMemoEditor = document.getElementById("sts-memo-editor");
@@ -698,9 +752,14 @@
             document.getElementById("sts-title-input")?.focus();
             return null;
         }
-        if (!dueDate) {
-            if (typeof showToast === "function") showToast("마감일을 선택해 주세요.");
-            document.getElementById("sts-due-date")?.focus();
+        if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+            if (typeof showToast === "function") showToast("시작일은 8자리 숫자(예: 20261122) 또는 YYYY-MM-DD 형식으로 입력해 주세요.");
+            elStart?.focus();
+            return null;
+        }
+        if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+            if (typeof showToast === "function") showToast("마감일은 8자리 숫자(예: 20261122) 또는 YYYY-MM-DD 형식으로 입력해 주세요.");
+            elDue?.focus();
             return null;
         }
 
@@ -1286,6 +1345,7 @@
 
         closeBlackHoleModelDropdown();
         syncBlackHoleModelPickerUI();
+        syncTimelyAiLiveModels(false);
         setBlackHoleMode(bhCurrentMode || "official");
         const pill = document.getElementById("zen-bh-status-pill");
         if (pill) pill.textContent = BH_DEFAULT_PROMPT;
@@ -1360,7 +1420,7 @@
     // 5-2. 블랙홀 AI 모델 선택 드롭다운 (디폴트: Solar Pro4, 문서 작업 특화)
     // ========================================================================
     const MYAI_MODEL_STORAGE_KEY = "zen_myai_selected_model";
-    const MYAI_DEFAULT_MODEL_ID = "upstage/solar-pro4";
+    const MYAI_DEFAULT_MODEL_ID = "solar-pro4";
 
     const MYAI_PROVIDER_ICONS = {
         upstage: `<svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8.5" fill="#0f172a" stroke="#a855f7" stroke-width="1.2"/><path d="M10 3.2L11.7 8.3L16.8 10L11.7 11.7L10 16.8L8.3 11.7L3.2 10L8.3 8.3L10 3.2Z" fill="#c084fc"/></svg>`,
@@ -1369,58 +1429,58 @@
         google: `<svg viewBox="0 0 20 20" fill="none"><path d="M10 2.2L12.1 7.9L17.8 10L12.1 12.1L10 17.8L7.9 12.1L2.2 10L7.9 7.9L10 2.2Z" fill="#38bdf8" stroke="#fbbf24" stroke-width="0.9"/></svg>`
     };
 
-    const MYAI_MODELS = [
+    const MYAI_DEFAULT_MODELS = [
         {
-            id: "upstage/solar-pro4",
+            id: "solar-pro4",
             name: "Solar Pro4",
             provider: "upstage",
             group: "기본 추천 모델",
             desc: "공문·글쓰기·한국어 문서 작업에 최적화 (기본)"
         },
         {
-            id: "anthropic/claude-sonnet-5",
+            id: "claude-sonnet-5",
             name: "Claude Sonnet 5",
             provider: "anthropic",
             group: "추천 문서 분석 모델",
             desc: "정밀한 문서 맥락 파악 및 자연스러운 요약"
         },
         {
-            id: "openai/gpt-5.6-sol",
+            id: "gpt-5.6-sol",
             name: "GPT-5.6 Sol",
             provider: "openai",
             group: "추천 문서 분석 모델",
             desc: "최신 모델 · 복합 문서 구조화 분석"
         },
         {
-            id: "google/gemini-3.8-flash",
+            id: "gemini-3.8-flash",
             name: "Gemini 3.8 Flash",
             provider: "google",
             group: "추천 문서 분석 모델",
             desc: "대용량 매뉴얼·긴 문서 초고속 분석 및 요약"
         },
         {
-            id: "anthropic/claude-sonnet-4.6",
+            id: "claude-sonnet-4-6",
             name: "Claude Sonnet 4.6",
             provider: "anthropic",
             group: "추천 문서 분석 모델",
             desc: "안정적인 공문서·보고서 핵심 추출"
         },
         {
-            id: "openai/gpt-5.5",
+            id: "gpt-5.5",
             name: "GPT-5.5",
             provider: "openai",
             group: "추천 문서 분석 모델",
             desc: "균형 잡힌 표준 행정·업무 문서 요약"
         },
         {
-            id: "anthropic/claude-haiku-4.5",
+            id: "claude-haiku-4-5",
             name: "Claude Haiku 4.5",
             provider: "anthropic",
             group: "경량 고속 모델",
             desc: "빠르고 간결한 쪽지·단문 핵심 추출"
         },
         {
-            id: "openai/gpt-4.1-mini",
+            id: "gpt-4.1-mini",
             name: "GPT-4.1 Mini",
             provider: "openai",
             group: "경량 고속 모델",
@@ -1428,10 +1488,177 @@
         }
     ];
 
+    let myAiActiveModels = [...MYAI_DEFAULT_MODELS];
+    let myAiModelsLastSyncAt = 0;
+    let myAiModelsSyncPromise = null;
+
+    function normalizeMyAiModelId(rawId) {
+        let s = String(rawId || "").trim();
+        if (!s) return MYAI_DEFAULT_MODEL_ID;
+        s = s.replace(/^(upstage|anthropic|openai|google)\//i, "");
+        if (s === "claude-sonnet-4.6") return "claude-sonnet-4-6";
+        if (s === "claude-haiku-4.5") return "claude-haiku-4-5";
+        if (s === "claude-opus-4.6") return "claude-opus-4-6";
+        return s;
+    }
+
+    function resolveMyAiProvider(modelId) {
+        const s = String(modelId || "").toLowerCase();
+        if (s.includes("solar") || s.startsWith("upstage/")) return "upstage";
+        if (s.includes("claude") || s.startsWith("anthropic/")) return "anthropic";
+        if (s.includes("gemini") || s.startsWith("google/")) return "google";
+        return "openai";
+    }
+
+    function formatLiveModelDisplayName(id) {
+        const raw = String(id || "").trim();
+        if (!raw) return "";
+        if (/^gpt-/i.test(raw)) return raw.replace(/^gpt-/i, "GPT-").replace(/-([a-z])/g, (_, c) => ` ${c.toUpperCase()}`);
+        if (/^claude-/i.test(raw)) {
+            return raw
+                .replace(/^claude-/i, "Claude ")
+                .replace(/-(\d+)-(\d+)$/, " $1.$2")
+                .replace(/-/g, " ")
+                .replace(/\b[a-z]/g, (c) => c.toUpperCase());
+        }
+        if (/^gemini-/i.test(raw)) {
+            return raw.replace(/^gemini-/i, "Gemini ").replace(/-/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+        }
+        if (/^solar-/i.test(raw)) {
+            return raw.replace(/^solar-/i, "Solar ").replace(/-/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+        }
+        return raw;
+    }
+
+    function applyLiveModelsCatalog(liveList) {
+        if (!Array.isArray(liveList) || liveList.length === 0) return;
+        const liveMap = new Map();
+        liveList.forEach((item) => {
+            if (!item || !item.id) return;
+            const normId = normalizeMyAiModelId(item.id);
+            if (!normId) return;
+            // Responses API 전용 모델이나 비채팅 모델 제외
+            if (/^(gpt-5\.5-pro|gpt-5\.3-codex)$/i.test(normId) || /embedding|whisper|tts|dall-e|moderation/i.test(normId)) return;
+            liveMap.set(normId, {
+                id: normId,
+                provider: item.provider || resolveMyAiProvider(normId),
+                displayName: item.name || ""
+            });
+        });
+        if (liveMap.size === 0) return;
+
+        const merged = [];
+        const usedIds = new Set();
+        MYAI_DEFAULT_MODELS.forEach((def) => {
+            if (liveMap.has(def.id)) {
+                merged.push(def);
+                usedIds.add(def.id);
+            }
+        });
+
+        const providerLabel = { upstage: "Solar API", anthropic: "Claude API", openai: "OpenAI API", google: "Gemini API" };
+        liveMap.forEach((entry, id) => {
+            if (usedIds.has(id)) return;
+            merged.push({
+                id,
+                name: entry.displayName && entry.displayName !== id ? entry.displayName : formatLiveModelDisplayName(id),
+                provider: entry.provider,
+                group: "실시간 API 지원 모델",
+                desc: `${providerLabel[entry.provider] || "Direct API"} · 사용 가능`
+            });
+        });
+
+        if (merged.length > 0) {
+            myAiActiveModels = merged;
+            const curSaved = normalizeMyAiModelId(localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || MYAI_DEFAULT_MODEL_ID);
+            if (!myAiActiveModels.some((m) => m.id === curSaved)) {
+                localStorage.setItem(MYAI_MODEL_STORAGE_KEY, myAiActiveModels[0].id);
+            }
+            syncBlackHoleModelPickerUI();
+        }
+    }
+
+    async function fetchLiveModelsInBrowser(apiKey) {
+        const key = String(apiKey || "").trim();
+        if (!key) return [];
+        const collected = [];
+        const tasks = [
+            fetch("https://hello.timelyai.io/api/v2/chat/direct/upstage/v1/models", {
+                headers: { "Authorization": `Bearer ${key}` }
+            }).then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json().catch(() => null);
+                (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "upstage" }));
+            }),
+            fetch("https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/models", {
+                headers: { "x-api-key": key, "anthropic-version": "2023-06-01" }
+            }).then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json().catch(() => null);
+                (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "anthropic", name: m.display_name || "" }));
+            }),
+            fetch("https://hello.timelyai.io/api/v2/chat/direct/openai/v1/models", {
+                headers: { "Authorization": `Bearer ${key}` }
+            }).then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json().catch(() => null);
+                (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "openai" }));
+            }),
+            fetch("https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models", {
+                headers: { "x-goog-api-key": key }
+            }).then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json().catch(() => null);
+                (d?.models || []).forEach((m) => {
+                    const id = String(m?.name || "").replace(/^models\//, "");
+                    if (id) collected.push({ id, provider: "google", name: m.displayName || "" });
+                });
+            })
+        ];
+        await Promise.allSettled(tasks);
+        return collected;
+    }
+
+    async function syncTimelyAiLiveModels(force = false) {
+        const apiKey = getSavedMyAiApiKey();
+        if (!apiKey) return;
+        const now = Date.now();
+        if (!force && myAiModelsLastSyncAt > 0 && now - myAiModelsLastSyncAt < 10 * 60 * 1000) {
+            return;
+        }
+        if (myAiModelsSyncPromise) return myAiModelsSyncPromise;
+
+        myAiModelsSyncPromise = (async () => {
+            try {
+                let list = [];
+                if (isDesktopWebViewEnv()) {
+                    const res = await callDesktopBridgeRequest("timelyAiListModelsRequest", { apiKey }, 15000);
+                    if (res && res.ok && Array.isArray(res.models)) {
+                        list = res.models;
+                    }
+                } else {
+                    list = await fetchLiveModelsInBrowser(apiKey);
+                }
+                if (Array.isArray(list) && list.length > 0) {
+                    myAiModelsLastSyncAt = Date.now();
+                    applyLiveModelsCatalog(list);
+                }
+            } catch { }
+            finally {
+                myAiModelsSyncPromise = null;
+            }
+        })();
+        return myAiModelsSyncPromise;
+    }
+
     function getSelectedMyAiModelMeta() {
-        const savedId = (localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || "").trim();
-        const found = MYAI_MODELS.find((m) => m.id === savedId);
-        return found || MYAI_MODELS[0];
+        const rawSaved = (localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || "").trim();
+        const savedId = normalizeMyAiModelId(rawSaved);
+        if (rawSaved && savedId !== rawSaved) {
+            localStorage.setItem(MYAI_MODEL_STORAGE_KEY, savedId);
+        }
+        const found = myAiActiveModels.find((m) => m.id === savedId);
+        return found || myAiActiveModels[0] || MYAI_DEFAULT_MODELS[0];
     }
 
     function syncBlackHoleModelPickerUI() {
@@ -1454,7 +1681,7 @@
 
         let html = "";
         let lastGroup = "";
-        MYAI_MODELS.forEach((m) => {
+        myAiActiveModels.forEach((m) => {
             if (m.group !== lastGroup) {
                 lastGroup = m.group;
                 html += `<div class="zen-bh-model-section-label">${escapeHtmlStr(m.group)}</div>`;
@@ -1482,7 +1709,8 @@
     }
 
     function selectBlackHoleAiModel(modelId) {
-        const found = MYAI_MODELS.find((m) => m.id === modelId) || MYAI_MODELS[0];
+        const normId = normalizeMyAiModelId(modelId);
+        const found = myAiActiveModels.find((m) => m.id === normId) || myAiActiveModels[0] || MYAI_DEFAULT_MODELS[0];
         localStorage.setItem(MYAI_MODEL_STORAGE_KEY, found.id);
         syncBlackHoleModelPickerUI();
         closeBlackHoleModelDropdown();
@@ -1501,6 +1729,7 @@
         } else {
             syncBlackHoleModelPickerUI();
             dropdown.style.display = "flex";
+            syncTimelyAiLiveModels(false);
         }
     }
 
@@ -1740,7 +1969,7 @@
             };
         }
 
-        const chosenModel = (preferredModelId || MYAI_DEFAULT_MODEL_ID).trim();
+        const chosenModel = normalizeMyAiModelId(preferredModelId || MYAI_DEFAULT_MODEL_ID);
 
         if (isDesktopWebViewEnv()) {
             const res = await callDesktopBridgeRequest(
@@ -1754,6 +1983,9 @@
                 48000
             );
             if (res && res.ok && res.content) {
+                if (/종료되었습니다|DIRECT_API_GUIDE/i.test(res.content)) {
+                    return { ok: false, error: "Timely API 엔드포인트 오류가 감지되었습니다. 관리자에게 문의해 주세요." };
+                }
                 return { ok: true, content: res.content, model: res.model || chosenModel };
             }
             return {
@@ -1763,33 +1995,73 @@
         }
 
         const candidateModels = [chosenModel];
-        for (const m of ["upstage/solar-pro4", "anthropic/claude-sonnet-5", "openai/gpt-5.6-sol", "google/gemini-3.8-flash"]) {
+        for (const m of ["solar-pro4", "claude-sonnet-5", "gpt-5.6-sol", "gemini-3.8-flash"]) {
             if (!candidateModels.includes(m)) candidateModels.push(m);
         }
 
         let lastErr = "Timely AI 서버 응답 실패";
         for (const modelName of candidateModels) {
             try {
-                const resp = await fetch("https://hello.timelyai.io/api/v2/chat/bridge/openai/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${trimmedKey}`
-                    },
-                    body: JSON.stringify({
+                const provider = resolveMyAiProvider(modelName);
+                let url = "";
+                let headers = { "Content-Type": "application/json" };
+                let payload = null;
+
+                if (provider === "anthropic") {
+                    url = "https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/messages";
+                    headers["x-api-key"] = trimmedKey;
+                    headers["anthropic-version"] = "2023-06-01";
+                    payload = {
+                        model: modelName,
+                        max_tokens: 4096,
+                        temperature: 0.0,
+                        system: systemPrompt,
+                        messages: [{ role: "user", content: userPrompt }]
+                    };
+                } else if (provider === "google") {
+                    url = `https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
+                    headers["x-goog-api-key"] = trimmedKey;
+                    payload = {
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                        generationConfig: { temperature: 0.0 }
+                    };
+                } else {
+                    url = provider === "upstage"
+                        ? "https://hello.timelyai.io/api/v2/chat/direct/upstage/v1/chat/completions"
+                        : "https://hello.timelyai.io/api/v2/chat/direct/openai/v1/chat/completions";
+                    headers["Authorization"] = `Bearer ${trimmedKey}`;
+                    payload = {
                         model: modelName,
                         messages: [
                             { role: "system", content: systemPrompt },
                             { role: "user", content: userPrompt }
                         ],
                         temperature: 0.0
-                    })
+                    };
+                }
+
+                const resp = await fetch(url, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify(payload)
                 });
                 const data = await resp.json().catch(() => null);
-                if (resp.ok && data && Array.isArray(data.choices) && data.choices[0]?.message?.content) {
+                let extractedText = "";
+                if (resp.ok && data) {
+                    if (provider === "anthropic" && Array.isArray(data.content)) {
+                        extractedText = data.content.filter((c) => c && c.type === "text").map((c) => c.text || "").join("\n");
+                    } else if (provider === "google" && Array.isArray(data.candidates)) {
+                        const parts = data.candidates[0]?.content?.parts || [];
+                        extractedText = parts.map((p) => p?.text || "").join("\n");
+                    } else if (Array.isArray(data.choices) && data.choices[0]?.message?.content) {
+                        extractedText = data.choices[0].message.content;
+                    }
+                }
+                if (extractedText && !/종료되었습니다|DIRECT_API_GUIDE/i.test(extractedText)) {
                     return {
                         ok: true,
-                        content: data.choices[0].message.content,
+                        content: extractedText,
                         model: modelName
                     };
                 }
@@ -2300,6 +2572,7 @@
 
     window.openSendToScheduleModal = openSendToScheduleModal;
     window.closeSendToScheduleModal = closeSendToScheduleModal;
+    window.normalizeSmartScheduleDateInput = normalizeSmartScheduleDateInput;
     window.normalizeSmartScheduleTimeInput = normalizeSmartScheduleTimeInput;
     window.exportNoteAsDdaySchedule = exportNoteAsDdaySchedule;
     window.sendNoteToScheduleDirectStub = sendNoteToScheduleDirectStub;
