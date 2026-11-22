@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.7.1">
-    <link rel="manifest" href="manifest.json?v=1.7.1">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.7.2">
+    <link rel="manifest" href="manifest.json?v=1.7.2">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.7.1">
+    <link rel="stylesheet" href="css/main.css?v=1.7.2">
 
 </head>
 
@@ -1111,7 +1111,7 @@
         </div>
     </div>
 
-    <!-- [V1.7.1] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 투입 꿀꺽 · 복귀 포털 (시연 버튼 제거) -->
+    <!-- [V1.7.2] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 투입 꿀꺽 · 복귀 포털 (시연 버튼 제거) -->
     <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
         <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
             <div class="zen-bh-shell-head">
@@ -1139,6 +1139,7 @@
                 <canvas id="zen-bh-canvas" class="zen-bh-canvas"></canvas>
                 <input type="file" id="zen-bh-file-input" multiple style="display: none;">
             </div>
+            <div id="zen-bh-status-pill" class="zen-bh-status-pill">다운 받은 공문(zip파일), 쪽지, 요약하고 싶은 문서를 블랙홀에 던져 넣으세요.</div>
             <div class="zen-bh-prompt-section">
                 <label class="zen-bh-summary-check">
                     <input type="checkbox" id="zen-bh-concise-toggle">
@@ -1146,7 +1147,6 @@
                 </label>
                 <textarea id="zen-bh-user-prompt" class="zen-bh-user-prompt" rows="2" placeholder="사용자 프롬프트 입력란"></textarea>
             </div>
-            <div id="zen-bh-status-pill" class="zen-bh-status-pill">다운 받은 공문(zip파일), 쪽지, 요약하고 싶은 문서를 블랙홀에 던져 넣으세요.</div>
             <div class="zen-bh-bottom-row">
                 <div class="zen-bh-bottom-left">
                     <label class="zen-bh-fold-check">
@@ -1160,20 +1160,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.7.1"></script>
-    <script src="js/db.js?v=1.7.1"></script>
-    <script src="js/ui.js?v=1.7.1"></script>
-    <script src="js/editor.js?v=1.7.1"></script>
-    <script src="js/file_manager.js?v=1.7.1"></script>
-    <script src="js/io.js?v=1.7.1"></script>
-    <script src="js/auth.js?v=1.7.1"></script>
-    <script src="js/zen_bridge.js?v=1.7.1"></script>
+    <script src="js/globals.js?v=1.7.2"></script>
+    <script src="js/db.js?v=1.7.2"></script>
+    <script src="js/ui.js?v=1.7.2"></script>
+    <script src="js/editor.js?v=1.7.2"></script>
+    <script src="js/file_manager.js?v=1.7.2"></script>
+    <script src="js/io.js?v=1.7.2"></script>
+    <script src="js/auth.js?v=1.7.2"></script>
+    <script src="js/zen_bridge.js?v=1.7.2"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.7.1");
+            console.log("[ZenNotes] 현재 버전: V1.7.2");
             console.log("=========================================");
         });
     </script>
