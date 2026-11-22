@@ -1316,6 +1316,14 @@
         });
         const foldToggle = document.getElementById("zen-bh-folding-toggle");
         if (foldToggle) foldToggle.checked = !!meta.defaultFolding;
+        const foldLabelEl = document.getElementById("zen-bh-folding-label");
+        if (foldLabelEl) {
+            foldLabelEl.textContent = bhCurrentMode === "official"
+                ? "자동 폴더링(폴더를 만들고 공문과 첨부 문서 저장)"
+                : bhCurrentMode === "memo"
+                    ? "자동 폴더링(폴더를 만들고 쪽지와 첨부 문서 저장)"
+                    : "자동 폴더링(폴더를 만들고 문서 저장)";
+        }
         const hintEl = document.getElementById("zen-bh-mode-hint");
         if (hintEl) hintEl.textContent = meta.hint;
     }
