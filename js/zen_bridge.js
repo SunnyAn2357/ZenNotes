@@ -1497,6 +1497,13 @@
         bhRetractTimer = null;
     }
 
+    function setBlackHoleSendingUi(isSending) {
+        const sendBtn = document.getElementById("zen-bh-prompt-send-btn");
+        if (sendBtn) {
+            sendBtn.disabled = !!isSending;
+        }
+    }
+
     function openBlackHolePortal() {
         const layer = document.getElementById("zen-blackhole-portal-layer");
         const shell = document.getElementById("zen-blackhole-portal-shell");
@@ -1506,6 +1513,7 @@
         clearBlackHoleTimers();
         if (bhOrbitDots.length === 0) initBlackHoleParticles();
         bhSwallowing = false;
+        setBlackHoleSendingUi(false);
         bhParticles = [];
         bhFlashLevel = 0;
         bhShockActive = false;
@@ -1546,6 +1554,7 @@
         bhSwallowTimer1 = null;
         bhSwallowTimer2 = null;
         bhSwallowing = false;
+        setBlackHoleSendingUi(false);
         bhIsOpen = false;
         if (bhRafId) {
             cancelAnimationFrame(bhRafId);
@@ -2176,7 +2185,7 @@
                     systemPrompt,
                     userPrompt
                 },
-                75000
+                120000
             );
             if (res && res.ok && res.content) {
                 if (/종료되었습니다|DIRECT_API_GUIDE/i.test(res.content)) {
@@ -2602,6 +2611,276 @@
         };
     }
 
+    function isSafePromptLinkHref(rawHref) {
+        const val = String(rawHref || "").trim();
+        if (!val) return false;
+        const normalized = val.replace(/[\u0000-\u0020]+/g, "").toLowerCase();
+        if (
+            normalized.startsWith("javascript:") ||
+            normalized.startsWith("vbscript:") ||
+            normalized.startsWith("data:")
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    function isSafePromptImageSrc(rawSrc) {
+        const val = String(rawSrc || "").trim();
+        if (!val) return false;
+        const normalized = val.replace(/[\u0000-\u0020]+/g, "").toLowerCase();
+        if (normalized.startsWith("javascript:") || normalized.startsWith("vbscript:")) {
+            return false;
+        }
+        if (normalized.startsWith("data:")) {
+            return /^data:image\/(png|jpeg|jpg|gif|webp);/i.test(val);
+        }
+        return /^https?:\/\//i.test(val);
+    }
+
+    function renderPromptMarkdownToQuillHtml(mdText) {
+        const rawMd = String(mdText || "").trim();
+        if (!rawMd) return "<p><br></p>";
+
+        if (typeof convertMarkdownToHTML !== "function" || typeof DOMParser === "undefined") {
+            return rawMd
+                .split(/\r?\n/)
+                .map((line) => `<p>${escapeHtmlStr(line) || "<br>"}</p>`)
+                .join("");
+        }
+
+        const rawHtml = convertMarkdownToHTML(rawMd);
+        const doc = new DOMParser().parseFromString(rawHtml || "", "text/html");
+        const allowedTags = new Set([
+            "P", "BR", "STRONG", "B", "EM", "I", "U", "S", "DEL", "CODE", "PRE",
+            "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE",
+            "UL", "OL", "LI", "TABLE", "THEAD", "TBODY", "TR", "TD", "TH",
+            "HR", "A", "IMG", "DIV", "SPAN"
+        ]);
+        const dropTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "NOSCRIPT", "TEMPLATE"]);
+        const allowedAttrs = new Set([
+            "class", "data-language", "spellcheck", "data-row", "data-list",
+            "href", "target", "rel", "src", "alt", "contenteditable"
+        ]);
+
+        function sanitizeElementTree(parent) {
+            const children = Array.from(parent.childNodes || []);
+            for (const node of children) {
+                if (!node || node.nodeType !== 1) continue;
+                const tag = String(node.tagName || "").toUpperCase();
+
+                if (dropTags.has(tag)) {
+                    node.remove();
+                    continue;
+                }
+
+                sanitizeElementTree(node);
+
+                if (!allowedTags.has(tag)) {
+                    const frag = doc.createDocumentFragment();
+                    while (node.firstChild) frag.appendChild(node.firstChild);
+                    parent.replaceChild(frag, node);
+                    continue;
+                }
+
+                for (const attr of Array.from(node.attributes || [])) {
+                    const attrName = String(attr.name || "").toLowerCase();
+                    if (!allowedAttrs.has(attrName) || attrName.startsWith("on")) {
+                        node.removeAttribute(attr.name);
+                    }
+                }
+
+                if (tag === "A") {
+                    const href = node.getAttribute("href") || "";
+                    if (!isSafePromptLinkHref(href)) {
+                        const frag = doc.createDocumentFragment();
+                        while (node.firstChild) frag.appendChild(node.firstChild);
+                        parent.replaceChild(frag, node);
+                        continue;
+                    }
+                    node.setAttribute("target", "_blank");
+                    node.setAttribute("rel", "noopener noreferrer");
+                } else if (tag === "IMG") {
+                    const src = node.getAttribute("src") || "";
+                    if (!isSafePromptImageSrc(src)) {
+                        node.remove();
+                        continue;
+                    }
+                }
+            }
+        }
+
+        sanitizeElementTree(doc.body);
+
+        // Quill 2 목록 일관성을 위해 연속된 <li> 요소를 <ol>로 래핑하고 .ql-ui 스팬 보장
+        const bodyChildren = Array.from(doc.body.childNodes);
+        const normalizedFrag = doc.createDocumentFragment();
+        let activeListOl = null;
+        let activeListIsQuote = false;
+
+        function ensureQuillListUiSpan(liEl) {
+            const firstEl = liEl.firstElementChild;
+            if (!firstEl || !firstEl.classList || !firstEl.classList.contains("ql-ui")) {
+                const uiSpan = doc.createElement("span");
+                uiSpan.className = "ql-ui";
+                uiSpan.setAttribute("contenteditable", "false");
+                liEl.insertBefore(uiSpan, liEl.firstChild);
+            }
+        }
+
+        for (const child of bodyChildren) {
+            if (child.nodeType === 1 && String(child.tagName || "").toUpperCase() === "LI") {
+                const isQuoteLi = child.classList && child.classList.contains("ql-quote-item");
+                ensureQuillListUiSpan(child);
+                if (!activeListOl || activeListIsQuote !== isQuoteLi) {
+                    activeListOl = doc.createElement("ol");
+                    activeListIsQuote = isQuoteLi;
+                    normalizedFrag.appendChild(activeListOl);
+                }
+                activeListOl.appendChild(child);
+            } else {
+                activeListOl = null;
+                if (child.nodeType === 1 && /^(OL|UL)$/i.test(child.tagName || "")) {
+                    Array.from(child.children || []).forEach((li) => {
+                        if (String(li.tagName || "").toUpperCase() === "LI") {
+                            ensureQuillListUiSpan(li);
+                        }
+                    });
+                }
+                normalizedFrag.appendChild(child);
+            }
+        }
+
+        doc.body.innerHTML = "";
+        doc.body.appendChild(normalizedFrag);
+        const out = (doc.body.innerHTML || "").trim();
+        return out || "<p><br></p>";
+    }
+
+    function normalizePromptFallbackTitle(fallbackPrompt) {
+        const firstLine = String(fallbackPrompt || "")
+            .split(/\r?\n/)
+            .map((l) => l.replace(/\s+/g, " ").trim())
+            .find(Boolean) || "";
+        if (!firstLine) return "MY AI 답변";
+        return firstLine.length > 36 ? `${firstLine.slice(0, 36).trim()}...` : firstLine;
+    }
+
+    function parsePromptOnlyAiResponse(rawContent, fallbackPrompt) {
+        let text = String(rawContent || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+        if (!text) {
+            return {
+                title: normalizePromptFallbackTitle(fallbackPrompt),
+                markdownBody: ""
+            };
+        }
+
+        // 전체가 단일 ```markdown / ```md 코드펜스로 감싸진 경우에만 외곽 펜스 해제
+        const outerMdFence = text.match(/^```(?:markdown|md)\s*\n([\s\S]*?)\n```\s*$/i);
+        if (outerMdFence && outerMdFence[1] !== undefined) {
+            const inner = outerMdFence[1];
+            const innerFenceCount = (inner.match(/^```/gm) || []).length;
+            if (innerFenceCount % 2 === 0) {
+                text = inner.trim();
+            }
+        }
+
+        const lines = text.split("\n");
+        const firstIdx = lines.findIndex((l) => l.trim().length > 0);
+        let title = "";
+        let bodyLines = lines;
+
+        if (firstIdx >= 0) {
+            const firstLine = lines[firstIdx].trim();
+            const titlePrefixMatch = firstLine.match(/^TITLE\s*:\s*(.+)$/i);
+            const h1Match = firstLine.match(/^#\s+(.+)$/);
+
+            if (titlePrefixMatch && titlePrefixMatch[1]) {
+                title = titlePrefixMatch[1].trim().replace(/^\*\*|\*\*$/g, "").trim();
+                bodyLines = lines.slice(firstIdx + 1);
+            } else if (h1Match && h1Match[1]) {
+                title = h1Match[1].trim().replace(/^\*\*|\*\*$/g, "").trim();
+                bodyLines = lines.slice(firstIdx + 1);
+            }
+        }
+
+        let markdownBody = bodyLines.join("\n").trim();
+        if (!title) {
+            title = normalizePromptFallbackTitle(fallbackPrompt);
+        } else if (!markdownBody) {
+            markdownBody = title;
+        }
+
+        return { title, markdownBody };
+    }
+
+    async function buildBlackHolePromptOnlyResult(userPromptText, options = {}) {
+        const trimmedPrompt = String(userPromptText || "").trim();
+        const selectedModelMeta = getSelectedMyAiModelMeta();
+        const conciseReportMode = !!(options && options.conciseChecked);
+        const savedApiKey = getSavedMyAiApiKey();
+        let resolvedModelName = selectedModelMeta.name;
+        const fallbackTitle = normalizePromptFallbackTitle(trimmedPrompt);
+
+        if (!savedApiKey) {
+            const errMsg = "환경설정 > MY AI 개인 API 키에 연동 키(tgpt_s...)를 먼저 저장해 주세요.";
+            return {
+                title: fallbackTitle,
+                html: `<p><strong>[MY AI 프롬프트 답변 · ${escapeHtmlStr(resolvedModelName)}]</strong></p><blockquote>${escapeHtmlStr(errMsg)}</blockquote>`,
+                targetFolderId: null,
+                aiErrorNotice: errMsg,
+                modelName: resolvedModelName
+            };
+        }
+
+        const styleInstruction = conciseReportMode
+            ? "- 답변 형식: 개조식(핵심 요점 나열) 위주로 1장 보고서 분량에 맞게 간결하고 구조화하여 작성하세요."
+            : "- 답변 형식: 문서 초안 작성, 설명, 질의응답 등 요청 성격에 맞게 분량 제한 없이 명확하고 충실하게 작성하세요.";
+
+        const systemPrompt = [
+            "당신은 정확하고 신뢰할 수 있는 한국어 업무 문서 작성 및 질의응답 AI입니다.",
+            "사용자가 파일 없이 입력한 프롬프트를 바탕으로 문서 초안 작성, 자료 정리, 질문 답변을 수행하세요.",
+            "- 억지 공문 양식이나 빈 표를 강제하지 말고 요청 목적에 가장 자연스러운 마크다운 구조를 사용하세요.",
+            "- 사실 확인이 불가능하거나 불확실한 최신 수치·법령·근거는 임의로 지어내지 말고, 확인이 필요한 사항은 솔직하게 안내하세요.",
+            styleInstruction,
+            "출력 규칙:",
+            "1. 첫 줄에는 반드시 `TITLE: 답변 내용을 대표하는 간결한 제목` 형식으로 적으세요.",
+            "2. 둘째 줄은 빈 줄로 두고, 셋째 줄부터 깔끔한 마크다운(소제목 ##/###, 글머리 목록, 표, 코드블록 등)으로 본문을 작성하세요."
+        ].join("\n");
+
+        const aiResp = await requestTimelyAiCompletion(savedApiKey, selectedModelMeta.id, systemPrompt, trimmedPrompt);
+        if (aiResp && aiResp.ok && aiResp.content) {
+            if (aiResp.model) {
+                const normRespId = normalizeMyAiModelId(aiResp.model);
+                const matched = myAiActiveModels.find((m) => m.id === normRespId);
+                resolvedModelName = (matched && matched.name) ? matched.name : formatLiveModelDisplayName(normRespId);
+            }
+            const parsed = parsePromptOnlyAiResponse(aiResp.content, trimmedPrompt);
+            const bodyHtml = renderPromptMarkdownToQuillHtml(parsed.markdownBody);
+            const fullHtml = [
+                `<p><strong>[MY AI 프롬프트 답변 · ${escapeHtmlStr(resolvedModelName)}]</strong></p>`,
+                `<p><br></p>`,
+                bodyHtml
+            ].join("");
+            return {
+                title: parsed.title || fallbackTitle,
+                html: fullHtml,
+                targetFolderId: null,
+                usedRealAi: true,
+                modelName: resolvedModelName
+            };
+        }
+
+        const errNotice = (aiResp && aiResp.error) || "AI 응답을 가져오지 못했습니다.";
+        return {
+            title: fallbackTitle,
+            html: `<p><strong>[MY AI 프롬프트 답변 · ${escapeHtmlStr(resolvedModelName)}]</strong></p><blockquote>${escapeHtmlStr(errNotice)}</blockquote>`,
+            targetFolderId: null,
+            aiErrorNotice: errNotice,
+            modelName: resolvedModelName
+        };
+    }
+
     function openBlackHoleSummaryInNewNote(summaryResult) {
         if (!summaryResult) return;
 
@@ -2660,6 +2939,7 @@
             bhAutoScheduleTimer = null;
         }
         bhSwallowing = true;
+        setBlackHoleSendingUi(true);
         const firstName = list[0] && list[0].name ? list[0].name : "문서";
         const extra = list.length > 1 ? ` 외 ${list.length - 1}건` : "";
 
@@ -2692,18 +2972,23 @@
 
         const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
         const userPromptText = (document.getElementById("zen-bh-user-prompt")?.value || "").trim();
-        const analysisPromise = buildBlackHoleSummaryResult(list, activeMode, foldChecked, {
-            conciseChecked,
-            userPromptText
-        });
-        const minWaitPromise = new Promise((resolve) => {
-            bhSwallowTimer2 = setTimeout(resolve, minWaitMs);
-        });
+        let summaryResult = null;
+        try {
+            const analysisPromise = buildBlackHoleSummaryResult(list, activeMode, foldChecked, {
+                conciseChecked,
+                userPromptText
+            });
+            const minWaitPromise = new Promise((resolve) => {
+                bhSwallowTimer2 = setTimeout(resolve, minWaitMs);
+            });
 
-        const [summaryResult] = await Promise.all([analysisPromise, minWaitPromise]);
+            [summaryResult] = await Promise.all([analysisPromise, minWaitPromise]);
+        } finally {
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+        }
         if (!bhIsOpen) return;
 
-        bhSwallowing = false;
         closeBlackHolePortal();
         openBlackHoleSummaryInNewNote(summaryResult);
 
@@ -2722,6 +3007,94 @@
                 bhAutoScheduleTimer = null;
                 openSendToScheduleModal();
             }, 1200);
+        }
+    }
+
+    async function submitBlackHolePromptOnly() {
+        if (!bhIsOpen || bhSwallowing) return;
+
+        const promptEl = document.getElementById("zen-bh-user-prompt");
+        const userPromptText = (promptEl && promptEl.value ? promptEl.value : "").trim();
+        if (!userPromptText) {
+            if (typeof showToast === "function") {
+                showToast("전송할 프롬프트를 먼저 입력해 주세요.");
+            }
+            if (promptEl) promptEl.focus();
+            return;
+        }
+
+        const savedApiKey = getSavedMyAiApiKey();
+        if (!savedApiKey) {
+            if (typeof showToast === "function") {
+                showToast("환경설정 > MY AI 개인 API 키에 연동 키(tgpt_s...)를 먼저 저장해 주세요.");
+            }
+            return;
+        }
+
+        const pill = document.getElementById("zen-bh-status-pill");
+        const modelMeta = getSelectedMyAiModelMeta();
+        const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
+
+        closeBlackHoleModelDropdown();
+        clearTimeout(bhSwallowTimer1);
+        clearTimeout(bhSwallowTimer2);
+        if (bhAutoScheduleTimer) {
+            clearTimeout(bhAutoScheduleTimer);
+            bhAutoScheduleTimer = null;
+        }
+
+        bhSwallowing = true;
+        setBlackHoleSendingUi(true);
+
+        const nowTs = performance.now();
+        const duration = 1200;
+        bhParticles.push({
+            startTime: nowTs,
+            duration,
+            startAngle: -2.15,
+            startR: 140
+        });
+
+        if (pill) {
+            pill.textContent = `프롬프트 전송 중 (${modelMeta.name})`;
+        }
+
+        const minWaitMs = 1800;
+        bhSwallowTimer1 = setTimeout(() => {
+            if (!bhIsOpen) return;
+            if (pill) {
+                pill.textContent = `${modelMeta.name} 모델이 답변을 작성하고 있습니다...`;
+            }
+        }, duration + 40);
+
+        let promptResult = null;
+        try {
+            const promptPromise = buildBlackHolePromptOnlyResult(userPromptText, { conciseChecked });
+            const minWaitPromise = new Promise((resolve) => {
+                bhSwallowTimer2 = setTimeout(resolve, minWaitMs);
+            });
+            [promptResult] = await Promise.all([promptPromise, minWaitPromise]);
+        } finally {
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+        }
+
+        if (!bhIsOpen) return;
+
+        closeBlackHolePortal();
+        openBlackHoleSummaryInNewNote(promptResult);
+
+        if (promptResult && !promptResult.aiErrorNotice && promptEl) {
+            promptEl.value = "";
+        }
+
+        if (typeof showToast === "function") {
+            if (promptResult && promptResult.aiErrorNotice) {
+                showToast(`MY AI 프롬프트 전송 오류: ${promptResult.aiErrorNotice}`);
+            } else {
+                const usedLabel = (promptResult && promptResult.modelName) || modelMeta.name;
+                showToast(`[${usedLabel}] 프롬프트 응답 노트가 생성되었습니다.`);
+            }
         }
     }
 
@@ -2784,6 +3157,16 @@
                 if (files.length > 0) handleBlackHoleDroppedFiles(files);
             });
         }
+        const promptInput = document.getElementById("zen-bh-user-prompt");
+        if (promptInput && !promptInput._bhKeyBound) {
+            promptInput._bhKeyBound = true;
+            promptInput.addEventListener("keydown", (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    submitBlackHolePromptOnly();
+                }
+            });
+        }
         window.addEventListener("resize", () => {
             if (bhIsOpen) updateBlackHoleButtonOriginVars();
         });
@@ -2818,6 +3201,7 @@
     window.selectBlackHoleAiModel = selectBlackHoleAiModel;
     window.handleBlackHoleDroppedFiles = handleBlackHoleDroppedFiles;
     window.triggerBlackHoleFilePick = triggerBlackHoleFilePick;
+    window.submitBlackHolePromptOnly = submitBlackHolePromptOnly;
 
     window.addEventListener("DOMContentLoaded", () => {
         bindBlackHoleEvents();

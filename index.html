@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.7.4">
-    <link rel="manifest" href="manifest.json?v=1.7.4">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.7.5">
+    <link rel="manifest" href="manifest.json?v=1.7.5">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.7.4">
+    <link rel="stylesheet" href="css/main.css?v=1.7.5">
 
 </head>
 
@@ -1111,7 +1111,7 @@
         </div>
     </div>
 
-    <!-- [V1.7.4] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 투입 꿀꺽 · 복귀 포털 -->
+    <!-- [V1.7.5] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 사용자 프롬프트 · 개조식 체크 · 프롬프트만 전송 포털 -->
     <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
         <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
             <div class="zen-bh-shell-head">
@@ -1155,25 +1155,25 @@
                     </label>
                     <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">공문 본문만 AI 전송·분석합니다(첨부 제외).</div>
                 </div>
-                <button type="button" class="zen-bh-act-btn" onclick="closeBlackHolePortal()">닫기</button>
+                <button type="button" id="zen-bh-prompt-send-btn" class="zen-bh-act-btn zen-bh-prompt-send-btn" onclick="submitBlackHolePromptOnly()" title="문서 없이 프롬프트만 AI에 전송 (Ctrl+Enter)">프롬프트만 전송</button>
             </div>
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.7.4"></script>
-    <script src="js/db.js?v=1.7.4"></script>
-    <script src="js/ui.js?v=1.7.4"></script>
-    <script src="js/editor.js?v=1.7.4"></script>
-    <script src="js/file_manager.js?v=1.7.4"></script>
-    <script src="js/io.js?v=1.7.4"></script>
-    <script src="js/auth.js?v=1.7.4"></script>
-    <script src="js/zen_bridge.js?v=1.7.4"></script>
+    <script src="js/globals.js?v=1.7.5"></script>
+    <script src="js/db.js?v=1.7.5"></script>
+    <script src="js/ui.js?v=1.7.5"></script>
+    <script src="js/editor.js?v=1.7.5"></script>
+    <script src="js/file_manager.js?v=1.7.5"></script>
+    <script src="js/io.js?v=1.7.5"></script>
+    <script src="js/auth.js?v=1.7.5"></script>
+    <script src="js/zen_bridge.js?v=1.7.5"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.7.4");
+            console.log("[ZenNotes] 현재 버전: V1.7.5");
             console.log("=========================================");
         });
     </script>

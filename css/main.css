@@ -7640,8 +7640,11 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-bh-user-prompt {
     width: 100%;
-    min-height: 52px;
-    max-height: 104px;
+    min-height: 60px;
+    max-height: 260px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
     resize: vertical;
     box-sizing: border-box;
     padding: 8px 11px;
@@ -7658,6 +7661,16 @@ body.light-theme .tree-folder-icon.is-trash {
     -webkit-user-select: text !important;
     caret-color: auto !important;
     transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.zen-bh-user-prompt::-webkit-scrollbar {
+    width: 5px;
+    display: block;
+}
+
+.zen-bh-user-prompt::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 999px;
 }
 
 .zen-bh-user-prompt:focus {
@@ -7752,12 +7765,30 @@ body.light-theme .tree-folder-icon.is-trash {
     color: #e2e8f0;
     font-size: 12px;
     font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
     cursor: pointer;
-    transition: background-color 0.16s ease;
+    transition: background-color 0.16s ease, border-color 0.16s ease, opacity 0.16s ease;
 }
 
 .zen-bh-act-btn:hover {
     background: rgba(255, 255, 255, 0.14);
+}
+
+.zen-bh-prompt-send-btn {
+    border-color: rgba(96, 165, 250, 0.45);
+    background: rgba(37, 99, 235, 0.28);
+    color: #eff6ff;
+}
+
+.zen-bh-prompt-send-btn:hover:not(:disabled) {
+    background: rgba(37, 99, 235, 0.42);
+    border-color: rgba(147, 197, 253, 0.65);
+}
+
+.zen-bh-prompt-send-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .zen-bh-act-btn.is-gold {
@@ -7920,6 +7951,18 @@ body.light-theme .zen-bh-act-btn {
 body.light-theme .zen-bh-act-btn:hover {
     background: #f1f5f9;
     color: #0f172a;
+}
+
+body.light-theme .zen-bh-prompt-send-btn {
+    border: 1px solid #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+}
+
+body.light-theme .zen-bh-prompt-send-btn:hover:not(:disabled) {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
 }
 
 body.light-theme .zen-bh-model-icon,
