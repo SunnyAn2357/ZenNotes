@@ -6575,12 +6575,12 @@ body.light-theme .zen-codeblock-tooltip {
 }
 
 .tree-lock-badge {
-    font-size: 10.5px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(245, 158, 11, 0.14);
-    color: #f59e0b;
-    font-weight: 600;
+    font-size: 11px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
     flex-shrink: 0;
 }
 
@@ -6826,6 +6826,28 @@ body.light-theme .tree-folder-icon.is-trash {
     display: none !important;
 }
 
+@keyframes zenLivingPulseGold {
+    0%, 100% {
+        color: var(--text-muted);
+        filter: drop-shadow(0 0 0 rgba(245, 158, 11, 0));
+    }
+    50% {
+        color: #f59e0b;
+        filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.42));
+    }
+}
+
+@keyframes zenLivingPulseBlue {
+    0%, 100% {
+        color: var(--text-muted);
+        filter: drop-shadow(0 0 0 rgba(37, 99, 235, 0));
+    }
+    50% {
+        color: var(--accent);
+        filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.45));
+    }
+}
+
 .zen-blackhole-trigger-btn {
     width: 30px;
     height: 30px;
@@ -6841,6 +6863,7 @@ body.light-theme .tree-folder-icon.is-trash {
     cursor: pointer;
     user-select: none;
     caret-color: transparent;
+    animation: zenLivingPulseGold 3.8s ease-in-out infinite;
     transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
@@ -6890,6 +6913,7 @@ body.light-theme .tree-folder-icon.is-trash {
     cursor: pointer;
     user-select: none;
     caret-color: transparent;
+    animation: zenLivingPulseBlue 4.2s ease-in-out infinite;
     transition: color 0.16s ease, transform 0.12s ease;
 }
 
@@ -7377,10 +7401,12 @@ body.light-theme .tree-folder-icon.is-trash {
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    width: 268px;
-    max-height: 330px;
+    width: 274px;
+    max-height: min(410px, 68vh);
     overflow-y: auto;
-    padding: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(251, 191, 36, 0.35) transparent;
+    padding: 8px 8px 10px;
     border-radius: 12px;
     background: rgba(15, 20, 34, 0.98);
     border: 1px solid rgba(251, 191, 36, 0.32);
@@ -7388,7 +7414,17 @@ body.light-theme .tree-folder-icon.is-trash {
     z-index: 30;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+}
+
+.zen-bh-model-dropdown::-webkit-scrollbar {
+    width: 5px;
+    display: block;
+}
+
+.zen-bh-model-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(251, 191, 36, 0.35);
+    border-radius: 999px;
 }
 
 .zen-bh-model-section-label {
