@@ -579,25 +579,65 @@
         return "";
     }
 
+    function formatIsoToKoreanScheduleDate(dateStr) {
+        const s = String(dateStr || "").trim();
+        if (!s) return "";
+        let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (!m) m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+        if (!m) m = s.match(/(\d{4})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/);
+        if (!m) return s;
+        return `${m[1]}년 ${pad2(parseInt(m[2], 10))}월 ${pad2(parseInt(m[3], 10))}일`;
+    }
+
+    function parseKoreanScheduleDateToIso(dateStr) {
+        const s = String(dateStr || "").trim();
+        if (!s) return "";
+        let yyyy = 0, mm = 0, dd = 0;
+        let m = s.match(/^(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?$/);
+        if (!m) m = s.match(/^(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})$/);
+        if (!m) m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+        if (!m) return "";
+        yyyy = parseInt(m[1], 10);
+        mm = parseInt(m[2], 10);
+        dd = parseInt(m[3], 10);
+        if (yyyy < 1900 || yyyy > 2199 || mm < 1 || mm > 12 || dd < 1 || dd > 31) return "";
+        const dt = new Date(yyyy, mm - 1, dd);
+        if (dt.getFullYear() !== yyyy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return "";
+        return `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
+    }
+
     function normalizeSmartScheduleDateInput(el) {
         if (!el) return;
         const raw = String(el.value || "");
-        const digits = raw.replace(/\D/g, "").slice(0, 8);
-        if (digits.length === 8) {
-            const yyyy = parseInt(digits.slice(0, 4), 10);
-            const mm = parseInt(digits.slice(4, 6), 10);
-            const dd = parseInt(digits.slice(6, 8), 10);
-            if (yyyy >= 1900 && yyyy <= 2199 && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
-                const dt = new Date(yyyy, mm - 1, dd);
-                if (dt.getFullYear() === yyyy && dt.getMonth() === mm - 1 && dt.getDate() === dd) {
-                    el.value = `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
-                    return;
-                }
-            }
+        const prev = String(el._prevDateVal || "");
+        let digits = raw.replace(/\D/g, "").slice(0, 8);
+
+        // 백스페이스로 '년'/'월'/'일'/공백 단위 문자가 지워졌을 때 직전 숫자도 함께 삭제해 삭제 막힘 방지
+        if (raw.length < prev.length && digits.length > 0 && digits.length === prev.replace(/\D/g, "").length) {
+            digits = digits.slice(0, -1);
         }
-        if (/[^\d-]/.test(raw)) {
-            el.value = raw.replace(/[^\d-]/g, "");
+
+        let formatted = "";
+        if (digits.length === 0) {
+            formatted = "";
+        } else if (digits.length < 4) {
+            formatted = digits;
+        } else if (digits.length === 4) {
+            formatted = `${digits}년 `;
+        } else if (digits.length < 6) {
+            formatted = `${digits.slice(0, 4)}년 ${digits.slice(4)}`;
+        } else if (digits.length === 6) {
+            formatted = `${digits.slice(0, 4)}년 ${digits.slice(4, 6)}월 `;
+        } else if (digits.length < 8) {
+            formatted = `${digits.slice(0, 4)}년 ${digits.slice(4, 6)}월 ${digits.slice(6)}`;
+        } else {
+            formatted = `${digits.slice(0, 4)}년 ${digits.slice(4, 6)}월 ${digits.slice(6, 8)}일`;
         }
+
+        if (el.value !== formatted) {
+            el.value = formatted;
+        }
+        el._prevDateVal = formatted;
     }
 
     function normalizeSmartScheduleTimeInput(el) {
@@ -688,10 +728,24 @@
         const elPri = document.getElementById("sts-priority-select");
         const elMemoEditor = document.getElementById("sts-memo-editor");
 
+        const curYearPh = `${new Date().getFullYear()}년 01월 01일`;
+        const formattedDetectedDate = detectedDate ? formatIsoToKoreanScheduleDate(detectedDate) : "";
+
         if (elTitle) elTitle.value = rawTitle;
-        if (elStart) elStart.value = detectedDate || "";
-        if (elDue) elDue.value = detectedDate || "";
-        if (elTime) elTime.value = detectedTime;
+        if (elStart) {
+            elStart.placeholder = curYearPh;
+            elStart.value = formattedDetectedDate;
+            elStart._prevDateVal = formattedDetectedDate;
+        }
+        if (elDue) {
+            elDue.placeholder = curYearPh;
+            elDue.value = formattedDetectedDate;
+            elDue._prevDateVal = formattedDetectedDate;
+        }
+        if (elTime) {
+            elTime.placeholder = "09:10";
+            elTime.value = detectedTime;
+        }
         if (elLoc) elLoc.value = detectedLocation;
         if (elPri) elPri.value = "Normal";
         if (elMemoEditor) {
@@ -740,8 +794,10 @@
         if (elDue) normalizeSmartScheduleDateInput(elDue);
         if (elTime) normalizeSmartScheduleTimeInput(elTime);
 
-        const startDate = (elStart?.value || "").trim();
-        const dueDate = (elDue?.value || "").trim() || startDate;
+        const rawStart = (elStart?.value || "").trim();
+        const rawDue = (elDue?.value || "").trim();
+        const startDate = rawStart ? parseKoreanScheduleDateToIso(rawStart) : "";
+        const dueDate = rawDue ? parseKoreanScheduleDateToIso(rawDue) : startDate;
         const time = (elTime?.value || "").trim();
         const location = (document.getElementById("sts-location-input")?.value || "").trim();
         const priority = document.getElementById("sts-priority-select")?.value || "Normal";
@@ -752,13 +808,13 @@
             document.getElementById("sts-title-input")?.focus();
             return null;
         }
-        if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-            if (typeof showToast === "function") showToast("시작일은 8자리 숫자(예: 20261122) 또는 YYYY-MM-DD 형식으로 입력해 주세요.");
+        if (rawStart && !startDate) {
+            if (typeof showToast === "function") showToast("시작일 형식을 확인해 주세요. (예: 2026년 11월 22일)");
             elStart?.focus();
             return null;
         }
-        if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-            if (typeof showToast === "function") showToast("마감일은 8자리 숫자(예: 20261122) 또는 YYYY-MM-DD 형식으로 입력해 주세요.");
+        if (!dueDate) {
+            if (typeof showToast === "function") showToast("마감일을 올바르게 입력해 주세요. (예: 2026년 11월 22일)");
             elDue?.focus();
             return null;
         }
@@ -1678,7 +1734,7 @@
             iconEl.innerHTML = MYAI_PROVIDER_ICONS[meta.provider] || MYAI_PROVIDER_ICONS.upstage;
         }
         if (labelEl) {
-            labelEl.textContent = "AI 선택";
+            labelEl.textContent = meta.name || "Solar Pro4";
         }
         if (btn) {
             btn.title = `현재 선택된 AI 모델: ${meta.name} (${meta.desc})`;
@@ -1791,10 +1847,10 @@
                 if (lineStr) {
                     pageTexts.push(`[${p}페이지] ${lineStr}`);
                     totalLen += lineStr.length;
-                    if (totalLen >= 18000) break;
+                    if (totalLen >= 200000) break;
                 }
             }
-            return pageTexts.join("\n").slice(0, 18000);
+            return pageTexts.join("\n").slice(0, 200000);
         } catch {
             return "";
         }
@@ -1820,7 +1876,7 @@
                     tmp.innerHTML = txt;
                     txt = (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
                 }
-                if (txt.trim()) return txt.trim().slice(0, 18000);
+                if (txt.trim()) return txt.trim().slice(0, 200000);
             } catch { }
         }
 
@@ -1835,7 +1891,7 @@
                         15000
                     );
                     if (res && res.ok && res.text && String(res.text).trim()) {
-                        return String(res.text).trim().slice(0, 18000);
+                        return String(res.text).trim().slice(0, 200000);
                     }
                 }
             } catch { }
@@ -1850,7 +1906,7 @@
                 const fallbackTxt = (await firstItem.text()) || "";
                 if (/^PK[\x03\x05\x07]/.test(fallbackTxt)) return "";
                 const cleaned = fallbackTxt.replace(/\0/g, "").trim();
-                if (cleaned) return cleaned.slice(0, 18000);
+                if (cleaned) return cleaned.slice(0, 200000);
             } catch { }
         }
         return "";
@@ -2021,7 +2077,7 @@
                     headers["anthropic-version"] = "2023-06-01";
                     payload = {
                         model: modelName,
-                        max_tokens: 4096,
+                        max_tokens: 8192,
                         temperature: 0.0,
                         system: systemPrompt,
                         messages: [{ role: "user", content: userPrompt }]
@@ -2148,11 +2204,13 @@
         return "";
     }
 
-    async function buildBlackHoleSummaryResult(list, modeKey, foldChecked) {
+    async function buildBlackHoleSummaryResult(list, modeKey, foldChecked, options = {}) {
         const firstItem = (Array.isArray(list) && list[0]) ? list[0] : { name: "문서.txt" };
         const rawFileName = String(firstItem.name || "문서").trim();
         const baseName = rawFileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim() || "문서";
         const selectedModelMeta = getSelectedMyAiModelMeta();
+        const conciseReportMode = !!(options && options.conciseChecked);
+        const customUserPrompt = String((options && options.userPromptText) || "").trim();
 
         // 1. 문서 본문 텍스트 추출
         const rawFileText = await extractDocumentTextForAi(firstItem);
@@ -2174,35 +2232,46 @@
                 "4. 원문이 매뉴얼·안내서·참고자료인 경우 억지로 업무 지시나 과제처럼 바꾸지 말고, 문서 본래의 핵심 내용만 객관적으로 요약하세요."
             ].join("\n");
 
+            const reportStyleRule = conciseReportMode
+                ? "[보고서 작성 형식]\n- 하단 상세 내용(sections 또는 keyPoints)은 개조식(핵심 요점 나열)으로 1장 보고서 분량에 맞게 간결하고 구조화하여 작성하세요. 상단 핵심 요약(summaryLead/overview)은 1~2문장으로 유지하세요."
+                : "[보고서 작성 형식]\n- 상단 인용구용 핵심 요지(summaryLead/overview)는 1~2문장으로 짧고 명확하게 유지하되, 보고서 하단의 상세 정리(sections 또는 keyPoints)에는 분량·줄 수·항목 수 제한을 두지 말고 원문에 담긴 핵심·세부 정보를 빠뜨리지 않도록 AI가 판단해 충실하고 자유롭게 정리하세요.";
+
             const systemPrompt = modeKey === "summary"
                 ? [
                     "당신은 정확하고 신뢰할 수 있는 문서 요약 AI입니다.",
                     zeroHallucinationRules,
+                    reportStyleRule,
                     "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
                     "{",
                     '  "title": "원문에 기반한 문서 제목 (원문 제목이 있으면 그대로 사용)",',
-                    '  "overview": "문서 전체의 핵심 목적과 내용을 1~2문장으로 요약 (원문 사실만 기재)",',
+                    '  "overview": "상단 인용구용 문서 전체 핵심 요지 (원문 사실만 1~2문장으로 간결히 기재)",',
                     '  "highlightSentence": "문서에서 가장 핵심이 되는 1문장 (원문 사실만 기재)",',
                     '  "sections": [',
-                    '    { "heading": "핵심 주제/장절 제목", "points": ["원문에 있는 세부 핵심 내용 1", "세부 핵심 내용 2"] }',
+                    '    { "heading": "주제/장절 제목", "points": ["원문에 근거한 세부 정리 내용..."] }',
                     "  ]",
                     "}"
                 ].join("\n")
                 : [
                     `당신은 대한민국 행정·업무 ${modeKey === "official" ? "공문서" : "쪽지"} 분석 AI입니다.`,
                     zeroHallucinationRules,
+                    reportStyleRule,
                     "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
                     "{",
                     '  "title": "원문에 명시된 공문/쪽지 제목",',
                     '  "dueDate": "원문에 명시된 제출/회신 마감일 또는 일시 (원문에 적힌 그대로 기재하되, 원문에 마감일/기한이 없으면 반드시 빈 문자열 \\"\\")",',
                     '  "submitTarget": "원문에 명시된 제출처/회신처/장소 (원문에 제출처나 장소가 없으면 반드시 빈 문자열 \\"\\")",',
-                    '  "summaryLead": "공문/쪽지의 핵심 요지 (원문에 있는 사실만 1~2문장)",',
-                    '  "coreContent": "핵심 내용 한 줄 요약 (원문에 있는 사실만 기재)",',
-                    '  "keyPoints": ["원문에 명시된 세부 내용 또는 협조/조치 사항 1", "항목 2"]',
+                    '  "summaryLead": "상단 인용구용 핵심 요지 (원문에 있는 사실만 1~2문장으로 간결히 기재)",',
+                    '  "coreContent": "표의 핵심 내용 칸에 들어갈 요지 (원문에 있는 사실만 기재)",',
+                    '  "keyPoints": ["원문에 명시된 본문 내용, 세부 사항, 협조·조치 사항 등을 제한 없이 충실히 정리..."]',
                     "}"
                 ].join("\n");
 
-            const userPrompt = `파일명: ${rawFileName}\n\n[문서 원문]\n${rawFileText}`;
+            const userPromptSections = [];
+            if (customUserPrompt) {
+                userPromptSections.push(`[사용자 추가 프롬프트 (할루시네이션 0% 원칙 범위 내에서 최우선 반영)]\n${customUserPrompt}`);
+            }
+            userPromptSections.push(`파일명: ${rawFileName}\n\n[문서 원문]\n${rawFileText}`);
+            const userPrompt = userPromptSections.join("\n\n");
             const aiResp = await requestTimelyAiCompletion(savedApiKey, selectedModelMeta.id, systemPrompt, userPrompt);
 
             if (aiResp && aiResp.ok && aiResp.content) {
@@ -2361,10 +2430,18 @@
         htmlParts.push(`<p><br></p>`);
         htmlParts.push([
             `<table><tbody>`,
-            `<tr><td><strong>문서명</strong></td><td>${escapeHtmlStr(rawFileName)}</td></tr>`,
-            `<tr><td><strong>일정 / 기한</strong></td><td>${escapeHtmlStr(verifiedDueDate)}</td></tr>`,
-            `<tr><td><strong>장소 / 제출처</strong></td><td>${escapeHtmlStr(verifiedSubmitTarget)}</td></tr>`,
-            `<tr><td><strong>핵심 내용</strong></td><td>${escapeHtmlStr(coreContent)}</td></tr>`,
+            `<tr>`,
+            `<td data-row="row-1"><strong>문서명</strong></td>`,
+            `<td data-row="row-1"><strong>일정 / 기한</strong></td>`,
+            `<td data-row="row-1"><strong>장소 / 제출처</strong></td>`,
+            `<td data-row="row-1"><strong>핵심 내용</strong></td>`,
+            `</tr>`,
+            `<tr>`,
+            `<td data-row="row-2">${escapeHtmlStr(rawFileName)}</td>`,
+            `<td data-row="row-2">${escapeHtmlStr(verifiedDueDate)}</td>`,
+            `<td data-row="row-2">${escapeHtmlStr(verifiedSubmitTarget)}</td>`,
+            `<td data-row="row-2">${escapeHtmlStr(coreContent)}</td>`,
+            `</tr>`,
             `</tbody></table>`
         ].join(""));
 
@@ -2473,7 +2550,12 @@
             }
         }, totalSwallowMs);
 
-        const analysisPromise = buildBlackHoleSummaryResult(list, activeMode, foldChecked);
+        const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
+        const userPromptText = (document.getElementById("zen-bh-user-prompt")?.value || "").trim();
+        const analysisPromise = buildBlackHoleSummaryResult(list, activeMode, foldChecked, {
+            conciseChecked,
+            userPromptText
+        });
         const minWaitPromise = new Promise((resolve) => {
             bhSwallowTimer2 = setTimeout(resolve, minWaitMs);
         });

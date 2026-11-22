@@ -7121,6 +7121,14 @@ body.light-theme .tree-folder-icon.is-trash {
     border-color: var(--accent);
 }
 
+#sts-start-date::placeholder,
+#sts-due-date::placeholder,
+#sts-time-input::placeholder {
+    color: #94a3b8;
+    font-style: italic;
+    opacity: 0.9;
+}
+
 .zen-sts-textarea {
     min-height: 240px;
     resize: vertical;
@@ -7339,13 +7347,14 @@ body.light-theme .tree-folder-icon.is-trash {
     align-items: center;
     gap: 10px;
     min-width: 0;
+    flex: 1;
 }
 
 .zen-bh-shell-title {
     font-size: 13.5px;
     font-weight: 700;
     letter-spacing: -0.01em;
-    color: #f1f5f9;
+    color: #60a5fa;
     white-space: nowrap;
 }
 
@@ -7353,27 +7362,40 @@ body.light-theme .tree-folder-icon.is-trash {
     position: relative;
     display: inline-flex;
     align-items: center;
+    flex: 1;
+    max-width: 230px;
 }
 
 .zen-bh-model-btn {
-    height: 26px;
-    padding: 0 9px 0 8px;
+    width: 100%;
+    min-width: 158px;
+    height: 28px;
+    padding: 0 10px 0 9px;
     border-radius: 7px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     background: rgba(255, 255, 255, 0.06);
-    color: #e2e8f0;
-    font-size: 11.5px;
+    color: #f1f5f9;
+    font-size: 12px;
     font-weight: 600;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .zen-bh-model-btn:hover {
     background: rgba(255, 255, 255, 0.11);
-    border-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(96, 165, 250, 0.5);
+}
+
+.zen-bh-model-btn-label {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .zen-bh-model-icon {
@@ -7392,9 +7414,10 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-model-caret {
-    font-size: 10px;
-    color: #94a3b8;
-    margin-left: 1px;
+    font-size: 11px;
+    color: #3b82f6;
+    margin-left: 2px;
+    flex-shrink: 0;
 }
 
 .zen-bh-model-dropdown {
@@ -7556,7 +7579,7 @@ body.light-theme .tree-folder-icon.is-trash {
 .zen-bh-orb-dropzone {
     position: relative;
     width: 100%;
-    height: 284px;
+    height: 246px;
     border-radius: 0;
     display: flex;
     align-items: center;
@@ -7572,21 +7595,76 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-bh-canvas {
     width: 100%;
-    height: 284px;
+    height: 246px;
     border-radius: 0;
     display: block;
     pointer-events: none;
 }
 
+.zen-bh-prompt-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.zen-bh-summary-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 400;
+    color: #cbd5e1;
+    cursor: pointer;
+    user-select: none;
+}
+
+.zen-bh-summary-check input[type="checkbox"] {
+    accent-color: #94a3b8;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.zen-bh-user-prompt {
+    width: 100%;
+    min-height: 52px;
+    max-height: 104px;
+    resize: vertical;
+    box-sizing: border-box;
+    padding: 8px 11px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: #f1f5f9;
+    font-family: inherit;
+    font-size: 12.5px;
+    line-height: 1.45;
+    outline: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.zen-bh-user-prompt:focus {
+    border-color: rgba(96, 165, 250, 0.55);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.zen-bh-user-prompt::placeholder {
+    color: #94a3b8;
+    font-style: italic;
+    opacity: 0.85;
+}
+
 .zen-bh-status-pill {
     width: 100%;
-    padding: 9px 14px;
+    padding: 8px 14px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #cbd5e1;
-    font-size: 12.5px;
-    line-height: 1.48;
+    font-size: 12px;
+    line-height: 1.45;
     text-align: center;
     white-space: normal;
     word-break: keep-all;
@@ -7594,41 +7672,47 @@ body.light-theme .tree-folder-icon.is-trash {
     text-overflow: clip;
 }
 
-.zen-bh-options-box {
+.zen-bh-bottom-row {
     width: 100%;
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 2px;
+}
+
+.zen-bh-bottom-left {
+    display: flex;
     flex-direction: column;
-    gap: 5px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
 }
 
 .zen-bh-fold-check {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
     color: #e2e8f0;
     cursor: pointer;
 }
 
 .zen-bh-fold-check input[type="checkbox"] {
     accent-color: #94a3b8;
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     margin: 0;
     flex-shrink: 0;
     cursor: pointer;
 }
 
 .zen-bh-mode-hint {
-    font-size: 11.5px;
+    font-size: 11px;
     color: #94a3b8;
-    line-height: 1.4;
-    padding-left: 22px;
+    line-height: 1.35;
+    padding-left: 21px;
     word-break: keep-all;
 }
 
@@ -7686,22 +7770,22 @@ body.light-theme .zen-bh-portal-shell {
 }
 
 body.light-theme .zen-bh-shell-title {
-    color: #191c20;
+    color: #2563eb;
 }
 
 body.light-theme .zen-bh-model-btn {
     border: 1px solid #d0d5dd;
     background: #f8fafc;
-    color: #334155;
+    color: #1e293b;
 }
 
 body.light-theme .zen-bh-model-btn:hover {
     background: #eef2f6;
-    border-color: #cbd5e1;
+    border-color: #3b82f6;
 }
 
 body.light-theme .zen-bh-model-caret {
-    color: #64748b;
+    color: #2563eb;
 }
 
 body.light-theme .zen-bh-model-dropdown {
@@ -7770,15 +7854,34 @@ body.light-theme .zen-bh-mode-btn.active {
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
+body.light-theme .zen-bh-summary-check {
+    color: #334155;
+}
+
+body.light-theme .zen-bh-summary-check input[type="checkbox"] {
+    accent-color: #2563eb;
+}
+
+body.light-theme .zen-bh-user-prompt {
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #191c20;
+}
+
+body.light-theme .zen-bh-user-prompt:focus {
+    border-color: #2563eb;
+    background: #ffffff;
+}
+
+body.light-theme .zen-bh-user-prompt::placeholder {
+    color: #64748b;
+    font-style: italic;
+}
+
 body.light-theme .zen-bh-status-pill {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     color: #334155;
-}
-
-body.light-theme .zen-bh-options-box {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
 }
 
 body.light-theme .zen-bh-fold-check {

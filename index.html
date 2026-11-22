@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.6.9">
-    <link rel="manifest" href="manifest.json?v=1.6.9">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.7.0">
+    <link rel="manifest" href="manifest.json?v=1.7.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.6.9">
+    <link rel="stylesheet" href="css/main.css?v=1.7.0">
 
 </head>
 
@@ -1069,15 +1069,15 @@
                 <div class="zen-sts-row-dates">
                     <div class="zen-sts-field">
                         <label class="zen-sts-label" for="sts-start-date">시작일</label>
-                        <input type="text" id="sts-start-date" class="zen-sts-input" inputmode="numeric" maxlength="10" oninput="normalizeSmartScheduleDateInput(this)">
+                        <input type="text" id="sts-start-date" class="zen-sts-input" inputmode="numeric" maxlength="16" placeholder="2026년 01월 01일" oninput="normalizeSmartScheduleDateInput(this)">
                     </div>
                     <div class="zen-sts-field">
                         <label class="zen-sts-label" for="sts-due-date">마감일 <span class="sts-req-star">*</span></label>
-                        <input type="text" id="sts-due-date" class="zen-sts-input" inputmode="numeric" maxlength="10" oninput="normalizeSmartScheduleDateInput(this)">
+                        <input type="text" id="sts-due-date" class="zen-sts-input" inputmode="numeric" maxlength="16" placeholder="2026년 01월 01일" oninput="normalizeSmartScheduleDateInput(this)">
                     </div>
                     <div class="zen-sts-field">
                         <label class="zen-sts-label" for="sts-time-input">시간</label>
-                        <input type="text" id="sts-time-input" class="zen-sts-input" inputmode="numeric" maxlength="5" oninput="normalizeSmartScheduleTimeInput(this)">
+                        <input type="text" id="sts-time-input" class="zen-sts-input" inputmode="numeric" maxlength="5" placeholder="09:10" oninput="normalizeSmartScheduleTimeInput(this)">
                     </div>
                 </div>
                 <div class="zen-sts-row-meta">
@@ -1111,16 +1111,16 @@
         </div>
     </div>
 
-    <!-- [V1.6.9] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 투입 꿀꺽 · 복귀 포털 (시연 버튼 제거) -->
+    <!-- [V1.7.0] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 투입 꿀꺽 · 복귀 포털 (시연 버튼 제거) -->
     <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
         <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
             <div class="zen-bh-shell-head">
                 <div class="zen-bh-head-left">
-                    <span class="zen-bh-shell-title">MY AI 문서 분석·요약</span>
+                    <span class="zen-bh-shell-title">MY AI 문서 분석</span>
                     <div class="zen-bh-model-picker-wrap">
                         <button type="button" id="zen-bh-model-btn" class="zen-bh-model-btn" onclick="toggleBlackHoleModelDropdown(event)" title="문서 분석·요약에 사용할 AI 모델 선택">
                             <span id="zen-bh-model-btn-icon" class="zen-bh-model-icon"></span>
-                            <span id="zen-bh-model-btn-label">AI 선택</span>
+                            <span id="zen-bh-model-btn-label" class="zen-bh-model-btn-label">Solar Pro4</span>
                             <i class="fa-solid fa-caret-down zen-bh-model-caret"></i>
                         </button>
                         <div id="zen-bh-model-dropdown" class="zen-bh-model-dropdown" style="display: none;" onclick="event.stopPropagation()"></div>
@@ -1139,34 +1139,41 @@
                 <canvas id="zen-bh-canvas" class="zen-bh-canvas"></canvas>
                 <input type="file" id="zen-bh-file-input" multiple style="display: none;">
             </div>
-            <div id="zen-bh-status-pill" class="zen-bh-status-pill">다운 받은 공문(zip파일), 쪽지, 요약하고 싶은 문서를 블랙홀에 던져 넣으세요.</div>
-            <div class="zen-bh-options-box">
-                <label class="zen-bh-fold-check">
-                    <input type="checkbox" id="zen-bh-folding-toggle" checked>
-                    <span id="zen-bh-folding-label">자동 폴더링(폴더를 만들고 공문과 첨부 문서 저장)</span>
+            <div class="zen-bh-prompt-section">
+                <label class="zen-bh-summary-check">
+                    <input type="checkbox" id="zen-bh-concise-toggle">
+                    <span>문서 요약(개조식, 1장 보고서)</span>
                 </label>
-                <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">공문 본문만 AI 전송·분석합니다(첨부 제외).</div>
+                <textarea id="zen-bh-user-prompt" class="zen-bh-user-prompt" rows="2" placeholder="사용자 프롬프트 입력란"></textarea>
             </div>
-            <div class="zen-bh-shell-actions is-right-only">
+            <div id="zen-bh-status-pill" class="zen-bh-status-pill">다운 받은 공문(zip파일), 쪽지, 요약하고 싶은 문서를 블랙홀에 던져 넣으세요.</div>
+            <div class="zen-bh-bottom-row">
+                <div class="zen-bh-bottom-left">
+                    <label class="zen-bh-fold-check">
+                        <input type="checkbox" id="zen-bh-folding-toggle" checked>
+                        <span id="zen-bh-folding-label">자동 폴더링(폴더를 만들고 공문과 첨부 문서 저장)</span>
+                    </label>
+                    <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">공문 본문만 AI 전송·분석합니다(첨부 제외).</div>
+                </div>
                 <button type="button" class="zen-bh-act-btn" onclick="closeBlackHolePortal()">닫기</button>
             </div>
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.6.9"></script>
-    <script src="js/db.js?v=1.6.9"></script>
-    <script src="js/ui.js?v=1.6.9"></script>
-    <script src="js/editor.js?v=1.6.9"></script>
-    <script src="js/file_manager.js?v=1.6.9"></script>
-    <script src="js/io.js?v=1.6.9"></script>
-    <script src="js/auth.js?v=1.6.9"></script>
-    <script src="js/zen_bridge.js?v=1.6.9"></script>
+    <script src="js/globals.js?v=1.7.0"></script>
+    <script src="js/db.js?v=1.7.0"></script>
+    <script src="js/ui.js?v=1.7.0"></script>
+    <script src="js/editor.js?v=1.7.0"></script>
+    <script src="js/file_manager.js?v=1.7.0"></script>
+    <script src="js/io.js?v=1.7.0"></script>
+    <script src="js/auth.js?v=1.7.0"></script>
+    <script src="js/zen_bridge.js?v=1.7.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.6.9");
+            console.log("[ZenNotes] 현재 버전: V1.7.0");
             console.log("=========================================");
         });
     </script>
