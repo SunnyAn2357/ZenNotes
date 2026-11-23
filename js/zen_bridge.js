@@ -2174,7 +2174,7 @@
         });
     }
 
-    async function requestTimelyAiCompletion(apiKey, preferredModelId, systemPrompt, userPrompt) {
+    async function requestTimelyAiCompletion(apiKey, preferredModelId, systemPrompt, userPrompt, images = []) {
         const trimmedKey = (apiKey || "").trim();
         if (!trimmedKey) {
             return {
@@ -2183,7 +2183,17 @@
             };
         }
 
-        const chosenModel = normalizeMyAiModelId(preferredModelId || MYAI_DEFAULT_MODEL_ID);
+        const imageList = Array.isArray(images)
+            ? images.filter((img) => img && img.base64).map((img) => ({
+                mimeType: img.mimeType || "image/jpeg",
+                base64: String(img.base64)
+            }))
+            : [];
+        const hasImages = imageList.length > 0;
+        let chosenModel = normalizeMyAiModelId(preferredModelId || MYAI_DEFAULT_MODEL_ID);
+        if (hasImages && resolveMyAiProvider(chosenModel) === "upstage") {
+            chosenModel = "claude-sonnet-5";
+        }
 
         if (isDesktopWebViewEnv()) {
             const res = await callDesktopBridgeRequest(
@@ -2192,7 +2202,8 @@
                     apiKey: trimmedKey,
                     model: chosenModel,
                     systemPrompt,
-                    userPrompt
+                    userPrompt,
+                    images: imageList
                 },
                 120000
             );
@@ -2209,7 +2220,10 @@
         }
 
         const candidateModels = [chosenModel];
-        for (const m of ["solar-pro4", "claude-sonnet-5", "gpt-5.6-sol", "gemini-3.8-flash"]) {
+        const fallbackPool = hasImages
+            ? ["claude-sonnet-5", "gemini-3.8-flash", "gpt-5.6-sol"]
+            : ["solar-pro4", "claude-sonnet-5", "gpt-5.6-sol", "gemini-3.8-flash"];
+        for (const m of fallbackPool) {
             if (!candidateModels.includes(m)) candidateModels.push(m);
         }
 
@@ -2217,6 +2231,7 @@
         for (const modelName of candidateModels) {
             try {
                 const provider = resolveMyAiProvider(modelName);
+                if (hasImages && provider === "upstage") continue;
                 let url = "";
                 let headers = { "Content-Type": "application/json" };
                 let payload = null;
@@ -2225,19 +2240,36 @@
                     url = "https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/messages";
                     headers["x-api-key"] = trimmedKey;
                     headers["anthropic-version"] = "2023-06-01";
+                    const userContent = hasImages
+                        ? [
+                            ...imageList.map((img) => ({
+                                type: "image",
+                                source: { type: "base64", media_type: img.mimeType, data: img.base64 }
+                            })),
+                            { type: "text", text: userPrompt }
+                        ]
+                        : userPrompt;
                     payload = {
                         model: modelName,
                         max_tokens: 8192,
                         temperature: 0.0,
                         system: systemPrompt,
-                        messages: [{ role: "user", content: userPrompt }]
+                        messages: [{ role: "user", content: userContent }]
                     };
                 } else if (provider === "google") {
                     url = `https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
                     headers["x-goog-api-key"] = trimmedKey;
+                    const parts = hasImages
+                        ? [
+                            ...imageList.map((img) => ({
+                                inlineData: { mimeType: img.mimeType, data: img.base64 }
+                            })),
+                            { text: userPrompt }
+                        ]
+                        : [{ text: userPrompt }];
                     payload = {
                         systemInstruction: { parts: [{ text: systemPrompt }] },
-                        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                        contents: [{ role: "user", parts }],
                         generationConfig: { temperature: 0.0 }
                     };
                 } else {
@@ -2245,11 +2277,20 @@
                         ? "https://hello.timelyai.io/api/v2/chat/direct/upstage/v1/chat/completions"
                         : "https://hello.timelyai.io/api/v2/chat/direct/openai/v1/chat/completions";
                     headers["Authorization"] = `Bearer ${trimmedKey}`;
+                    const userMsgContent = hasImages
+                        ? [
+                            { type: "text", text: userPrompt },
+                            ...imageList.map((img) => ({
+                                type: "image_url",
+                                image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+                            }))
+                        ]
+                        : userPrompt;
                     payload = {
                         model: modelName,
                         messages: [
                             { role: "system", content: systemPrompt },
-                            { role: "user", content: userPrompt }
+                            { role: "user", content: userMsgContent }
                         ],
                         temperature: 0.0
                     };
@@ -2354,6 +2395,178 @@
         return "";
     }
 
+    function isModelSupportingVision(modelId) {
+        return resolveMyAiProvider(modelId) !== "upstage";
+    }
+
+    function pickVisionPreferredModel(selectedModelId) {
+        const normSel = normalizeMyAiModelId(selectedModelId || MYAI_DEFAULT_MODEL_ID);
+        if (isModelSupportingVision(normSel)) {
+            const m = myAiActiveModels.find((x) => x.id === normSel);
+            return {
+                id: normSel,
+                name: (m && m.name) ? m.name : formatLiveModelDisplayName(normSel),
+                switchedFrom: ""
+            };
+        }
+        const preferredOrder = ["claude-sonnet-5", "gemini-3.8-flash", "gpt-5.6-sol", "claude-sonnet-4-6", "gpt-5.5"];
+        let chosen = null;
+        for (const pid of preferredOrder) {
+            const found = myAiActiveModels.find((m) => m.id === pid);
+            if (found) {
+                chosen = found;
+                break;
+            }
+        }
+        if (!chosen) {
+            chosen = myAiActiveModels.find((m) => isModelSupportingVision(m.id)) || {
+                id: "claude-sonnet-5",
+                name: "Claude Sonnet 5"
+            };
+        }
+        const prevMeta = myAiActiveModels.find((m) => m.id === normSel);
+        return {
+            id: chosen.id,
+            name: chosen.name || formatLiveModelDisplayName(chosen.id),
+            switchedFrom: (prevMeta && prevMeta.name) ? prevMeta.name : formatLiveModelDisplayName(normSel)
+        };
+    }
+
+    function resizeImageDataUrlToPayload(dataUrl, preferredMime = "image/jpeg", maxDim = 2000, quality = 0.86) {
+        return new Promise((resolve) => {
+            try {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        let w = img.naturalWidth || img.width || 0;
+                        let h = img.naturalHeight || img.height || 0;
+                        if (w <= 0 || h <= 0) {
+                            resolve(null);
+                            return;
+                        }
+                        if (Math.max(w, h) > maxDim) {
+                            const scale = maxDim / Math.max(w, h);
+                            w = Math.max(1, Math.round(w * scale));
+                            h = Math.max(1, Math.round(h * scale));
+                        }
+                        const cvs = document.createElement("canvas");
+                        cvs.width = w;
+                        cvs.height = h;
+                        const ctx = cvs.getContext("2d");
+                        if (!ctx) {
+                            resolve(null);
+                            return;
+                        }
+                        if (preferredMime === "image/jpeg") {
+                            ctx.fillStyle = "#ffffff";
+                            ctx.fillRect(0, 0, w, h);
+                        }
+                        ctx.drawImage(img, 0, 0, w, h);
+                        const outDataUrl = cvs.toDataURL(preferredMime, quality);
+                        const commaIdx = outDataUrl.indexOf(",");
+                        if (commaIdx < 0) {
+                            resolve(null);
+                            return;
+                        }
+                        resolve({
+                            mimeType: preferredMime,
+                            base64: outDataUrl.slice(commaIdx + 1)
+                        });
+                    } catch {
+                        resolve(null);
+                    }
+                };
+                img.onerror = () => resolve(null);
+                img.src = dataUrl;
+            } catch {
+                resolve(null);
+            }
+        });
+    }
+
+    async function extractImagePayloadFromFile(fileObj) {
+        if (!fileObj) return [];
+        const objUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+            ? URL.createObjectURL(fileObj)
+            : "";
+        try {
+            if (objUrl) {
+                const mime = /\.png$/i.test(fileObj.name || "") ? "image/png" : "image/jpeg";
+                const payload = await resizeImageDataUrlToPayload(objUrl, mime, 2000, 0.88);
+                return payload ? [payload] : [];
+            }
+            return [];
+        } catch {
+            return [];
+        } finally {
+            if (objUrl) {
+                try { URL.revokeObjectURL(objUrl); } catch { }
+            }
+        }
+    }
+
+    async function renderScannedPdfPagesToImages(fileObj, maxPages = 10) {
+        if (!fileObj || typeof fileObj.arrayBuffer !== "function") return [];
+        const pdfLib = window.pdfjsLib;
+        if (!pdfLib || typeof pdfLib.getDocument !== "function") return [];
+        try {
+            const buf = await fileObj.arrayBuffer();
+            const pdfDoc = await pdfLib.getDocument({ data: new Uint8Array(buf) }).promise;
+            const total = Math.min(pdfDoc.numPages || 1, maxPages);
+            const results = [];
+            for (let p = 1; p <= total; p++) {
+                const page = await pdfDoc.getPage(p);
+                const viewport = page.getViewport({ scale: 1.6 });
+                const cvs = document.createElement("canvas");
+                cvs.width = Math.max(1, Math.round(viewport.width));
+                cvs.height = Math.max(1, Math.round(viewport.height));
+                const ctx = cvs.getContext("2d");
+                if (!ctx) continue;
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, cvs.width, cvs.height);
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                const dataUrl = cvs.toDataURL("image/jpeg", 0.82);
+                const commaIdx = dataUrl.indexOf(",");
+                if (commaIdx >= 0) {
+                    results.push({
+                        mimeType: "image/jpeg",
+                        base64: dataUrl.slice(commaIdx + 1)
+                    });
+                }
+            }
+            return results;
+        } catch {
+            return [];
+        }
+    }
+
+    async function extractDocumentImagesAndTextForAi(firstItem) {
+        if (!firstItem) return { text: "", images: [], isVisualInput: false, isScannedPdf: false };
+        const rawFileName = String(firstItem.name || "").trim();
+        const lower = rawFileName.toLowerCase();
+
+        if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(lower)) {
+            const imgs = await extractImagePayloadFromFile(firstItem);
+            return { text: "", images: imgs, isVisualInput: true, isScannedPdf: false };
+        }
+
+        if (lower.endsWith(".pdf")) {
+            const pdfText = await extractPdfTextFromFile(firstItem);
+            const pureChars = pdfText.replace(/\[\d+페이지\]/g, "").replace(/\s+/g, "");
+            const pageHeaderCount = (pdfText.match(/\[\d+페이지\]/g) || []).length || 1;
+            if (pureChars.length < Math.max(30, pageHeaderCount * 20)) {
+                const scannedImgs = await renderScannedPdfPagesToImages(firstItem, 10);
+                if (scannedImgs.length > 0) {
+                    return { text: pdfText, images: scannedImgs, isVisualInput: true, isScannedPdf: true };
+                }
+            }
+            return { text: pdfText, images: [], isVisualInput: false, isScannedPdf: false };
+        }
+
+        const txt = await extractDocumentTextForAi(firstItem);
+        return { text: txt, images: [], isVisualInput: false, isScannedPdf: false };
+    }
+
     async function buildBlackHoleSummaryResult(list, modeKey, foldChecked, options = {}) {
         const firstItem = (Array.isArray(list) && list[0]) ? list[0] : { name: "문서.txt" };
         const rawFileName = String(firstItem.name || "문서").trim();
@@ -2362,24 +2575,36 @@
         const conciseReportMode = !!(options && options.conciseChecked);
         const customUserPrompt = String((options && options.userPromptText) || "").trim();
 
-        // 1. 문서 본문 텍스트 추출
-        const rawFileText = await extractDocumentTextForAi(firstItem);
+        // 1. 문서 본문 텍스트 또는 이미지/스캔 PDF 추출
+        const extractedInput = await extractDocumentImagesAndTextForAi(firstItem);
+        const rawFileText = extractedInput.text || "";
+        const extractedImages = Array.isArray(extractedInput.images) ? extractedInput.images : [];
+        const hasImages = extractedImages.length > 0;
         const savedApiKey = getSavedMyAiApiKey();
 
         let aiData = null;
         let aiErrorNotice = "";
+        let targetModelId = selectedModelMeta.id;
         let resolvedModelName = selectedModelMeta.name;
+        let autoSwitchedFrom = "";
+
+        if (hasImages) {
+            const visionPick = pickVisionPreferredModel(selectedModelMeta.id);
+            targetModelId = visionPick.id;
+            resolvedModelName = visionPick.name;
+            autoSwitchedFrom = visionPick.switchedFrom;
+        }
 
         if (!savedApiKey) {
             aiErrorNotice = "환경설정 > MY AI 개인 API 키에 연동 키(tgpt_s...)를 먼저 저장해 주세요.";
-        } else if (!rawFileText) {
-            aiErrorNotice = "이 문서 형식에서 텍스트 본문을 추출할 수 없습니다.";
+        } else if (!rawFileText && !hasImages) {
+            aiErrorNotice = "이 문서 형식에서 텍스트 본문이나 이미지를 추출할 수 없습니다.";
         } else {
             const zeroHallucinationRules = [
                 "[절대 불가침 할루시네이션 0% 규칙]",
-                "1. 제공된 [문서 원문]에 명시적으로 적혀 있는 사실만 100% 그대로 요약하세요.",
-                "2. 원문에 없는 날짜, 시간, 기한, 마감일, 장소, 제출처, 부서명, 담당자, 지시사항을 절대로 추측하거나 임의로 만들어내지 마세요.",
-                "3. 원문에 해당 정보가 없거나 불확실하면 반드시 빈 문자열(\"\")로 비워 두세요. ('없음', '미정', '자체 검토' 같은 임의 문구도 넣지 말고 완전히 빈 문자열 \"\"로 두세요.)",
+                "1. 제공된 [문서 원문] 또는 첨부 이미지에 명시적으로 적혀 있는 사실만 100% 그대로 요약하세요.",
+                "2. 문서/이미지에 없는 날짜, 시간, 기한, 마감일, 장소, 제출처, 부서명, 담당자, 지시사항을 절대로 추측하거나 임의로 만들어내지 마세요.",
+                "3. 해당 정보가 없거나 판독이 불확실하면 반드시 빈 문자열(\"\")로 비워 두세요. ('없음', '미정', '자체 검토' 같은 임의 문구도 넣지 말고 완전히 빈 문자열 \"\"로 두세요.)",
                 "4. 원문이 매뉴얼·안내서·참고자료인 경우 억지로 업무 지시나 과제처럼 바꾸지 말고, 문서 본래의 핵심 내용만 객관적으로 요약하세요."
             ].join("\n");
 
@@ -2421,9 +2646,13 @@
             if (customUserPrompt) {
                 userPromptSections.push(`[사용자 추가 프롬프트 (할루시네이션 0% 원칙 범위 내에서 최우선 반영)]\n${customUserPrompt}`);
             }
-            userPromptSections.push(`파일명: ${rawFileName}\n\n[문서 원문]\n${rawFileText}`);
+            if (rawFileText) {
+                userPromptSections.push(`파일명: ${rawFileName}\n\n[문서 원문]\n${rawFileText}`);
+            } else {
+                userPromptSections.push(`파일명: ${rawFileName}\n\n[첨부 이미지/스캔 문서(${extractedImages.length}장)를 직접 판독해 위 JSON 스키마 형식으로 분석·요약하세요.]`);
+            }
             const userPrompt = userPromptSections.join("\n\n");
-            const aiResp = await requestTimelyAiCompletion(savedApiKey, selectedModelMeta.id, systemPrompt, userPrompt);
+            const aiResp = await requestTimelyAiCompletion(savedApiKey, targetModelId, systemPrompt, userPrompt, extractedImages);
 
             if (aiResp && aiResp.ok && aiResp.content) {
                 if (aiResp.model) {
@@ -2461,9 +2690,15 @@
             }
         }
 
-        // 2. 원문 대조를 통한 날짜·제출처 할루시네이션 2중 검증 (원문에 없는 날짜는 즉시 폐기)
+        const displayModelBadge = autoSwitchedFrom
+            ? `${autoSwitchedFrom} → ${resolvedModelName} 자동 전환`
+            : resolvedModelName;
+
+        // 2. 원문 대조를 통한 날짜·제출처 할루시네이션 2중 검증 (이미지/스캔 PDF는 텍스트 원문 없을 시 플레이스홀더만 정제)
         const verifiedDueDate = (aiData && aiData.dueDate)
-            ? verifyDateExistsInSourceText(aiData.dueDate, rawFileText)
+            ? (rawFileText && !hasImages
+                ? verifyDateExistsInSourceText(aiData.dueDate, rawFileText)
+                : cleanHallucinatedPlaceholder(aiData.dueDate))
             : "";
         const verifiedSubmitTarget = (aiData && aiData.submitTarget)
             ? cleanHallucinatedPlaceholder(aiData.submitTarget)
@@ -2500,17 +2735,17 @@
             const noteTitle = rawSubj;
             if (!aiData) {
                 const errHtml = [
-                    `<p><strong>[MY AI 문서 요약 · ${escapeHtmlStr(resolvedModelName)}]</strong></p>`,
+                    `<p><strong>[MY AI 문서 요약 · ${escapeHtmlStr(displayModelBadge)}]</strong></p>`,
                     `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 요약할 수 없습니다.")}</blockquote>`,
                     linksHtml
                 ].join("");
-                return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice, modelName: resolvedModelName };
+                return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice, modelName: displayModelBadge };
             }
 
             const overview = cleanHallucinatedPlaceholder(aiData.overview);
             const highlightSentence = cleanHallucinatedPlaceholder(aiData.highlightSentence);
             const htmlParts = [
-                `<p><strong>[MY AI 문서 핵심 요약 · ${escapeHtmlStr(resolvedModelName)}]</strong></p>`
+                `<p><strong>[MY AI 문서 핵심 요약 · ${escapeHtmlStr(displayModelBadge)}]</strong></p>`
             ];
 
             if (overview || highlightSentence) {
@@ -2551,15 +2786,15 @@
                 html: htmlParts.join(""),
                 targetFolderId: targetNoteFolderId,
                 usedRealAi: true,
-                modelName: resolvedModelName
+                modelName: displayModelBadge
             };
         }
 
         // 5. [공문 분석 / 쪽지 분석 모드] 원문에 있는 사실만 표기하고, 없는 항목은 빈칸("")으로 유지
         const noteTitle = compactDue ? `${rawSubj} (${compactDue}까지)` : rawSubj;
         const headerBadge = modeKey === "official"
-            ? `[MY AI 공문 분석 · ${resolvedModelName}]`
-            : `[MY AI 쪽지 분석 · ${resolvedModelName}]`;
+            ? `[MY AI 공문 분석 · ${displayModelBadge}]`
+            : `[MY AI 쪽지 분석 · ${displayModelBadge}]`;
 
         if (!aiData) {
             const errHtml = [
@@ -2567,7 +2802,7 @@
                 `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 분석할 수 없습니다.")}</blockquote>`,
                 linksHtml
             ].join("");
-            return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice, modelName: resolvedModelName };
+            return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice, modelName: displayModelBadge };
         }
 
         const summaryLead = cleanHallucinatedPlaceholder(aiData.summaryLead);
