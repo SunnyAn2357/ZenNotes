@@ -1027,8 +1027,20 @@ function fmDuplicate(id) {
   };
 }
 
+// [V1.7.9] 보안 폴더 내 노트 생성/수정/조회/삭제 시 순간 포커스 이탈 오토락 보호
+function guardSecurityCrudAutoLock(durationMs = 1000) {
+  if (
+    ((typeof isSecurityUnlocked !== "undefined" && isSecurityUnlocked) ||
+      (typeof isEditingSecureMemo !== "undefined" && isEditingSecureMemo)) &&
+    typeof markSecurityCrudActivity === "function"
+  ) {
+    markSecurityCrudActivity(durationMs);
+  }
+}
+
 // 4. 휴지통으로 이동
 function fmDelete(id) {
+  guardSecurityCrudAutoLock(1000);
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
   let deletedAny = false;
@@ -1100,6 +1112,7 @@ function fmRestore(id) {
 
 // 6. 영구 삭제 (폴더인 경우 하위 자손도 함께 영구 삭제 처리)
 function fmHardDelete(id) {
+  guardSecurityCrudAutoLock(1000);
   if (!confirm("이 항목을 영구 삭제하시겠습니까?")) return;
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
@@ -1693,6 +1706,7 @@ function openFmBatchMoveModal() {
 
 // 🎯 [완벽 교정] 위치 및 선택 항목 소속에 따른 다중 선택 삭제/영구삭제 분기 로직
 function fmBatchDelete() {
+  guardSecurityCrudAutoLock(1000);
   if (fmSelectedItems.size === 0) {
     showToast("삭제할 항목을 선택해주세요.");
     return;
@@ -2402,6 +2416,7 @@ function handleFmHamburger() {
 }
 
 function createNewMemo(folderId = null) {
+  guardSecurityCrudAutoLock(800);
   forceSaveImmediate();
   targetNewMemoFolderId = folderId; // 🎯 새 노트가 저장될 특정 폴더 위치 기억
   isEditingSecureMemo = false; // 🎯 새 노트 작성 시 보안 노트 편집 상태 해제
@@ -3081,6 +3096,7 @@ function closeSidebarContextMenu() {
 }
 
 async function deleteItemsToTrashWithUndo(itemIds) {
+  guardSecurityCrudAutoLock(1000);
   if (!Array.isArray(itemIds) || itemIds.length === 0 || !db) return;
 
   const uniqueIds = Array.from(new Set(itemIds.map((id) => Number(id)).filter((n) => !isNaN(n))));
@@ -3133,6 +3149,7 @@ async function deleteItemsToTrashWithUndo(itemIds) {
 }
 
 function deleteSidebarFolderWithConfirm(folderId) {
+  guardSecurityCrudAutoLock(1000);
   closeSidebarContextMenu();
   const cache = window.__zenFmTreeDataCache || window.__zenTreeDataCache;
   const folder = cache ? cache.folderMap.get(folderId) : null;
@@ -3151,6 +3168,7 @@ function deleteSidebarFolderWithConfirm(folderId) {
 }
 
 function deleteSidebarNoteWithConfirm(noteId) {
+  guardSecurityCrudAutoLock(1000);
   closeSidebarContextMenu();
   const targets =
     selectedMemos.has(noteId) && selectedMemos.size > 1
@@ -4924,6 +4942,7 @@ function togglePin(id, e) {
 
 // 🚀 [보안 코어 1] 노트 불러오기 (복호화 검문소)
 async function loadMemo(id) {
+  guardSecurityCrudAutoLock(800);
   targetNewMemoFolderId = null; // 🎯 기존 노트를 열 때는 저장 타겟 폴더를 초기화합니다.
   if (currentMemoId === id) return; // 이미 열려있는 노트면 무시 (속도 향상)
 
@@ -5009,6 +5028,7 @@ async function loadMemo(id) {
 
 function deleteMemo(id, e) {
   e.stopPropagation();
+  guardSecurityCrudAutoLock(1000);
   const targets =
     selectedMemos.has(id) && selectedMemos.size > 1
       ? Array.from(selectedMemos)
@@ -5118,6 +5138,7 @@ function restoreMemo(id, e) {
 
 function hardDeleteMemo(id, e) {
   e.stopPropagation();
+  guardSecurityCrudAutoLock(1000);
   const targets =
     selectedTrashMemos.has(id) && selectedTrashMemos.size > 1
       ? Array.from(selectedTrashMemos)
@@ -5283,6 +5304,7 @@ function restoreCurrentFolder() {
 
 // 🎯 [신규] 현재 폴더 비우기 (영구 삭제 및 부모 폴더로 바운스)
 function emptyCurrentFolder() {
+  guardSecurityCrudAutoLock(1000);
   if (
     !confirm(
       "이 폴더를 비우시겠습니까? 폴더와 내부의 모든 항목이 영구 삭제됩니다.",

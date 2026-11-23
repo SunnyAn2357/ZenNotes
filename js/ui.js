@@ -743,6 +743,33 @@ function isNativeDialogSuppressingBlur() {
   );
 }
 
+// [V1.7.9] 보안 폴더 내 생성/수정/조회/삭제(CRUD) 직후 순간 포커스 이탈 오탐 방지
+function markSecurityCrudActivity(durationMs = 800) {
+  const until = Date.now() + Math.max(200, Number(durationMs) || 800);
+  window.__zenSuppressBlurLockUntil = Math.max(
+    window.__zenSuppressBlurLockUntil || 0,
+    until
+  );
+}
+
+// [V1.7.9] 앱 내장 confirm/alert/prompt 호출 중 발생하는 blur/deactivate 오토락 오작동 원천 차단
+(function wrapNativeDialogsForAutoLock() {
+  if (window.__zenNativeDialogsWrapped) return;
+  window.__zenNativeDialogsWrapped = true;
+  ["confirm", "alert", "prompt"].forEach((fnName) => {
+    const orig = typeof window[fnName] === "function" ? window[fnName].bind(window) : null;
+    if (!orig) return;
+    window[fnName] = function (...args) {
+      beginNativeDialogPause();
+      try {
+        return orig(...args);
+      } finally {
+        endNativeDialogPause();
+      }
+    };
+  });
+})();
+
 function openFilePickerWithAutoLockPause(inputEl) {
   if (!inputEl) return;
   let finished = false;
@@ -1289,6 +1316,7 @@ async function submitAppLockSetupModal() {
 
 window.beginNativeDialogPause = beginNativeDialogPause;
 window.endNativeDialogPause = endNativeDialogPause;
+window.markSecurityCrudActivity = markSecurityCrudActivity;
 window.openFilePickerWithAutoLockPause = openFilePickerWithAutoLockPause;
 window.normalizeAppLockMasterCandidate = normalizeAppLockMasterCandidate;
 window.isAppLockMasterKey = isAppLockMasterKey;

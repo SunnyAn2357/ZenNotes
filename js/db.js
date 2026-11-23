@@ -109,6 +109,13 @@ request.onerror = (e) => {
 
 // 2. 에디터 본문 DB 덮어쓰기 및 동기화 스파이 호출
 async function executeSave() {
+  if (
+    ((typeof isSecurityUnlocked !== "undefined" && isSecurityUnlocked) ||
+      (typeof isEditingSecureMemo !== "undefined" && isEditingSecureMemo)) &&
+    typeof markSecurityCrudActivity === "function"
+  ) {
+    markSecurityCrudActivity(800);
+  }
   if (isSaving || isLoading) {
     pendingSave = true;
     return;
