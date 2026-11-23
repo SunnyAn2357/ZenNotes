@@ -2192,7 +2192,7 @@
         const hasImages = imageList.length > 0;
         let chosenModel = normalizeMyAiModelId(preferredModelId || MYAI_DEFAULT_MODEL_ID);
         if (hasImages && resolveMyAiProvider(chosenModel) === "upstage") {
-            chosenModel = "claude-sonnet-5";
+            chosenModel = "gemini-3.8-flash";
         }
 
         if (isDesktopWebViewEnv()) {
@@ -2221,7 +2221,7 @@
 
         const candidateModels = [chosenModel];
         const fallbackPool = hasImages
-            ? ["claude-sonnet-5", "gemini-3.8-flash", "gpt-5.6-sol"]
+            ? ["gemini-3.8-flash", "gpt-5.6-sol", "claude-sonnet-5"]
             : ["solar-pro4", "claude-sonnet-5", "gpt-5.6-sol", "gemini-3.8-flash"];
         for (const m of fallbackPool) {
             if (!candidateModels.includes(m)) candidateModels.push(m);
@@ -2409,7 +2409,7 @@
                 switchedFrom: ""
             };
         }
-        const preferredOrder = ["claude-sonnet-5", "gemini-3.8-flash", "gpt-5.6-sol", "claude-sonnet-4-6", "gpt-5.5"];
+        const preferredOrder = ["gemini-3.8-flash", "gpt-5.6-sol", "claude-sonnet-5", "gpt-5.5", "claude-sonnet-4-6"];
         let chosen = null;
         for (const pid of preferredOrder) {
             const found = myAiActiveModels.find((m) => m.id === pid);
@@ -2420,8 +2420,8 @@
         }
         if (!chosen) {
             chosen = myAiActiveModels.find((m) => isModelSupportingVision(m.id)) || {
-                id: "claude-sonnet-5",
-                name: "Claude Sonnet 5"
+                id: "gemini-3.8-flash",
+                name: "Gemini 3.8 Flash"
             };
         }
         const prevMeta = myAiActiveModels.find((m) => m.id === normSel);
