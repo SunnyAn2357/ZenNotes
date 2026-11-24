@@ -1975,18 +1975,54 @@
         }
     }
 
-    async function extractPdfTextFromFile(fileObj) {
-        if (!fileObj || typeof fileObj.arrayBuffer !== "function") return "";
+    function base64ToUint8Array(base64Str) {
+        const bin = atob(String(base64Str || ""));
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) {
+            bytes[i] = bin.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    async function loadPdfDocumentWithLocalWorker(uint8Array) {
+        if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") {
+            try {
+                const mod = await import(new URL("./lib/pdfjs/pdf.min.mjs", location.href).href);
+                if (mod && typeof mod.getDocument === "function") {
+                    window.pdfjsLib = mod;
+                }
+            } catch (importErr) {
+                console.warn("[BlackHole pdf.js 동적 로드 실패]", importErr);
+            }
+        }
         const pdfLib = window.pdfjsLib;
-        if (!pdfLib || typeof pdfLib.getDocument !== "function") return "";
+        if (!pdfLib || typeof pdfLib.getDocument !== "function") {
+            throw new Error("pdf.js 라이브러리가 로드되지 않았습니다.");
+        }
+        const basePdfUrl = new URL("./lib/pdfjs/", location.href).href;
+        if (pdfLib.GlobalWorkerOptions) {
+            pdfLib.GlobalWorkerOptions.workerSrc = `${basePdfUrl}pdf.worker.min.mjs`;
+        }
+        const loadingTask = pdfLib.getDocument({
+            data: uint8Array.slice(),
+            cMapUrl: `${basePdfUrl}cmaps/`,
+            cMapPacked: true,
+            standardFontDataUrl: `${basePdfUrl}standard_fonts/`,
+            useSystemFonts: true
+        });
+        return await loadingTask.promise;
+    }
+
+    async function extractPdfTextMetaFromBytes(uint8Array, maxPages = 50) {
+        if (!uint8Array || uint8Array.length === 0) return { text: "", totalPages: 0, textPageCount: 0 };
         try {
-            const buf = await fileObj.arrayBuffer();
-            const loadingTask = pdfLib.getDocument({ data: new Uint8Array(buf) });
-            const pdfDoc = await loadingTask.promise;
-            const maxPages = Math.min(pdfDoc.numPages || 1, 25);
+            const pdfDoc = await loadPdfDocumentWithLocalWorker(uint8Array);
+            const totalPages = Math.max(1, Number(pdfDoc.numPages) || 1);
+            const total = Math.min(totalPages, maxPages);
             const pageTexts = [];
             let totalLen = 0;
-            for (let p = 1; p <= maxPages; p++) {
+            let textPageCount = 0;
+            for (let p = 1; p <= total; p++) {
                 const page = await pdfDoc.getPage(p);
                 const textContent = await page.getTextContent();
                 const lineStr = (textContent.items || [])
@@ -1995,26 +2031,48 @@
                     .replace(/\s+/g, " ")
                     .trim();
                 if (lineStr) {
+                    textPageCount++;
                     pageTexts.push(`[${p}페이지] ${lineStr}`);
                     totalLen += lineStr.length;
                     if (totalLen >= 200000) break;
                 }
             }
-            return pageTexts.join("\n").slice(0, 200000);
-        } catch {
+            return {
+                text: pageTexts.join("\n").slice(0, 200000),
+                totalPages,
+                textPageCount
+            };
+        } catch (err) {
+            console.warn("[BlackHole PDF 텍스트 추출 실패]", err);
+            return { text: "", totalPages: 0, textPageCount: 0 };
+        }
+    }
+
+    async function extractPdfTextFromBytes(uint8Array, maxPages = 50) {
+        const meta = await extractPdfTextMetaFromBytes(uint8Array, maxPages);
+        return meta.text;
+    }
+
+    async function extractPdfTextFromFile(fileObj) {
+        if (!fileObj || typeof fileObj.arrayBuffer !== "function") return "";
+        try {
+            const buf = await fileObj.arrayBuffer();
+            return await extractPdfTextFromBytes(new Uint8Array(buf), 50);
+        } catch (err) {
+            console.warn("[BlackHole PDF 파일 읽기 실패]", err);
             return "";
         }
     }
 
     async function extractDocumentTextForAi(firstItem) {
-        if (!firstItem) return "";
+        if (!firstItem) return { text: "", embeddedPdfBase64: "", embeddedImages: [] };
         const rawFileName = String(firstItem.name || "").trim();
         const lower = rawFileName.toLowerCase();
 
         // 1. PDF 파일: 내장 pdf.js로 페이지 텍스트 추출
         if (lower.endsWith(".pdf")) {
             const pdfTxt = await extractPdfTextFromFile(firstItem);
-            if (pdfTxt) return pdfTxt;
+            if (pdfTxt) return { text: pdfTxt, embeddedPdfBase64: "", embeddedImages: [] };
         }
 
         // 2. 일반 텍스트 계열 (.txt, .md, .csv, .json, .html, .xml)
@@ -2026,11 +2084,11 @@
                     tmp.innerHTML = txt;
                     txt = (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
                 }
-                if (txt.trim()) return txt.trim().slice(0, 200000);
+                if (txt.trim()) return { text: txt.trim().slice(0, 200000), embeddedPdfBase64: "", embeddedImages: [] };
             } catch { }
         }
 
-        // 3. 데스크톱 C# 브릿지로 .docx / .hwpx / .zip / 기타 파일 텍스트 추출
+        // 3. 데스크톱 C# 브릿지로 .docx / .hwpx / .xlsx / .pptx / .hwp / .zip 텍스트 및 동봉 PDF·이미지 추출
         if (isDesktopWebViewEnv() && typeof firstItem.arrayBuffer === "function") {
             try {
                 const b64 = await readFileAsBase64(firstItem);
@@ -2038,28 +2096,36 @@
                     const res = await callDesktopBridgeRequest(
                         "extractBlackHoleFileText",
                         { fileName: rawFileName, base64: b64 },
-                        15000
+                        25000
                     );
-                    if (res && res.ok && res.text && String(res.text).trim()) {
-                        return String(res.text).trim().slice(0, 200000);
+                    if (res && res.ok) {
+                        return {
+                            text: res.text ? String(res.text).trim().slice(0, 200000) : "",
+                            embeddedPdfBase64: res.embeddedPdfBase64 ? String(res.embeddedPdfBase64) : "",
+                            embeddedImages: Array.isArray(res.embeddedImages) ? res.embeddedImages : []
+                        };
                     }
                 }
-            } catch { }
+            } catch (err) {
+                console.warn("[BlackHole C# 추출 브릿지 실패]", err);
+            }
         }
 
         // 4. 바이너리/압축 문서는 생바이트(PK...) 깨짐 방지를 위해 firstItem.text() 금지
         if (/\.(docx|hwpx|zip|pdf|hwp|xlsx|pptx|doc|xls|ppt|png|jpg|jpeg|gif|webp|bmp|exe|dll)$/i.test(lower)) {
-            return "";
+            return { text: "", embeddedPdfBase64: "", embeddedImages: [] };
         }
         if (typeof firstItem.text === "function") {
             try {
                 const fallbackTxt = (await firstItem.text()) || "";
-                if (/^PK[\x03\x05\x07]/.test(fallbackTxt)) return "";
+                if (/^PK[\x03\x05\x07]/.test(fallbackTxt)) {
+                    return { text: "", embeddedPdfBase64: "", embeddedImages: [] };
+                }
                 const cleaned = fallbackTxt.replace(/\0/g, "").trim();
-                if (cleaned) return cleaned.slice(0, 200000);
+                if (cleaned) return { text: cleaned.slice(0, 200000), embeddedPdfBase64: "", embeddedImages: [] };
             } catch { }
         }
-        return "";
+        return { text: "", embeddedPdfBase64: "", embeddedImages: [] };
     }
 
     async function executeDiskAutoFoldering(list, modeKey, folderLabel) {
@@ -2205,7 +2271,7 @@
                     userPrompt,
                     images: imageList
                 },
-                120000
+                150000
             );
             if (res && res.ok && res.content) {
                 if (/종료되었습니다|DIRECT_API_GUIDE/i.test(res.content)) {
@@ -2484,20 +2550,37 @@
         });
     }
 
-    async function extractImagePayloadFromFile(fileObj) {
-        if (!fileObj) return [];
+    function readFileAsDataUrl(fileObj) {
+        return new Promise((resolve) => {
+            try {
+                const reader = new FileReader();
+                reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+                reader.onerror = () => resolve("");
+                reader.readAsDataURL(fileObj);
+            } catch {
+                resolve("");
+            }
+        });
+    }
+
+    async function extractImagePayloadFromFile(fileObj, maxDim = 2000, quality = 0.86) {
+        if (!fileObj) return null;
+        const mime = /\.png$/i.test(fileObj.name || "") ? "image/png" : "image/jpeg";
         const objUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
             ? URL.createObjectURL(fileObj)
             : "";
         try {
             if (objUrl) {
-                const mime = /\.png$/i.test(fileObj.name || "") ? "image/png" : "image/jpeg";
-                const payload = await resizeImageDataUrlToPayload(objUrl, mime, 2000, 0.88);
-                return payload ? [payload] : [];
+                const payload = await resizeImageDataUrlToPayload(objUrl, mime, maxDim, quality);
+                if (payload) return payload;
             }
-            return [];
+            const dataUrl = await readFileAsDataUrl(fileObj);
+            if (dataUrl) {
+                return await resizeImageDataUrlToPayload(dataUrl, mime, maxDim, quality);
+            }
+            return null;
         } catch {
-            return [];
+            return null;
         } finally {
             if (objUrl) {
                 try { URL.revokeObjectURL(objUrl); } catch { }
@@ -2505,18 +2588,42 @@
         }
     }
 
-    async function renderScannedPdfPagesToImages(fileObj, maxPages = 10) {
-        if (!fileObj || typeof fileObj.arrayBuffer !== "function") return [];
-        const pdfLib = window.pdfjsLib;
-        if (!pdfLib || typeof pdfLib.getDocument !== "function") return [];
+    async function extractImagesFromFileList(fileList, maxImages = 20) {
+        const imgs = [];
+        const targets = (Array.isArray(fileList) ? fileList : []).filter(
+            (f) => f && /\.(png|jpe?g|webp|gif|bmp)$/i.test(String(f.name || ""))
+        ).slice(0, maxImages);
+        const isBulk = targets.length > 10;
+        const maxDim = isBulk ? 1500 : 2000;
+        const quality = isBulk ? 0.76 : 0.86;
+        for (const f of targets) {
+            const payload = await extractImagePayloadFromFile(f, maxDim, quality);
+            if (payload) imgs.push(payload);
+        }
+        return imgs;
+    }
+
+    async function renderScannedPdfPagesToImages(fileOrBytes, maxPages = 20) {
+        if (!fileOrBytes) return [];
         try {
-            const buf = await fileObj.arrayBuffer();
-            const pdfDoc = await pdfLib.getDocument({ data: new Uint8Array(buf) }).promise;
+            let uint8 = null;
+            if (fileOrBytes instanceof Uint8Array) {
+                uint8 = fileOrBytes;
+            } else if (typeof fileOrBytes.arrayBuffer === "function") {
+                const buf = await fileOrBytes.arrayBuffer();
+                uint8 = new Uint8Array(buf);
+            }
+            if (!uint8 || uint8.length === 0) return [];
+
+            const pdfDoc = await loadPdfDocumentWithLocalWorker(uint8);
             const total = Math.min(pdfDoc.numPages || 1, maxPages);
+            const isLarge = total > 10;
+            const scale = isLarge ? 1.25 : 1.5;
+            const quality = isLarge ? 0.72 : 0.80;
             const results = [];
             for (let p = 1; p <= total; p++) {
                 const page = await pdfDoc.getPage(p);
-                const viewport = page.getViewport({ scale: 1.6 });
+                const viewport = page.getViewport({ scale });
                 const cvs = document.createElement("canvas");
                 cvs.width = Math.max(1, Math.round(viewport.width));
                 cvs.height = Math.max(1, Math.round(viewport.height));
@@ -2525,7 +2632,7 @@
                 ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, cvs.width, cvs.height);
                 await page.render({ canvasContext: ctx, viewport }).promise;
-                const dataUrl = cvs.toDataURL("image/jpeg", 0.82);
+                const dataUrl = cvs.toDataURL("image/jpeg", quality);
                 const commaIdx = dataUrl.indexOf(",");
                 if (commaIdx >= 0) {
                     results.push({
@@ -2535,36 +2642,94 @@
                 }
             }
             return results;
-        } catch {
+        } catch (err) {
+            console.warn("[BlackHole 스캔 PDF 이미지 렌더링 실패]", err);
             return [];
         }
     }
 
-    async function extractDocumentImagesAndTextForAi(firstItem) {
-        if (!firstItem) return { text: "", images: [], isVisualInput: false, isScannedPdf: false };
+    function isPdfTextTooSparse(pdfText, totalPages, textPageCount) {
+        const pureChars = String(pdfText || "").replace(/\[\d+페이지\]/g, "").replace(/\s+/g, "");
+        const headerCount = (String(pdfText || "").match(/\[\d+페이지\]/g) || []).length;
+        const pages = Math.max(1, Number(totalPages) || headerCount || 1);
+        const textPages = Number.isFinite(textPageCount) ? textPageCount : headerCount;
+        return pureChars.length < Math.max(40, pages * 25) || (pages >= 2 && textPages < Math.ceil(pages * 0.5));
+    }
+
+    async function extractDocumentImagesAndTextForAi(itemsList) {
+        const list = Array.isArray(itemsList) ? itemsList.filter(Boolean) : [itemsList].filter(Boolean);
+        if (list.length === 0) return { text: "", images: [], isVisualInput: false, isScannedPdf: false };
+        const firstItem = list[0];
         const rawFileName = String(firstItem.name || "").trim();
         const lower = rawFileName.toLowerCase();
 
         if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(lower)) {
-            const imgs = await extractImagePayloadFromFile(firstItem);
+            const imgs = await extractImagesFromFileList(list, 20);
             return { text: "", images: imgs, isVisualInput: true, isScannedPdf: false };
         }
 
         if (lower.endsWith(".pdf")) {
-            const pdfText = await extractPdfTextFromFile(firstItem);
-            const pureChars = pdfText.replace(/\[\d+페이지\]/g, "").replace(/\s+/g, "");
-            const pageHeaderCount = (pdfText.match(/\[\d+페이지\]/g) || []).length || 1;
-            if (pureChars.length < Math.max(30, pageHeaderCount * 20)) {
-                const scannedImgs = await renderScannedPdfPagesToImages(firstItem, 10);
+            let pdfBytes = null;
+            try {
+                if (typeof firstItem.arrayBuffer === "function") {
+                    pdfBytes = new Uint8Array(await firstItem.arrayBuffer());
+                }
+            } catch (err) {
+                console.warn("[BlackHole PDF 버퍼 읽기 실패]", err);
+            }
+            const meta = pdfBytes ? await extractPdfTextMetaFromBytes(pdfBytes, 50) : { text: "", totalPages: 0, textPageCount: 0 };
+            if (isPdfTextTooSparse(meta.text, meta.totalPages, meta.textPageCount)) {
+                const scannedImgs = pdfBytes ? await renderScannedPdfPagesToImages(pdfBytes, 20) : [];
                 if (scannedImgs.length > 0) {
-                    return { text: pdfText, images: scannedImgs, isVisualInput: true, isScannedPdf: true };
+                    return { text: meta.text, images: scannedImgs, isVisualInput: true, isScannedPdf: true };
                 }
             }
-            return { text: pdfText, images: [], isVisualInput: false, isScannedPdf: false };
+            return { text: meta.text, images: [], isVisualInput: false, isScannedPdf: false };
         }
 
-        const txt = await extractDocumentTextForAi(firstItem);
-        return { text: txt, images: [], isVisualInput: false, isScannedPdf: false };
+        const docRes = await extractDocumentTextForAi(firstItem);
+        let text = docRes.text || "";
+        const images = [];
+
+        if (docRes.embeddedPdfBase64 && text.replace(/\s+/g, "").length < 100) {
+            try {
+                const pdfBytes = base64ToUint8Array(docRes.embeddedPdfBase64);
+                const meta = await extractPdfTextMetaFromBytes(pdfBytes, 50);
+                if (meta.text) {
+                    text = text ? `${text}\n\n${meta.text}` : meta.text;
+                }
+                if (isPdfTextTooSparse(meta.text, meta.totalPages, meta.textPageCount)) {
+                    const scannedImgs = await renderScannedPdfPagesToImages(pdfBytes, 20);
+                    if (scannedImgs.length > 0) {
+                        return { text, images: scannedImgs, isVisualInput: true, isScannedPdf: true };
+                    }
+                }
+            } catch (err) {
+                console.warn("[BlackHole ZIP 동봉 PDF 추출 실패]", err);
+            }
+        }
+
+        if (images.length === 0 && (!text || text.replace(/\s+/g, "").length < 40) && Array.isArray(docRes.embeddedImages) && docRes.embeddedImages.length > 0) {
+            const rawImgs = docRes.embeddedImages.slice(0, 20);
+            const isBulk = rawImgs.length > 10;
+            for (const item of rawImgs) {
+                if (!item || !item.base64) continue;
+                const mime = item.mimeType || "image/jpeg";
+                const dataUrl = `data:${mime};base64,${item.base64}`;
+                const normalized = await resizeImageDataUrlToPayload(
+                    dataUrl,
+                    mime === "image/png" ? "image/png" : "image/jpeg",
+                    isBulk ? 1500 : 2000,
+                    isBulk ? 0.76 : 0.86
+                );
+                if (normalized) images.push(normalized);
+            }
+            if (images.length > 0) {
+                return { text, images, isVisualInput: true, isScannedPdf: false };
+            }
+        }
+
+        return { text, images: [], isVisualInput: false, isScannedPdf: false };
     }
 
     async function buildBlackHoleSummaryResult(list, modeKey, foldChecked, options = {}) {
@@ -2575,8 +2740,8 @@
         const conciseReportMode = !!(options && options.conciseChecked);
         const customUserPrompt = String((options && options.userPromptText) || "").trim();
 
-        // 1. 문서 본문 텍스트 또는 이미지/스캔 PDF 추출
-        const extractedInput = await extractDocumentImagesAndTextForAi(firstItem);
+        // 1. 문서 본문 텍스트 또는 이미지/스캔 PDF 추출 (다중 이미지·ZIP 내 PDF 포함 최대 20장)
+        const extractedInput = await extractDocumentImagesAndTextForAi(list);
         const rawFileText = extractedInput.text || "";
         const extractedImages = Array.isArray(extractedInput.images) ? extractedInput.images : [];
         const hasImages = extractedImages.length > 0;
@@ -2646,7 +2811,10 @@
             if (customUserPrompt) {
                 userPromptSections.push(`[사용자 추가 프롬프트 (할루시네이션 0% 원칙 범위 내에서 최우선 반영)]\n${customUserPrompt}`);
             }
-            if (rawFileText) {
+            if (rawFileText && hasImages) {
+                userPromptSections.push(`파일명: ${rawFileName}\n\n[문서 원문(일부 추출)]\n${rawFileText}`);
+                userPromptSections.push(`[첨부 이미지/스캔 문서(${extractedImages.length}장)도 함께 정밀 판독하여 텍스트·표·도표 내용을 모두 반영해 위 JSON 스키마 형식으로 분석·요약하세요.]`);
+            } else if (rawFileText) {
                 userPromptSections.push(`파일명: ${rawFileName}\n\n[문서 원문]\n${rawFileText}`);
             } else {
                 userPromptSections.push(`파일명: ${rawFileName}\n\n[첨부 이미지/스캔 문서(${extractedImages.length}장)를 직접 판독해 위 JSON 스키마 형식으로 분석·요약하세요.]`);
