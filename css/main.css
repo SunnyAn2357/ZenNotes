@@ -8000,6 +8000,97 @@ body.light-theme .zen-bh-model-opt-icon {
     color: #0f172a;
 }
 
+/* ============================================================================
+   [V1.8.2] 가운데 편집 창 전용 초슬림 자동 숨김 오버레이 스크롤바
+   ============================================================================ */
+.zen-center-scrollbar {
+    position: fixed;
+    right: 2px;
+    top: 72px;
+    height: calc(100vh - 80px);
+    width: 14px;
+    z-index: 950;
+    display: none;
+    pointer-events: auto;
+    touch-action: none;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    caret-color: transparent !important;
+}
+
+.zen-center-scrollbar.has-overflow {
+    display: block;
+}
+
+.zen-center-scrollbar-thumb {
+    position: absolute;
+    top: 0;
+    right: 2px;
+    width: 4px;
+    min-height: 32px;
+    border-radius: 999px;
+    background-color: rgba(148, 163, 184, 0.42);
+    opacity: 0;
+    will-change: transform, opacity;
+    transition: opacity 0.22s ease, width 0.16s ease, background-color 0.16s ease;
+    cursor: pointer;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    caret-color: transparent !important;
+}
+
+.zen-center-scrollbar.is-active .zen-center-scrollbar-thumb,
+.zen-center-scrollbar.is-hovered .zen-center-scrollbar-thumb,
+.zen-center-scrollbar.is-dragging .zen-center-scrollbar-thumb {
+    opacity: 1;
+}
+
+.zen-center-scrollbar.is-hovered .zen-center-scrollbar-thumb,
+.zen-center-scrollbar.is-dragging .zen-center-scrollbar-thumb {
+    width: 7px;
+    background-color: rgba(148, 163, 184, 0.72);
+}
+
+.zen-center-scrollbar.is-dragging .zen-center-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.86);
+    cursor: grabbing;
+}
+
+body.light-theme .zen-center-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.36);
+}
+
+body.light-theme .zen-center-scrollbar.is-hovered .zen-center-scrollbar-thumb,
+body.light-theme .zen-center-scrollbar.is-dragging .zen-center-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.65);
+}
+
+body.light-theme .zen-center-scrollbar.is-dragging .zen-center-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.80);
+}
+
+body.zen-scrollbar-dragging,
+body.zen-scrollbar-dragging * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+@media (pointer: coarse) {
+    .zen-center-scrollbar:not(.is-active):not(.is-dragging) {
+        pointer-events: none;
+    }
+}
+
+@media print {
+    .zen-center-scrollbar {
+        display: none !important;
+    }
+}
+
+body.is-pdf-exporting .zen-center-scrollbar {
+    display: none !important;
+}
+
 /* [V1.7.1] 모든 실제 입력란에서는 캐럿 커서 및 텍스트 선택 항상 보장 */
 input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
 textarea,

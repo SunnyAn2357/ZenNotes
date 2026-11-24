@@ -2251,6 +2251,11 @@ function applyEditorZoom(newScale, silentToast = false) {
     window.syncZenImageResizerPosition();
   }
 
+  // 가운데 편집 창 초슬림 스크롤바 위치/크기 실시간 동기화
+  if (typeof window.refreshCenterEditorScrollbar === "function") {
+    window.refreshCenterEditorScrollbar();
+  }
+
   // 100% 여부에 따른 토스트 제어
   if (Math.abs(editorZoomLevel - 1.0) > 0.02) {
     if (!silentToast) {
@@ -2473,6 +2478,373 @@ function initSidebarResizer() {
   });
 }
 
+// ============================================================================
+// [V1.8.2] 가운데 편집 창 전용 초슬림 자동 숨김 오버레이 스크롤바
+// ============================================================================
+function initCenterEditorScrollbar() {
+  if (window.__zenCenterScrollbarInitialized) {
+    if (typeof window.refreshCenterEditorScrollbar === "function") {
+      window.refreshCenterEditorScrollbar();
+    }
+    return;
+  }
+  window.__zenCenterScrollbarInitialized = true;
+
+  let track = document.getElementById("zen-center-scrollbar");
+  let thumb = track ? track.querySelector(".zen-center-scrollbar-thumb") : null;
+  if (!track) {
+    track = document.createElement("div");
+    track.id = "zen-center-scrollbar";
+    track.className = "zen-center-scrollbar";
+    track.setAttribute("aria-hidden", "true");
+
+    thumb = document.createElement("div");
+    thumb.className = "zen-center-scrollbar-thumb";
+    track.appendChild(thumb);
+    document.body.appendChild(track);
+  }
+
+  const MIN_OVERFLOW_PX = 2;
+  const MIN_THUMB_HEIGHT_PX = 32;
+  const HIDE_DELAY_SCROLL_MS = 1200;
+  const HIDE_DELAY_LEAVE_MS = 800;
+
+  let hideTimer = null;
+  let rafId = 0;
+  let isHovered = false;
+  let isDragging = false;
+  let lastScrolledEl = null;
+  let currentTrackHeight = 0;
+  let currentThumbHeight = MIN_THUMB_HEIGHT_PX;
+  let currentMaxScroll = 0;
+
+  let resizeObserver = null;
+  let editorMutationObserver = null;
+  let stateMutationObserver = null;
+  const observedResizeTargets = new WeakSet();
+  const observedMutationTargets = new WeakSet();
+  const observedImageLoadTargets = new WeakSet();
+
+  function getCandidateElements() {
+    return {
+      qlEditor: document.querySelector("#editor .ql-editor"),
+      editorContainer: document.getElementById("editor"),
+      colCenter: document.querySelector(".col-center"),
+    };
+  }
+
+  function isCenterScrollCandidate(el) {
+    if (!el || el.nodeType !== 1) return false;
+    const { qlEditor, editorContainer, colCenter } = getCandidateElements();
+    return el === qlEditor || el === editorContainer || el === colCenter;
+  }
+
+  function getOverflowAmount(el) {
+    if (!el || !el.isConnected) return 0;
+    return Math.max(0, el.scrollHeight - el.clientHeight);
+  }
+
+  function getActiveScrollEl() {
+    const { qlEditor, editorContainer, colCenter } = getCandidateElements();
+    if (lastScrolledEl && isCenterScrollCandidate(lastScrolledEl) && getOverflowAmount(lastScrolledEl) > MIN_OVERFLOW_PX) {
+      return lastScrolledEl;
+    }
+
+    const ordered = window.innerWidth <= 768
+      ? [colCenter, editorContainer, qlEditor]
+      : [qlEditor, editorContainer, colCenter];
+
+    let bestEl = null;
+    let bestOverflow = MIN_OVERFLOW_PX;
+    for (const candidate of ordered) {
+      const overflow = getOverflowAmount(candidate);
+      if (overflow > bestOverflow) {
+        bestOverflow = overflow;
+        bestEl = candidate;
+      }
+    }
+    return bestEl;
+  }
+
+  function shouldSuppressScrollbar() {
+    const fmPane = document.getElementById("file-manager-pane");
+    if (fmPane && (fmPane.style.display === "flex" || fmPane.style.display === "block")) {
+      return true;
+    }
+    if (document.body.classList.contains("is-pdf-exporting")) {
+      return true;
+    }
+    if (window.__zenAppScreenLocked === true) {
+      return true;
+    }
+    return false;
+  }
+
+  function clearHideTimer() {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+
+  function resetScrollbarState() {
+    clearHideTimer();
+    currentTrackHeight = 0;
+    currentMaxScroll = 0;
+    track.classList.remove("has-overflow", "is-active", "is-hovered", "is-dragging");
+  }
+
+  function syncTrackAndThumb() {
+    if (shouldSuppressScrollbar()) {
+      resetScrollbarState();
+      return null;
+    }
+
+    const el = getActiveScrollEl();
+    if (!el) {
+      resetScrollbarState();
+      return null;
+    }
+
+    const scrollHeight = el.scrollHeight;
+    const clientHeight = el.clientHeight;
+    const maxScroll = scrollHeight - clientHeight;
+    if (scrollHeight <= 0 || clientHeight <= 0 || maxScroll <= MIN_OVERFLOW_PX) {
+      resetScrollbarState();
+      return null;
+    }
+
+    let top = 72;
+    let bottom = 8;
+    if (window.innerWidth <= 768) {
+      top = 68;
+      bottom = 58;
+    } else {
+      const editorContainer = document.getElementById("editor");
+      if (editorContainer) {
+        const rect = editorContainer.getBoundingClientRect();
+        top = Math.max(Math.round(rect.top) + 6, 70);
+      }
+    }
+
+    const trackHeight = Math.max(40, window.innerHeight - top - bottom);
+    const thumbHeight = Math.max(
+      MIN_THUMB_HEIGHT_PX,
+      Math.min(trackHeight, Math.round((clientHeight / scrollHeight) * trackHeight))
+    );
+    const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+    const ratio = Math.max(0, Math.min(1, el.scrollTop / maxScroll));
+    const thumbTop = Math.round(ratio * maxThumbTop);
+
+    currentTrackHeight = trackHeight;
+    currentThumbHeight = thumbHeight;
+    currentMaxScroll = maxScroll;
+
+    track.style.top = top + "px";
+    track.style.height = trackHeight + "px";
+    thumb.style.height = thumbHeight + "px";
+    thumb.style.transform = "translateY(" + thumbTop + "px)";
+    track.classList.add("has-overflow");
+
+    return el;
+  }
+
+  function scheduleSync() {
+    if (rafId) return;
+    rafId = window.requestAnimationFrame(() => {
+      rafId = 0;
+      syncTrackAndThumb();
+    });
+  }
+
+  function revealTemporarily(delayMs = HIDE_DELAY_SCROLL_MS) {
+    if (!track.classList.contains("has-overflow")) return;
+    track.classList.add("is-active");
+    clearHideTimer();
+    if (!isHovered && !isDragging) {
+      hideTimer = setTimeout(() => {
+        hideTimer = null;
+        if (!isHovered && !isDragging) {
+          track.classList.remove("is-active");
+        }
+      }, delayMs);
+    }
+  }
+
+  function onDocumentScroll(e) {
+    if (!isCenterScrollCandidate(e.target)) return;
+    lastScrolledEl = e.target;
+    if (rafId) {
+      window.cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    const activeEl = syncTrackAndThumb();
+    if (activeEl) {
+      revealTemporarily(HIDE_DELAY_SCROLL_MS);
+    }
+  }
+
+  function startDrag(e, targetEl) {
+    const el = targetEl || syncTrackAndThumb();
+    if (!el) return;
+
+    const initialMaxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
+    const initialMaxThumbTop = Math.max(0, currentTrackHeight - currentThumbHeight);
+    if (initialMaxThumbTop <= 0) return;
+
+    isDragging = true;
+    clearHideTimer();
+    track.classList.add("is-active", "is-dragging");
+    document.body.classList.add("zen-scrollbar-dragging");
+
+    const startClientY = e.clientY;
+    const startScrollTop = el.scrollTop;
+
+    function onPointerMove(moveEvent) {
+      if (!isDragging) return;
+      const latestMaxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
+      const latestMaxThumbTop = Math.max(1, currentTrackHeight - currentThumbHeight);
+      const deltaY = moveEvent.clientY - startClientY;
+      const nextScrollTop = startScrollTop + (deltaY / latestMaxThumbTop) * latestMaxScroll;
+      el.scrollTop = Math.max(0, Math.min(latestMaxScroll, nextScrollTop));
+      syncTrackAndThumb();
+    }
+
+    function stopDrag() {
+      if (!isDragging) return;
+      isDragging = false;
+      track.classList.remove("is-dragging");
+      document.body.classList.remove("zen-scrollbar-dragging");
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", stopDrag);
+      window.removeEventListener("pointercancel", stopDrag);
+      window.removeEventListener("blur", stopDrag);
+      if (!isHovered) {
+        revealTemporarily(HIDE_DELAY_SCROLL_MS);
+      }
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", stopDrag);
+    window.addEventListener("pointercancel", stopDrag);
+    window.addEventListener("blur", stopDrag);
+  }
+
+  function ensureObservers() {
+    const { qlEditor, editorContainer, colCenter } = getCandidateElements();
+
+    if (typeof ResizeObserver === "function") {
+      if (!resizeObserver) {
+        resizeObserver = new ResizeObserver(scheduleSync);
+      }
+      for (const el of [colCenter, editorContainer, qlEditor]) {
+        if (el && !observedResizeTargets.has(el)) {
+          observedResizeTargets.add(el);
+          resizeObserver.observe(el);
+        }
+      }
+    }
+
+    if (typeof MutationObserver === "function") {
+      if (!editorMutationObserver) {
+        editorMutationObserver = new MutationObserver(scheduleSync);
+      }
+      if (editorContainer && !observedMutationTargets.has(editorContainer)) {
+        observedMutationTargets.add(editorContainer);
+        editorMutationObserver.observe(editorContainer, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      }
+
+      if (!stateMutationObserver) {
+        stateMutationObserver = new MutationObserver(scheduleSync);
+      }
+      const fmPane = document.getElementById("file-manager-pane");
+      if (fmPane && !observedMutationTargets.has(fmPane)) {
+        observedMutationTargets.add(fmPane);
+        stateMutationObserver.observe(fmPane, { attributes: true, attributeFilter: ["style"] });
+      }
+      const appLockOverlay = document.getElementById("app-lock-overlay");
+      if (appLockOverlay && !observedMutationTargets.has(appLockOverlay)) {
+        observedMutationTargets.add(appLockOverlay);
+        stateMutationObserver.observe(appLockOverlay, { attributes: true, attributeFilter: ["style"] });
+      }
+      if (document.body && !observedMutationTargets.has(document.body)) {
+        observedMutationTargets.add(document.body);
+        stateMutationObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      }
+    }
+
+    if (editorContainer && !observedImageLoadTargets.has(editorContainer)) {
+      observedImageLoadTargets.add(editorContainer);
+      editorContainer.addEventListener("load", scheduleSync, { capture: true, passive: true });
+    }
+  }
+
+  track.addEventListener("mouseenter", () => {
+    isHovered = true;
+    clearHideTimer();
+    const activeEl = syncTrackAndThumb();
+    if (activeEl) {
+      track.classList.add("is-hovered", "is-active");
+    }
+  });
+
+  track.addEventListener("mouseleave", () => {
+    isHovered = false;
+    track.classList.remove("is-hovered");
+    if (!isDragging) {
+      revealTemporarily(HIDE_DELAY_LEAVE_MS);
+    }
+  });
+
+  thumb.addEventListener("pointerdown", (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const activeEl = syncTrackAndThumb();
+    if (activeEl) {
+      startDrag(e, activeEl);
+    }
+  });
+
+  track.addEventListener("pointerdown", (e) => {
+    if (e.target !== track) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const activeEl = syncTrackAndThumb();
+    if (!activeEl) return;
+
+    const trackRect = track.getBoundingClientRect();
+    const clickY = e.clientY - trackRect.top;
+    const maxThumbTop = Math.max(0, currentTrackHeight - currentThumbHeight);
+    const targetThumbTop = Math.max(0, Math.min(maxThumbTop, clickY - currentThumbHeight / 2));
+    const jumpRatio = maxThumbTop > 0 ? (targetThumbTop / maxThumbTop) : 0;
+    const maxScroll = Math.max(0, activeEl.scrollHeight - activeEl.clientHeight);
+    activeEl.scrollTop = jumpRatio * maxScroll;
+    syncTrackAndThumb();
+    startDrag(e, activeEl);
+  });
+
+  track.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  document.addEventListener("scroll", onDocumentScroll, { passive: true, capture: true });
+  window.addEventListener("resize", scheduleSync, { passive: true });
+
+  window.refreshCenterEditorScrollbar = () => {
+    ensureObservers();
+    scheduleSync();
+  };
+
+  ensureObservers();
+  syncTrackAndThumb();
+}
+
 // 하위 호환성 글로벌 함수 노출
 window.toggleSidebarSearchBar = toggleSidebarSearchBar;
 window.closeSidebarSearchBar = closeSidebarSearchBar;
@@ -2484,5 +2856,8 @@ window.resetAppZoomScale = resetEditorZoom;
 window.resetEditorZoom = resetEditorZoom;
 window.applyEditorZoom = applyEditorZoom;
 window.initSidebarResizer = initSidebarResizer;
+window.initCenterEditorScrollbar = initCenterEditorScrollbar;
 window.addEventListener("DOMContentLoaded", initEditorZoomEngine);
 window.addEventListener("DOMContentLoaded", initSidebarResizer);
+window.addEventListener("DOMContentLoaded", initCenterEditorScrollbar);
+window.addEventListener("load", initCenterEditorScrollbar);
