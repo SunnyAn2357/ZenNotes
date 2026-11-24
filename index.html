@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.8.3">
-    <link rel="manifest" href="manifest.json?v=1.8.3">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.8.4">
+    <link rel="manifest" href="manifest.json?v=1.8.4">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.8.3">
+    <link rel="stylesheet" href="css/main.css?v=1.8.4">
 
 </head>
 
@@ -1163,20 +1163,48 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.8.3"></script>
-    <script src="js/db.js?v=1.8.3"></script>
-    <script src="js/ui.js?v=1.8.3"></script>
-    <script src="js/editor.js?v=1.8.3"></script>
-    <script src="js/file_manager.js?v=1.8.3"></script>
-    <script src="js/io.js?v=1.8.3"></script>
-    <script src="js/auth.js?v=1.8.3"></script>
-    <script src="js/zen_bridge.js?v=1.8.3"></script>
+    <!-- [V1.8.4] 쪽지 AI 분석 제목 초안 확정 모달 -->
+    <div id="zen-memo-title-modal" class="zen-mt-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="zen-mt-title-heading">
+        <div class="zen-mt-modal" onclick="event.stopPropagation()">
+            <div class="zen-mt-header">
+                <span id="zen-mt-title-heading" class="zen-mt-heading">쪽지 제목 확정</span>
+                <button type="button" id="zen-mt-close-btn" class="zen-mt-close-btn" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="zen-mt-body">
+                <div class="zen-mt-desc">AI가 작성한 제목 초안을 확인하고 필요 시 수정해 주세요.</div>
+                <input type="text" id="zen-mt-title-input" class="zen-mt-input" maxlength="100" placeholder="쪽지 제목을 입력하세요">
+                <div id="zen-mt-folder-preview-wrap" class="zen-mt-preview-box" style="display: none;">
+                    <div class="zen-mt-preview-label">자동 폴더링 저장 위치</div>
+                    <div id="zen-mt-folder-preview" class="zen-mt-preview-path"></div>
+                </div>
+                <div id="zen-mt-attach-wrap" class="zen-mt-preview-box" style="display: none;">
+                    <div id="zen-mt-attach-label" class="zen-mt-preview-label">수집된 첨부파일 (원본 복사 저장)</div>
+                    <div id="zen-mt-attach-list" class="zen-mt-attach-list"></div>
+                </div>
+            </div>
+            <div class="zen-mt-footer">
+                <button type="button" id="zen-mt-cancel-btn" class="zen-mt-btn-cancel">취소</button>
+                <button type="button" id="zen-mt-confirm-btn" class="zen-mt-btn-confirm">확정 및 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/globals.js?v=1.8.4"></script>
+    <script src="js/db.js?v=1.8.4"></script>
+    <script src="js/ui.js?v=1.8.4"></script>
+    <script src="js/editor.js?v=1.8.4"></script>
+    <script src="js/file_manager.js?v=1.8.4"></script>
+    <script src="js/io.js?v=1.8.4"></script>
+    <script src="js/auth.js?v=1.8.4"></script>
+    <script src="js/zen_bridge.js?v=1.8.4"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.8.3");
+            console.log("[ZenNotes] 현재 버전: V1.8.4");
             console.log("=========================================");
         });
     </script>

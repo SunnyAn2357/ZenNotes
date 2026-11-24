@@ -1005,12 +1005,24 @@
         window.chrome.webview.addEventListener("message", (event) => {
             try {
                 const payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-                if (!payload || !payload.reqId) return;
-                const entry = pendingDesktopReqMap.get(payload.reqId);
-                if (entry) {
-                    clearTimeout(entry.timer);
-                    pendingDesktopReqMap.delete(payload.reqId);
-                    entry.resolve(payload);
+                if (!payload) return;
+
+                if (payload.reqId) {
+                    const entry = pendingDesktopReqMap.get(payload.reqId);
+                    if (entry) {
+                        clearTimeout(entry.timer);
+                        pendingDesktopReqMap.delete(payload.reqId);
+                        entry.resolve(payload);
+                        return;
+                    }
+                }
+
+                if (payload.type === "externalMemoDragState" && typeof handleExternalMemoDragStateEvent === "function") {
+                    handleExternalMemoDragStateEvent(payload);
+                } else if (payload.type === "miryangMemoCaptureStarted" && typeof handleMiryangMemoCaptureStartedEvent === "function") {
+                    handleMiryangMemoCaptureStartedEvent(payload);
+                } else if (payload.type === "miryangMemoCaptured" && typeof handleCapturedMiryangMemoPayload === "function") {
+                    handleCapturedMiryangMemoPayload(payload);
                 }
             } catch { }
         });
@@ -1183,8 +1195,8 @@
         memo: {
             label: "쪽지 분석",
             defaultFolding: true,
-            prompt: "쪽지를 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
-            hint: "쪽지 본문만 AI 전송·분석합니다(첨부 제외)."
+            prompt: "받은 쪽지 창을 블랙홀에 끌어다 놓거나 파일을 던져 넣으세요(개인정보X, 비공개문서X).",
+            hint: "쪽지 본문 및 첨부파일을 함께 AI 전송·분석합니다."
         },
         summary: {
             label: "문서 요약",
@@ -1515,12 +1527,35 @@
             : "문서 없이 프롬프트 전송은 '문서 요약' 탭에서 사용할 수 있습니다.";
     }
 
+    function notifyDesktopBlackHolePortalState(isOpen) {
+        if (!isDesktopWebViewEnv()) return;
+        try {
+            let rectObj = null;
+            if (isOpen) {
+                const shell = document.getElementById("zen-blackhole-portal-shell");
+                if (shell) {
+                    const r = shell.getBoundingClientRect();
+                    if (r && r.width > 40 && r.height > 40) {
+                        rectObj = { left: r.left, top: r.top, width: r.width, height: r.height };
+                    }
+                }
+            }
+            window.chrome.webview.postMessage(JSON.stringify({
+                type: "blackHolePortalState",
+                open: !!isOpen,
+                rect: rectObj
+            }));
+        } catch { }
+    }
+
     function openBlackHolePortal() {
         const layer = document.getElementById("zen-blackhole-portal-layer");
         const shell = document.getElementById("zen-blackhole-portal-shell");
         const btn = document.getElementById("zen-blackhole-btn");
+        const dropZone = document.getElementById("zen-bh-orb-dropzone");
         if (!layer || !shell) return;
 
+        bindDesktopBridgeResponseListener();
         clearBlackHoleTimers();
         if (bhOrbitDots.length === 0) initBlackHoleParticles();
         bhSwallowing = false;
@@ -1528,6 +1563,7 @@
         bhFlashLevel = 0;
         bhShockActive = false;
         bhTargetHover = 0;
+        if (dropZone) dropZone.classList.remove("is-drag-hover", "is-external-memo-hover");
 
         closeBlackHoleModelDropdown();
         syncBlackHoleModelPickerUI();
@@ -1546,6 +1582,11 @@
         if (btn) btn.classList.add("is-active");
         if (!bhRafId) bhRafId = requestAnimationFrame(renderBlackHoleCanvasFrame);
 
+        notifyDesktopBlackHolePortalState(true);
+        setTimeout(() => {
+            if (bhIsOpen) notifyDesktopBlackHolePortalState(true);
+        }, 320);
+
         try {
             history.pushState({ modal: "blackhole-portal" }, "");
         } catch { }
@@ -1555,6 +1596,7 @@
         const layer = document.getElementById("zen-blackhole-portal-layer");
         const shell = document.getElementById("zen-blackhole-portal-shell");
         const btn = document.getElementById("zen-blackhole-btn");
+        const dropZone = document.getElementById("zen-bh-orb-dropzone");
         if (!layer || layer.style.display === "none") return;
 
         closeBlackHoleModelDropdown();
@@ -1565,6 +1607,10 @@
         bhSwallowing = false;
         setBlackHoleSendingUi(false);
         bhIsOpen = false;
+        bhTargetHover = 0;
+        if (dropZone) dropZone.classList.remove("is-drag-hover", "is-external-memo-hover");
+        notifyDesktopBlackHolePortalState(false);
+
         if (bhRafId) {
             cancelAnimationFrame(bhRafId);
             bhRafId = null;
@@ -2461,6 +2507,22 @@
         return "";
     }
 
+    function normalizeVerifiedDateWithYear(verifiedDateStr, referenceYear) {
+        const s = String(verifiedDateStr || "").trim();
+        if (!s) return "";
+        if (/(\d{4})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/.test(s)) return s;
+        const m = s.match(/(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/);
+        const yr = Number(referenceYear) > 2000 ? Number(referenceYear) : new Date().getFullYear();
+        if (m) {
+            const mo = parseInt(m[1], 10);
+            const dy = parseInt(m[2], 10);
+            if (!isNaN(mo) && !isNaN(dy) && mo >= 1 && mo <= 12 && dy >= 1 && dy <= 31) {
+                return `${yr}-${pad2(mo)}-${pad2(dy)}`;
+            }
+        }
+        return s;
+    }
+
     function isModelSupportingVision(modelId) {
         return resolveMyAiProvider(modelId) !== "upstage";
     }
@@ -2732,19 +2794,274 @@
         return { text, images: [], isVisualInput: false, isScannedPdf: false };
     }
 
+    function buildOfficialOrMemoNoteHtml({
+        headerBadge,
+        docTitleText,
+        verifiedDueDate,
+        verifiedSubmitTarget,
+        summaryLead,
+        coreContent,
+        keyPoints,
+        copiedAttachments,
+        docFilePath,
+        folderPath,
+        modeKey,
+        foldChecked
+    }) {
+        const htmlParts = [
+            `<p><strong>${escapeHtmlStr(headerBadge)}</strong></p>`
+        ];
+
+        if (summaryLead) {
+            htmlParts.push(`<blockquote><span style="background-color: rgb(254, 240, 138);">${escapeHtmlStr(summaryLead)}</span></blockquote>`);
+        }
+
+        htmlParts.push(`<p><br></p>`);
+        htmlParts.push([
+            `<table><tbody>`,
+            `<tr>`,
+            `<td data-row="row-1"><strong>문서명</strong></td>`,
+            `<td data-row="row-1"><strong>일정 / 기한</strong></td>`,
+            `<td data-row="row-1"><strong>장소 / 제출처</strong></td>`,
+            `<td data-row="row-1"><strong>핵심 내용</strong></td>`,
+            `</tr>`,
+            `<tr>`,
+            `<td data-row="row-2">${escapeHtmlStr(docTitleText)}</td>`,
+            `<td data-row="row-2">${escapeHtmlStr(verifiedDueDate)}</td>`,
+            `<td data-row="row-2">${escapeHtmlStr(verifiedSubmitTarget)}</td>`,
+            `<td data-row="row-2">${escapeHtmlStr(coreContent)}</td>`,
+            `</tr>`,
+            `</tbody></table>`
+        ].join(""));
+
+        if (Array.isArray(keyPoints) && keyPoints.length > 0) {
+            const liHtml = keyPoints
+                .map((pt) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(pt)}</li>`)
+                .join("");
+            htmlParts.push(`<p><br></p><p><strong>주요 내용</strong></p><ol>${liHtml}</ol>`);
+        }
+
+        if (Array.isArray(copiedAttachments) && copiedAttachments.length > 0) {
+            const attLiHtml = copiedAttachments
+                .map((fn) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(fn)}</li>`)
+                .join("");
+            htmlParts.push(`<p><br></p><p><strong>첨부파일 (원본 복사 보관)</strong></p><ol>${attLiHtml}</ol>`);
+        }
+
+        const linkLabel = modeKey === "official" ? "공문 열기" : modeKey === "memo" ? "쪽지 보기" : "문서 열기";
+        if (foldChecked && folderPath) {
+            htmlParts.push(`<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">${linkLabel}</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`);
+        }
+
+        return htmlParts.join("");
+    }
+
+    function promptMemoTitleConfirmation({ draftTitle, folderDatePrefix, foldChecked, attachmentNames }) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById("zen-memo-title-modal");
+            const input = document.getElementById("zen-mt-title-input");
+            const previewWrap = document.getElementById("zen-mt-folder-preview-wrap");
+            const previewPath = document.getElementById("zen-mt-folder-preview");
+            const attachWrap = document.getElementById("zen-mt-attach-wrap");
+            const attachList = document.getElementById("zen-mt-attach-list");
+            const confirmBtn = document.getElementById("zen-mt-confirm-btn");
+            const cancelBtn = document.getElementById("zen-mt-cancel-btn");
+            const closeBtn = document.getElementById("zen-mt-close-btn");
+
+            const baseDraft = String(draftTitle || "").trim() || "새 쪽지";
+            if (!modal || !input) {
+                resolve(baseDraft);
+                return;
+            }
+
+            const updatePreview = () => {
+                if (!previewWrap || !previewPath) return;
+                if (!foldChecked) {
+                    previewWrap.style.display = "none";
+                    return;
+                }
+                previewWrap.style.display = "block";
+                const rawVal = (input.value || "").trim() || baseDraft;
+                const safeFolderName = rawVal.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_").slice(0, 48) || "쪽지";
+                previewPath.textContent = `D:\\MY_Apps\\쪽지\\${folderDatePrefix}_${safeFolderName}\\`;
+            };
+
+            input.value = baseDraft;
+            updatePreview();
+
+            if (attachWrap && attachList) {
+                const names = Array.isArray(attachmentNames) ? attachmentNames.filter(Boolean) : [];
+                if (names.length > 0) {
+                    attachWrap.style.display = "block";
+                    attachList.innerHTML = names.map((nm, i) => `${i + 1}. ${escapeHtmlStr(nm)}`).join("<br>");
+                } else {
+                    attachWrap.style.display = "none";
+                    attachList.innerHTML = "";
+                }
+            }
+
+            modal.style.display = "flex";
+            setTimeout(() => {
+                try {
+                    input.focus();
+                    input.select();
+                } catch { }
+            }, 30);
+
+            let settled = false;
+            const cleanup = () => {
+                input.removeEventListener("input", onInput);
+                input.removeEventListener("keydown", onInputKeydown);
+                document.removeEventListener("keydown", onDocKeydown, true);
+                modal.removeEventListener("click", onOverlayClick);
+                if (confirmBtn) confirmBtn.removeEventListener("click", onConfirm);
+                if (cancelBtn) cancelBtn.removeEventListener("click", onCancel);
+                if (closeBtn) closeBtn.removeEventListener("click", onCancel);
+                modal.style.display = "none";
+            };
+            const finish = (val) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(val);
+            };
+            const onInput = () => updatePreview();
+            const onConfirm = () => finish((input.value || "").trim() || baseDraft);
+            const onCancel = () => finish(null);
+            const onOverlayClick = (e) => {
+                if (e.target === modal) onCancel();
+            };
+            const onInputKeydown = (e) => {
+                if (e.isComposing) return;
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onConfirm();
+                }
+            };
+            const onDocKeydown = (e) => {
+                if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onCancel();
+                }
+            };
+
+            input.addEventListener("input", onInput);
+            input.addEventListener("keydown", onInputKeydown);
+            document.addEventListener("keydown", onDocKeydown, true);
+            modal.addEventListener("click", onOverlayClick);
+            if (confirmBtn) confirmBtn.addEventListener("click", onConfirm);
+            if (cancelBtn) cancelBtn.addEventListener("click", onCancel);
+            if (closeBtn) closeBtn.addEventListener("click", onCancel);
+        });
+    }
+
+    async function finalizeMemoSummaryAfterTitleConfirm(pendingRes, confirmedTitle) {
+        const finalTitle = String(confirmedTitle || pendingRes?.draftTitle || "새 쪽지").trim() || "새 쪽지";
+        const safeSubjForFolder = finalTitle
+            .replace(/[\\/:*?"<>|]/g, "_")
+            .replace(/\s+/g, "_")
+            .slice(0, 48) || "쪽지";
+        const folderLabel = `${pendingRes.folderDatePrefix}_${safeSubjForFolder}`;
+
+        let folderPath = "";
+        let docFilePath = "";
+        let targetNoteFolderId = null;
+
+        if (pendingRes.foldChecked) {
+            if (pendingRes.tucPayload && isDesktopWebViewEnv()) {
+                const tuc = pendingRes.tucPayload;
+                const attPaths = Array.isArray(tuc.attachments)
+                    ? tuc.attachments.map((a) => a && a.fullPath).filter(Boolean)
+                    : [];
+                const diskRes = await callDesktopBridgeRequest(
+                    "saveMiryangMemoAutoFoldering",
+                    {
+                        folderLabel,
+                        senderLabel: tuc.senderLabel || "",
+                        windowTitle: tuc.windowTitle || "",
+                        capturedAtText: tuc.capturedAtText || "",
+                        bodyText: tuc.bodyText || "",
+                        bodyHtml: tuc.bodyHtml || "",
+                        screenshotBase64: tuc.screenshotBase64 || "",
+                        attachmentPaths: attPaths
+                    },
+                    25000
+                );
+                if (diskRes && diskRes.ok && diskRes.folderPath) {
+                    folderPath = diskRes.folderPath;
+                    docFilePath = diskRes.primaryFilePath || `${diskRes.folderPath}\\쪽지_원문.html`;
+                } else {
+                    folderPath = `D:\\MY_Apps\\쪽지\\${folderLabel}`;
+                    docFilePath = `${folderPath}\\쪽지_원문.html`;
+                }
+            } else {
+                const diskRes = await executeDiskAutoFoldering(pendingRes.list || [], "memo", folderLabel);
+                folderPath = diskRes.folderPath;
+                docFilePath = diskRes.docFilePath;
+            }
+            targetNoteFolderId = await ensureBlackHoleTargetNoteFolder("memo");
+        }
+
+        const attNames = pendingRes.tucPayload && Array.isArray(pendingRes.tucPayload.attachments)
+            ? pendingRes.tucPayload.attachments.map((a) => a && a.name).filter(Boolean)
+            : [];
+        const noteTitle = pendingRes.compactDue ? `${finalTitle} (${pendingRes.compactDue}까지)` : finalTitle;
+        const html = buildOfficialOrMemoNoteHtml({
+            headerBadge: pendingRes.headerBadge,
+            docTitleText: finalTitle,
+            verifiedDueDate: pendingRes.verifiedDueDate,
+            verifiedSubmitTarget: pendingRes.verifiedSubmitTarget,
+            summaryLead: pendingRes.summaryLead,
+            coreContent: pendingRes.coreContent,
+            keyPoints: pendingRes.keyPoints,
+            copiedAttachments: pendingRes.foldChecked ? attNames : [],
+            docFilePath,
+            folderPath,
+            modeKey: "memo",
+            foldChecked: pendingRes.foldChecked
+        });
+
+        return {
+            title: noteTitle,
+            html,
+            targetFolderId: targetNoteFolderId,
+            usedRealAi: true,
+            modelName: pendingRes.displayModelBadge
+        };
+    }
+
     async function buildBlackHoleSummaryResult(list, modeKey, foldChecked, options = {}) {
+        const preExtracted = (options && options.preExtracted) || null;
         const firstItem = (Array.isArray(list) && list[0]) ? list[0] : { name: "문서.txt" };
-        const rawFileName = String(firstItem.name || "문서").trim();
-        const baseName = rawFileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim() || "문서";
+        const rawFileName = preExtracted
+            ? String(preExtracted.rawFileName || "받은 쪽지").trim()
+            : String(firstItem.name || "문서").trim();
+        const baseName = preExtracted
+            ? String(preExtracted.baseName || "새 쪽지").trim()
+            : (rawFileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim() || "문서");
         const selectedModelMeta = getSelectedMyAiModelMeta();
         const conciseReportMode = !!(options && options.conciseChecked);
         const customUserPrompt = String((options && options.userPromptText) || "").trim();
 
         // 1. 문서 본문 텍스트 또는 이미지/스캔 PDF 추출 (다중 이미지·ZIP 내 PDF 포함 최대 20장)
-        const extractedInput = await extractDocumentImagesAndTextForAi(list);
+        const extractedInput = preExtracted
+            ? {
+                text: preExtracted.rawFileText || "",
+                images: Array.isArray(preExtracted.extractedImages) ? preExtracted.extractedImages : []
+            }
+            : await extractDocumentImagesAndTextForAi(list);
         const rawFileText = extractedInput.text || "";
         const extractedImages = Array.isArray(extractedInput.images) ? extractedInput.images : [];
         const hasImages = extractedImages.length > 0;
+        const referenceYear = preExtracted && Number(preExtracted.referenceYear) > 2000
+            ? Number(preExtracted.referenceYear)
+            : new Date().getFullYear();
+        const isForwardedMemo = modeKey === "memo" && (
+            (preExtracted && preExtracted.isForwarded) ||
+            /-{3,}\s*원본\s*내용\s*-{3,}/.test(rawFileText)
+        );
         const savedApiKey = getSavedMyAiApiKey();
 
         let aiData = null;
@@ -2777,6 +3094,16 @@
                 ? "[보고서 작성 형식]\n- 하단 상세 내용(sections 또는 keyPoints)은 개조식(핵심 요점 나열)으로 1장 보고서 분량에 맞게 간결하고 구조화하여 작성하세요. 상단 핵심 요약(summaryLead/overview)은 1~2문장으로 유지하세요."
                 : "[보고서 작성 형식]\n- 상단 인용구용 핵심 요지(summaryLead/overview)는 1~2문장으로 짧고 명확하게 유지하되, 보고서 하단의 상세 정리(sections 또는 keyPoints)에는 분량·줄 수·항목 수 제한을 두지 말고 원문에 담긴 핵심·세부 정보를 빠뜨리지 않도록 AI가 판단해 충실하고 자유롭게 정리하세요.";
 
+            const memoExtraRules = modeKey === "memo"
+                ? [
+                    `[쪽지 제목 초안 작성 규칙] 쪽지 헤더 제목은 비어 있는 경우가 많으므로 기존 파일명·빈 제목에 의존하지 말고 본문과 첨부파일의 핵심 업무를 압축한 명확하고 간결한 제목 초안(title)을 25자 이내로 직접 작성하세요.`,
+                    isForwardedMemo
+                        ? `[전달 쪽지 처리 규칙] 이 쪽지는 전달된 쪽지입니다. '원본 내용' 구분선 아래의 원본 본문에서 핵심 일정·기한·제출처·요청사항을 우선 기준으로 추출하고, 상단 전달자의 추가 지시도 함께 반영하세요.`
+                        : "",
+                    `[기준 연도 안내] 이 쪽지의 발신·수신 기준 연도는 ${referenceYear}년입니다. 본문에 '11.23.(월)'처럼 연도가 생략된 날짜가 있으면 반드시 '${referenceYear}-MM-DD' 형식으로 표기하세요.`
+                ].filter(Boolean).join("\n")
+                : "";
+
             const systemPrompt = modeKey === "summary"
                 ? [
                     "당신은 정확하고 신뢰할 수 있는 문서 요약 AI입니다.",
@@ -2795,17 +3122,18 @@
                 : [
                     `당신은 대한민국 행정·업무 ${modeKey === "official" ? "공문서" : "쪽지"} 분석 AI입니다.`,
                     zeroHallucinationRules,
+                    memoExtraRules,
                     reportStyleRule,
                     "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
                     "{",
-                    '  "title": "원문에 명시된 공문/쪽지 제목",',
-                    '  "dueDate": "원문에 명시된 제출/회신 마감일 또는 일시 (원문에 적힌 그대로 기재하되, 원문에 마감일/기한이 없으면 반드시 빈 문자열 \\"\\")",',
+                    `  "title": "${modeKey === "memo" ? "본문과 첨부파일의 핵심 업무를 압축한 간결한 쪽지 제목 초안 (25자 이내)" : "원문에 명시된 공문 제목"}",`,
+                    '  "dueDate": "원문에 명시된 제출/회신 마감일 또는 일시 (연도가 생략된 경우 기준 연도를 보정해 YYYY-MM-DD 형식 또는 원문 그대로 기재, 마감일/기한이 없으면 반드시 빈 문자열 \\"\\")",',
                     '  "submitTarget": "원문에 명시된 제출처/회신처/장소 (원문에 제출처나 장소가 없으면 반드시 빈 문자열 \\"\\")",',
                     '  "summaryLead": "상단 인용구용 핵심 요지 (원문에 있는 사실만 1~2문장으로 간결히 기재)",',
                     '  "coreContent": "표의 핵심 내용 칸에 들어갈 요지 (원문에 있는 사실만 기재)",',
                     '  "keyPoints": ["원문에 명시된 본문 내용, 세부 사항, 협조·조치 사항 등을 제한 없이 충실히 정리..."]',
                     "}"
-                ].join("\n");
+                ].filter(Boolean).join("\n");
 
             const userPromptSections = [];
             if (customUserPrompt) {
@@ -2862,20 +3190,54 @@
             ? `${autoSwitchedFrom} → ${resolvedModelName} 자동 전환`
             : resolvedModelName;
 
-        // 2. 원문 대조를 통한 날짜·제출처 할루시네이션 2중 검증 (이미지/스캔 PDF는 텍스트 원문 없을 시 플레이스홀더만 정제)
-        const verifiedDueDate = (aiData && aiData.dueDate)
+        // 2. 원문 대조를 통한 날짜·제출처 할루시네이션 2중 검증
+        let verifiedDueDate = (aiData && aiData.dueDate)
             ? (rawFileText && !hasImages
                 ? verifyDateExistsInSourceText(aiData.dueDate, rawFileText)
                 : cleanHallucinatedPlaceholder(aiData.dueDate))
             : "";
+        if (verifiedDueDate && modeKey === "memo") {
+            verifiedDueDate = normalizeVerifiedDateWithYear(verifiedDueDate, referenceYear);
+        }
         const verifiedSubmitTarget = (aiData && aiData.submitTarget)
             ? cleanHallucinatedPlaceholder(aiData.submitTarget)
             : "";
         const compactDue = extractCompactYmdFromVerifiedDate(verifiedDueDate);
 
-        // 3. 자동 폴더링 실행 (원문에 기한이 있으면 기한 날짜, 없으면 오늘 보관일자로 폴더 생성)
+        // 3. 날짜 접두어 & 초안 제목
         const folderDatePrefix = compactDue || getLocalTodayCompact();
         const rawSubj = cleanHallucinatedPlaceholder(aiData && aiData.title) || baseName;
+
+        // 4. [쪽지 분석 모드] AI 성공 시 사용자 최종 제목 확정 모달을 띄운 뒤 자동 폴더링·노트 저장 실행
+        if (modeKey === "memo" && aiData && !aiErrorNotice) {
+            const summaryLead = cleanHallucinatedPlaceholder(aiData.summaryLead);
+            const coreContent = cleanHallucinatedPlaceholder(aiData.coreContent);
+            const keyPoints = Array.isArray(aiData.keyPoints)
+                ? aiData.keyPoints.map((p) => cleanHallucinatedPlaceholder(p)).filter(Boolean)
+                : [];
+            return {
+                needsMemoTitleConfirmation: true,
+                draftTitle: rawSubj,
+                modeKey: "memo",
+                foldChecked: !!foldChecked,
+                folderDatePrefix,
+                compactDue,
+                verifiedDueDate,
+                verifiedSubmitTarget,
+                displayModelBadge,
+                headerBadge: `[MY AI 쪽지 분석 · ${displayModelBadge}]`,
+                summaryLead,
+                coreContent,
+                keyPoints,
+                rawFileName,
+                list,
+                tucPayload: preExtracted ? preExtracted.tucPayload : null,
+                usedRealAi: true,
+                modelName: displayModelBadge
+            };
+        }
+
+        // 5. 자동 폴더링 실행 (공문 분석 / 문서 요약 / 오류 폴백)
         const safeSubjForFolder = rawSubj
             .replace(/[\\/:*?"<>|]/g, "_")
             .replace(/\s+/g, "_")
@@ -2887,18 +3249,43 @@
         let targetNoteFolderId = null;
 
         if (foldChecked) {
-            const diskRes = await executeDiskAutoFoldering(list, modeKey, folderLabel);
-            folderPath = diskRes.folderPath;
-            docFilePath = diskRes.docFilePath;
+            if (preExtracted && preExtracted.tucPayload && isDesktopWebViewEnv()) {
+                const tuc = preExtracted.tucPayload;
+                const attPaths = Array.isArray(tuc.attachments)
+                    ? tuc.attachments.map((a) => a && a.fullPath).filter(Boolean)
+                    : [];
+                const diskRes = await callDesktopBridgeRequest(
+                    "saveMiryangMemoAutoFoldering",
+                    {
+                        folderLabel,
+                        senderLabel: tuc.senderLabel || "",
+                        windowTitle: tuc.windowTitle || "",
+                        capturedAtText: tuc.capturedAtText || "",
+                        bodyText: tuc.bodyText || "",
+                        bodyHtml: tuc.bodyHtml || "",
+                        screenshotBase64: tuc.screenshotBase64 || "",
+                        attachmentPaths: attPaths
+                    },
+                    25000
+                );
+                if (diskRes && diskRes.ok && diskRes.folderPath) {
+                    folderPath = diskRes.folderPath;
+                    docFilePath = diskRes.primaryFilePath || `${diskRes.folderPath}\\쪽지_원문.html`;
+                }
+            } else {
+                const diskRes = await executeDiskAutoFoldering(list, modeKey, folderLabel);
+                folderPath = diskRes.folderPath;
+                docFilePath = diskRes.docFilePath;
+            }
             targetNoteFolderId = await ensureBlackHoleTargetNoteFolder(modeKey);
         }
 
-        const linkLabel = modeKey === "official" ? "공문 열기" : modeKey === "memo" ? "쪽지 열기" : "문서 열기";
+        const linkLabel = modeKey === "official" ? "공문 열기" : modeKey === "memo" ? "쪽지 보기" : "문서 열기";
         const linksHtml = foldChecked && folderPath
             ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">${linkLabel}</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
             : "";
 
-        // 4. [일반 문서 요약 모드] 억지 4칸 표(기한/제출처) 없이 문서 본연의 핵심만 깔끔하게 구성
+        // 6. [일반 문서 요약 모드] 억지 4칸 표(기한/제출처) 없이 문서 본연의 핵심만 깔끔하게 구성
         if (modeKey === "summary") {
             const noteTitle = rawSubj;
             if (!aiData) {
@@ -2958,7 +3345,7 @@
             };
         }
 
-        // 5. [공문 분석 / 쪽지 분석 모드] 원문에 있는 사실만 표기하고, 없는 항목은 빈칸("")으로 유지
+        // 7. [공문 분석 / 오류 폴백]
         const noteTitle = compactDue ? `${rawSubj} (${compactDue}까지)` : rawSubj;
         const headerBadge = modeKey === "official"
             ? `[MY AI 공문 분석 · ${displayModelBadge}]`
@@ -2979,47 +3366,27 @@
             ? aiData.keyPoints.map((p) => cleanHallucinatedPlaceholder(p)).filter(Boolean)
             : [];
 
-        const htmlParts = [
-            `<p><strong>${escapeHtmlStr(headerBadge)}</strong></p>`
-        ];
-
-        if (summaryLead) {
-            htmlParts.push(`<blockquote><span style="background-color: rgb(254, 240, 138);">${escapeHtmlStr(summaryLead)}</span></blockquote>`);
-        }
-
-        htmlParts.push(`<p><br></p>`);
-        htmlParts.push([
-            `<table><tbody>`,
-            `<tr>`,
-            `<td data-row="row-1"><strong>문서명</strong></td>`,
-            `<td data-row="row-1"><strong>일정 / 기한</strong></td>`,
-            `<td data-row="row-1"><strong>장소 / 제출처</strong></td>`,
-            `<td data-row="row-1"><strong>핵심 내용</strong></td>`,
-            `</tr>`,
-            `<tr>`,
-            `<td data-row="row-2">${escapeHtmlStr(rawFileName)}</td>`,
-            `<td data-row="row-2">${escapeHtmlStr(verifiedDueDate)}</td>`,
-            `<td data-row="row-2">${escapeHtmlStr(verifiedSubmitTarget)}</td>`,
-            `<td data-row="row-2">${escapeHtmlStr(coreContent)}</td>`,
-            `</tr>`,
-            `</tbody></table>`
-        ].join(""));
-
-        if (keyPoints.length > 0) {
-            const liHtml = keyPoints
-                .map((pt) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(pt)}</li>`)
-                .join("");
-            htmlParts.push(`<p><br></p><p><strong>주요 내용</strong></p><ol>${liHtml}</ol>`);
-        }
-
-        if (linksHtml) htmlParts.push(linksHtml);
+        const html = buildOfficialOrMemoNoteHtml({
+            headerBadge,
+            docTitleText: rawFileName,
+            verifiedDueDate,
+            verifiedSubmitTarget,
+            summaryLead,
+            coreContent,
+            keyPoints,
+            copiedAttachments: [],
+            docFilePath,
+            folderPath,
+            modeKey,
+            foldChecked
+        });
 
         return {
             title: noteTitle,
-            html: htmlParts.join(""),
+            html,
             targetFolderId: targetNoteFolderId,
             usedRealAi: true,
-            modelName: resolvedModelName
+            modelName: displayModelBadge
         };
     }
 
@@ -3332,6 +3699,250 @@
         setTimeout(applyContent, 35);
     }
 
+    let bhExternalCaptureStartTs = 0;
+    let bhExternalCaptureWatchdog = null;
+
+    async function presentAndFinalizeBlackHoleResult(rawSummaryResult, activeMode) {
+        const meta = BH_MODE_META[activeMode] || BH_MODE_META.official;
+        const modelMeta = getSelectedMyAiModelMeta();
+        let finalSummary = rawSummaryResult;
+
+        if (rawSummaryResult && rawSummaryResult.needsMemoTitleConfirmation) {
+            const attNames = rawSummaryResult.tucPayload && Array.isArray(rawSummaryResult.tucPayload.attachments)
+                ? rawSummaryResult.tucPayload.attachments.map((a) => a && a.name).filter(Boolean)
+                : [];
+            const confirmedTitle = await promptMemoTitleConfirmation({
+                draftTitle: rawSummaryResult.draftTitle,
+                folderDatePrefix: rawSummaryResult.folderDatePrefix,
+                foldChecked: rawSummaryResult.foldChecked,
+                attachmentNames: attNames
+            });
+            if (!confirmedTitle) {
+                if (typeof showToast === "function") {
+                    showToast("쪽지 저장을 취소했습니다.");
+                }
+                return;
+            }
+            finalSummary = await finalizeMemoSummaryAfterTitleConfirm(rawSummaryResult, confirmedTitle);
+        }
+
+        openBlackHoleSummaryInNewNote(finalSummary);
+
+        if (typeof showToast === "function") {
+            if (finalSummary && finalSummary.aiErrorNotice) {
+                showToast(`${meta.label}: ${finalSummary.aiErrorNotice}`);
+            } else {
+                const usedLabel = (finalSummary && finalSummary.modelName) || modelMeta.name;
+                showToast(`[${usedLabel}] ${meta.label} 요약 노트가 생성되었습니다.`);
+            }
+        }
+
+        // 공문 분석(official)과 쪽지 분석(memo)이 정상 완료되었을 때만 1.2초 후 'MY 일정관리로 보내기' 팝업 자동 실행
+        if ((activeMode === "official" || activeMode === "memo") && finalSummary && finalSummary.usedRealAi && !finalSummary.aiErrorNotice) {
+            bhAutoScheduleTimer = setTimeout(() => {
+                bhAutoScheduleTimer = null;
+                openSendToScheduleModal();
+            }, 1200);
+        }
+    }
+
+    function handleExternalMemoDragStateEvent(payload) {
+        if (!bhIsOpen || bhSwallowing) return;
+        const dropZone = document.getElementById("zen-bh-orb-dropzone");
+        const pill = document.getElementById("zen-bh-status-pill");
+        const isHover = !!(payload && payload.active && payload.isOver);
+
+        if (isHover) {
+            if (bhCurrentMode !== "memo") {
+                setBlackHoleMode("memo");
+            }
+            bhTargetHover = 1;
+            if (dropZone) dropZone.classList.add("is-drag-hover", "is-external-memo-hover");
+            if (pill) {
+                pill.textContent = "밀양 메신저 쪽지 감지 — 여기에 놓으면 블랙홀이 빨아들입니다!";
+            }
+        } else {
+            bhTargetHover = 0;
+            if (dropZone) dropZone.classList.remove("is-drag-hover", "is-external-memo-hover");
+            if (pill) {
+                pill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.official).prompt;
+            }
+        }
+    }
+
+    function handleMiryangMemoCaptureStartedEvent() {
+        const dropZone = document.getElementById("zen-bh-orb-dropzone");
+        const pill = document.getElementById("zen-bh-status-pill");
+        if (!bhIsOpen) return;
+
+        closeBlackHoleModelDropdown();
+        clearTimeout(bhSwallowTimer1);
+        clearTimeout(bhSwallowTimer2);
+        clearTimeout(bhExternalCaptureWatchdog);
+        if (bhAutoScheduleTimer) {
+            clearTimeout(bhAutoScheduleTimer);
+            bhAutoScheduleTimer = null;
+        }
+
+        bhTargetHover = 0;
+        if (dropZone) dropZone.classList.remove("is-drag-hover", "is-external-memo-hover");
+        if (bhCurrentMode !== "memo") {
+            setBlackHoleMode("memo");
+        }
+
+        bhExternalCaptureStartTs = performance.now();
+        bhSwallowing = true;
+        setBlackHoleSendingUi(true);
+
+        const nowTs = performance.now();
+        for (let i = 0; i < 4; i++) {
+            bhParticles.push({
+                startTime: nowTs + i * 85,
+                duration: 1200,
+                startAngle: -2.35 + i * 0.85,
+                startR: 138 + i * 10
+            });
+        }
+
+        if (pill) {
+            pill.textContent = "쪽지 본문 및 첨부파일을 자동 수집하고 있습니다...";
+        }
+
+        bhExternalCaptureWatchdog = setTimeout(() => {
+            if (bhSwallowing) {
+                bhSwallowing = false;
+                setBlackHoleSendingUi(false);
+                const curPill = document.getElementById("zen-bh-status-pill");
+                if (curPill) curPill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt;
+                if (typeof showToast === "function") {
+                    showToast("쪽지 수집 응답 시간이 초과되었습니다. 다시 시도해 주세요.");
+                }
+            }
+        }, 25000);
+    }
+
+    async function handleCapturedMiryangMemoPayload(payload) {
+        clearTimeout(bhExternalCaptureWatchdog);
+        bhExternalCaptureWatchdog = null;
+
+        if (!payload || !payload.ok) {
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+            const curPill = document.getElementById("zen-bh-status-pill");
+            if (curPill) curPill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt;
+            if (typeof showToast === "function") {
+                showToast((payload && payload.errorMessage) || "쪽지 창에서 내용을 수집할 수 없습니다.");
+            }
+            return;
+        }
+
+        const pill = document.getElementById("zen-bh-status-pill");
+        const modelMeta = getSelectedMyAiModelMeta();
+        if (pill) {
+            pill.textContent = `${modelMeta.name} 모델이 쪽지 본문과 첨부를 분석하고 있습니다...`;
+        }
+
+        const foldChecked = !!document.getElementById("zen-bh-folding-toggle")?.checked;
+        const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
+        const userPromptText = (document.getElementById("zen-bh-user-prompt")?.value || "").trim();
+        const refYear = Number(payload.referenceYear) > 2000 ? Number(payload.referenceYear) : new Date().getFullYear();
+
+        const rawParts = [];
+        if (payload.senderLabel) rawParts.push(`[보낸사람] ${payload.senderLabel}`);
+        if (payload.capturedAtText) rawParts.push(`[수집/기준 시각] ${payload.capturedAtText} (연도 생략 날짜 기준: ${refYear}년)`);
+        if (payload.bodyText) rawParts.push(`[쪽지 본문]\n${String(payload.bodyText).slice(0, 140000)}`);
+
+        const collectedImages = [];
+        const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
+        let primaryAttName = "";
+
+        for (const att of attachments) {
+            if (!att || !att.name) continue;
+            if (!primaryAttName) primaryAttName = att.name;
+            if (att.extractedText) {
+                rawParts.push(`[첨부파일: ${att.name}]\n${String(att.extractedText).slice(0, 60000)}`);
+            }
+            if (att.embeddedPdfBase64) {
+                try {
+                    const pdfBytes = base64ToUint8Array(att.embeddedPdfBase64);
+                    const meta = await extractPdfTextMetaFromBytes(pdfBytes, 50);
+                    if (meta.text) {
+                        rawParts.push(`[첨부 PDF: ${att.name}]\n${meta.text.slice(0, 80000)}`);
+                    }
+                    if (isPdfTextTooSparse(meta.text, meta.totalPages, meta.textPageCount) && collectedImages.length < 20) {
+                        const scannedImgs = await renderScannedPdfPagesToImages(pdfBytes, 20 - collectedImages.length);
+                        for (const si of scannedImgs) {
+                            if (collectedImages.length >= 20) break;
+                            collectedImages.push(si);
+                        }
+                    }
+                } catch (err) {
+                    console.warn("[TUC 첨부 PDF 분석 실패]", err);
+                }
+            }
+            if (Array.isArray(att.embeddedImages) && att.embeddedImages.length > 0 && collectedImages.length < 20) {
+                for (const item of att.embeddedImages) {
+                    if (collectedImages.length >= 20) break;
+                    if (!item || !item.base64) continue;
+                    const mime = item.mimeType || "image/jpeg";
+                    const normalized = await resizeImageDataUrlToPayload(
+                        `data:${mime};base64,${item.base64}`,
+                        mime === "image/png" ? "image/png" : "image/jpeg",
+                        attachments.length > 10 ? 1500 : 2000,
+                        attachments.length > 10 ? 0.76 : 0.86
+                    );
+                    if (normalized) collectedImages.push(normalized);
+                }
+            }
+        }
+
+        const combinedText = rawParts.join("\n\n").slice(0, 200000);
+        if (collectedImages.length === 0 && combinedText.replace(/\s+/g, "").length < 30 && payload.screenshotBase64) {
+            const shotImg = await resizeImageDataUrlToPayload(
+                `data:image/png;base64,${payload.screenshotBase64}`,
+                "image/png",
+                1800,
+                0.86
+            );
+            if (shotImg) collectedImages.push(shotImg);
+        }
+
+        let summaryResult = null;
+        try {
+            const elapsed = performance.now() - (bhExternalCaptureStartTs || 0);
+            const remainWait = Math.max(0, 1600 - elapsed);
+            const analysisPromise = buildBlackHoleSummaryResult([], "memo", foldChecked, {
+                conciseChecked,
+                userPromptText,
+                preExtracted: {
+                    rawFileText: combinedText,
+                    extractedImages: collectedImages,
+                    rawFileName: primaryAttName || payload.senderLabel || "받은 쪽지",
+                    baseName: "새 쪽지",
+                    referenceYear: refYear,
+                    isForwarded: !!payload.isForwarded,
+                    senderLabel: payload.senderLabel || "",
+                    tucPayload: payload
+                }
+            });
+            const waitPromise = new Promise((resolve) => setTimeout(resolve, remainWait));
+            [summaryResult] = await Promise.all([analysisPromise, waitPromise]);
+        } finally {
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+        }
+
+        if (payload.attachmentWarning && typeof showToast === "function") {
+            showToast(payload.attachmentWarning);
+        }
+
+        if (bhIsOpen) {
+            closeBlackHolePortal();
+            await new Promise((resolve) => setTimeout(resolve, 220));
+        }
+        await presentAndFinalizeBlackHoleResult(summaryResult, "memo");
+    }
+
     async function triggerBlackHoleSwallow(items) {
         if (!bhIsOpen || bhSwallowing) return;
         const list = Array.isArray(items) ? items.filter(Boolean) : [];
@@ -3402,24 +4013,10 @@
         if (!bhIsOpen) return;
 
         closeBlackHolePortal();
-        openBlackHoleSummaryInNewNote(summaryResult);
-
-        if (typeof showToast === "function") {
-            if (summaryResult && summaryResult.aiErrorNotice) {
-                showToast(`${meta.label}: ${summaryResult.aiErrorNotice}`);
-            } else {
-                const usedLabel = (summaryResult && summaryResult.modelName) || modelMeta.name;
-                showToast(`[${usedLabel}] ${meta.label} 요약 노트가 생성되었습니다.`);
-            }
+        if (summaryResult && summaryResult.needsMemoTitleConfirmation) {
+            await new Promise((resolve) => setTimeout(resolve, 220));
         }
-
-        // 공문 분석(official)과 쪽지 분석(memo)이 정상 완료되었을 때만 1.2초 후 'MY 일정관리로 보내기' 팝업 자동 실행
-        if ((activeMode === "official" || activeMode === "memo") && summaryResult && summaryResult.usedRealAi && !summaryResult.aiErrorNotice) {
-            bhAutoScheduleTimer = setTimeout(() => {
-                bhAutoScheduleTimer = null;
-                openSendToScheduleModal();
-            }, 1200);
-        }
+        await presentAndFinalizeBlackHoleResult(summaryResult, activeMode);
     }
 
     async function submitBlackHolePromptOnly() {
@@ -3532,6 +4129,7 @@
     }
 
     function bindBlackHoleEvents() {
+        bindDesktopBridgeResponseListener();
         const dropZone = document.getElementById("zen-bh-orb-dropzone");
         const fileInput = document.getElementById("zen-bh-file-input");
         const shell = document.getElementById("zen-blackhole-portal-shell");
@@ -3585,9 +4183,15 @@
                 }
             });
         }
-        window.addEventListener("resize", () => {
-            if (bhIsOpen) updateBlackHoleButtonOriginVars();
-        });
+        if (!window._zenBhResizeBound) {
+            window._zenBhResizeBound = true;
+            window.addEventListener("resize", () => {
+                if (bhIsOpen) {
+                    updateBlackHoleButtonOriginVars();
+                    notifyDesktopBlackHolePortalState(true);
+                }
+            });
+        }
         syncBlackHoleModelPickerUI();
     }
 

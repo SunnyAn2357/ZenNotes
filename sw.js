@@ -1,20 +1,20 @@
 // 캐시 이름 (앱을 업데이트할 때마다 v2, v3... 로 숫자를 올려주세요!)
-const CACHE_NAME = 'zennotes-cache-v1.8.3';
+const CACHE_NAME = 'zennotes-cache-v1.8.4';
 
 // 반드시 캐싱해야 할 내 서버의 기본 파일들
 const STATIC_ASSETS = [
     './',
     './index.html',
     './manifest.json',
-    './css/main.css?v=1.8.3',
-    './js/globals.js?v=1.8.3',
-    './js/db.js?v=1.8.3',
-    './js/ui.js?v=1.8.3',
-    './js/editor.js?v=1.8.3',
-    './js/file_manager.js?v=1.8.3',
-    './js/io.js?v=1.8.3',
-    './js/auth.js?v=1.8.3',
-    './js/zen_bridge.js?v=1.8.3',
+    './css/main.css?v=1.8.4',
+    './js/globals.js?v=1.8.4',
+    './js/db.js?v=1.8.4',
+    './js/ui.js?v=1.8.4',
+    './js/editor.js?v=1.8.4',
+    './js/file_manager.js?v=1.8.4',
+    './js/io.js?v=1.8.4',
+    './js/auth.js?v=1.8.4',
+    './js/zen_bridge.js?v=1.8.4',
     './img192.png',
     './img512.png',
     './miryang_bi.png'
