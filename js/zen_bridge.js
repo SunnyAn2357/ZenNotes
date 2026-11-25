@@ -1236,8 +1236,12 @@
     let bhIsOpen = false;
     let bhRafId = null;
     let bhOrbitDots = [];
+    let bhOuterStars = [];
     let bhParticles = [];
+    let bhInfallBodies = [];
+    let bhLastInfallSpawnTs = 0;
     let bhSwallowing = false;
+    let bhSwallowBoost = 1.0;
     let bhFlashLevel = 0;
     let bhShockProgress = 0;
     let bhShockActive = false;
@@ -1246,17 +1250,193 @@
     let bhSwallowTimer1 = null;
     let bhSwallowTimer2 = null;
     let bhRetractTimer = null;
+    let bhCheerDelayTimer = null;
+    let bhCheerIntervalTimer = null;
+    let bhCheerFadeTimer = null;
+
+    const BH_CHEER_IDX_KEY = "zen_bh_cheer_idx";
+    const BH_CHEER_MESSAGES = [
+        "언제나 당신을 응원합니다.",
+        "지금 이 순간에도 묵묵히 해내고 있는 당신이 참 멋집니다.",
+        "차근차근 쌓아 올린 노력이 결국 가장 든든한 힘이 됩니다.",
+        "잠시 숨을 고르는 시간도 앞으로 나아가는 소중한 과정입니다.",
+        "당신의 섬세함과 성실함이 문서 한 줄 한 줄에 고스란히 담깁니다.",
+        "복잡해 보이는 일도 하나씩 풀어내다 보면 어느새 정리되어 있을 것입니다.",
+        "맡은 자리에서 늘 최선을 다하는 당신에게 따뜻한 박수를 보냅니다.",
+        "작은 진전 하나하나가 모여 큰 결실을 만들어 냅니다.",
+        "바쁜 흐름 속에서도 중심을 잃지 않는 당신의 집중력이 빛납니다.",
+        "완벽하지 않아도 괜찮습니다. 이미 충분히 잘 해내고 있습니다.",
+        "당신이 기울이는 정성과 고민은 결코 헛되지 않습니다.",
+        "어려운 과제일수록 해결했을 때의 성취감도 더 크게 돌아옵니다.",
+        "한 걸음씩 꾸준히 걸어가는 사람에게 결국 좋은 결과가 찾아옵니다.",
+        "스스로를 너무 다그치지 말고, 해낸 것들에 작은 칭찬을 건네 보세요.",
+        "당신의 차분한 판단과 배려가 주변 사람들에게 큰 안정감을 줍니다.",
+        "막막해 보이던 일도 정리가 시작되면 금세 윤곽이 드러납니다.",
+        "지금의 노력이 앞으로의 당신을 한결 더 편안하고 단단하게 만들어 줄 것입니다.",
+        "일의 속도가 조금 느려도 방향만 맞다면 분명히 목적지에 닿습니다.",
+        "복잡하고 까다로운 내용을 꼼꼼히 살피는 당신의 눈빛이 참 든든합니다.",
+        "잠깐의 물 한 모금이 지친 집중력을 부드럽게 되살려 줍니다.",
+        "누구보다 성실하게 임하는 당신의 태도가 가장 큰 경쟁력입니다.",
+        "지나온 시간보다 앞으로 펼쳐질 좋은 순간들이 훨씬 더 많습니다.",
+        "지금 해결하고 있는 이 일도 곧 뿌듯한 완료 목록으로 남을 것입니다.",
+        "어깨에 들어간 힘을 살짝 풀고 편안한 마음으로 호흡해 보세요.",
+        "당신의 차분한 열정이 빈칸들을 근사하게 채워 가고 있습니다.",
+        "보이지 않는 곳에서 쏟은 수고까지 모두 가치 있는 발자취입니다.",
+        "세심하게 확인하는 습관이 더 큰 실수를 막아 주는 든든한 방패입니다.",
+        "마음먹은 일들을 하나씩 매듭지어 가는 당신이 정말 대단합니다.",
+        "예상치 못한 변수 앞에서도 흔들리지 않고 길을 찾아낼 수 있습니다.",
+        "당신이 만들어 가는 결과물에는 늘 따뜻한 진심이 배어 있습니다.",
+        "잠시 눈을 감고 어깨를 기지개 켜면 새로운 에너지가 차오릅니다.",
+        "크고 거창한 변화보다 꾸준한 성실함이 삶을 가장 단단히 지킵니다.",
+        "어려운 내용을 쉽게 풀어 정리하려는 당신의 노력이 빛을 발합니다.",
+        "지금의 작은 배움과 정리가 다가올 실력을 한 뼘 더 키워 줍니다.",
+        "혼자가 아닙니다. 언제든 기댈 수 있는 든든한 도구가 곁에 있습니다.",
+        "해야 할 일이 많아 보일 때도 가장 중요한 것부터 차분히 다뤄 보세요.",
+        "당신의 신중함과 책임감이 주변의 믿음을 단단하게 만듭니다.",
+        "잠시 속도를 늦추고 쉬어 가도 목표는 사라지지 않고 그 자리에 있습니다.",
+        "예전보다 조금 더 정돈된 지금의 자신이 스스로에게 주는 선물입니다.",
+        "묵묵히 쌓아 둔 경험들이 결정적인 순간에 가장 빛나는 해답이 됩니다.",
+        "고민이 깊어질수록 더 정확하고 설득력 있는 결과가 완성됩니다.",
+        "복잡한 실타래도 첫 매듭을 찾으면 생각보다 술술 풀려 나갑니다.",
+        "스스로의 페이스를 믿고 지금처럼 차분하게 나아가세요.",
+        "늘 새로운 방법을 고민하고 더 나아지려 노력하는 모습이 아름답습니다.",
+        "당신의 친절한 말 한마디와 세심한 정리 하나가 일을 훨씬 수월하게 합니다.",
+        "지금 흘리는 작은 정성들이 머지않아 환한 웃음으로 돌아올 것입니다.",
+        "가끔은 결과보다 여기까지 오기 위해 애쓴 과정을 더 많이 기억해 주세요.",
+        "낯설고 까다로운 업무도 몇 번 마주하다 보면 금세 익숙한 영역이 됩니다.",
+        "어떤 순간에도 스스로의 가치를 의심하지 마세요. 이미 충분히 빛납니다.",
+        "할 수 있다는 믿음 하나만으로도 어려운 길의 절반은 건너온 셈입니다.",
+        "깔끔하게 정돈되는 문서처럼 마음속 걱정도 하나씩 비워지길 바랍니다.",
+        "당신의 손끝을 거친 자료는 언제나 보기 좋고 이해하기 쉽게 바뀝니다.",
+        "무거운 책임감을 묵묵히 견뎌 내는 당신의 내면은 생각보다 훨씬 강합니다.",
+        "잠깐 창밖 먼 곳을 바라보며 눈의 피로를 부드럽게 덜어 보세요.",
+        "작은 디테일을 놓치지 않는 정교함이 결국 완성도의 차이를 만듭니다.",
+        "서두르지 않아도 괜찮습니다. 정확한 한 걸음이 가장 빠른 길입니다.",
+        "스스로 선택한 일에 책임을 다하려는 마음이 참 존경스럽습니다.",
+        "지금의 집중력이 복잡한 업무를 가장 깔끔한 해답으로 이끌고 있습니다.",
+        "지치는 순간이 찾아와도 당신 안의 회복력을 믿고 한 템포 쉬어 가세요.",
+        "바쁘게 움직이는 손길 뒤에는 언제나 성실한 고민의 시간이 담겨 있습니다.",
+        "한 줄을 정리할 때마다 해야 할 일의 무게도 조금씩 가벼워집니다.",
+        "당신이 쏟은 진심 어린 노력은 반드시 제 빛을 내는 순간이 옵니다.",
+        "작은 친절과 배려를 잃지 않는 당신 덕분에 주변 분위기가 따뜻합니다.",
+        "눈앞의 과제가 끝없이 느껴져도 하나씩 비워 내다 보면 끝에 닿습니다.",
+        "매 순간 최선을 찾으려는 당신의 자세 자체가 이미 훌륭한 성과입니다.",
+        "잘 풀리지 않을 때는 잠시 거리를 두고 보면 의외로 쉬운 길이 보입니다.",
+        "끊임없이 배우고 정돈하는 태도가 당신을 더욱 자유롭게 만듭니다.",
+        "스스로를 아끼고 돌보는 시간 역시 일의 완성도를 높이는 비결입니다.",
+        "꼼꼼하게 짚어 내는 통찰력 덕분에 놓치기 쉬운 부분까지 살아납니다.",
+        "당신의 성실함은 유행처럼 사라지지 않는 가장 든든한 자산입니다.",
+        "마음에 여유를 한 스푼 더하면 복잡한 일도 한결 부드럽게 풀립니다.",
+        "지금까지 수많은 일을 해내 왔듯 이번 일 역시 멋지게 마칠 것입니다.",
+        "따뜻한 차 한 잔과 같은 평온함이 당신의 일상에 함께하길 바랍니다.",
+        "정직하게 쌓아 온 실력은 어떤 상황에서도 가장 큰 자신감이 됩니다.",
+        "작은 성공의 기억들을 모아 두면 큰 도전을 앞두어도 두렵지 않습니다.",
+        "지금 마주한 고민들이 훗날 누군가에게 건넬 소중한 지혜가 됩니다.",
+        "묵직한 업무 속에서도 유머와 여유를 잃지 않는 당신이 멋집니다.",
+        "누구와 비교하지 않아도 당신만의 속도와 결이 충분히 훌륭합니다.",
+        "흩어져 있던 생각들이 반듯한 문장으로 모이는 즐거움을 느껴 보세요.",
+        "궂은 일도 마다하지 않고 먼저 살피는 따뜻함에 늘 고마움을 느낍니다.",
+        "스스로 만족할 만큼 정성을 들인 일은 결과가 어떻든 당당합니다.",
+        "가끔은 아무 생각 없이 크게 숨을 들이마시고 길게 내쉬어 보세요.",
+        "당신의 맑은 시선과 차분한 어조가 복잡한 문제의 열쇠가 됩니다.",
+        "크고 작은 일들을 능숙하게 조율하는 능력이 차곡차곡 깊어지고 있습니다.",
+        "잘하고 싶은 마음이 크기에 더 신중해지는 것일 뿐, 이미 잘하고 있습니다.",
+        "깔끔하게 마무리될 결과를 떠올리며 조금만 더 힘을 내 보세요.",
+        "당신의 손길이 닿는 곳마다 질서와 명쾌함이 자연스럽게 자리 잡습니다.",
+        "어려운 조건 속에서도 최선의 답을 찾아내는 지혜가 참 돋보입니다.",
+        "힘들 때는 잠시 멈춰 서서 스스로에게 따뜻한 응원을 건네도 좋습니다.",
+        "당신의 꾸준한 발걸음이 더 단단하고 여유로운 미래를 열어 줍니다.",
+        "세심한 정리 하나가 모두의 시간을 아껴 주는 큰 배려가 됩니다.",
+        "정성껏 건넨 노력들이 삶에 기분 좋은 보람으로 오래 남을 것입니다.",
+        "작은 실수는 고쳐 나가면 그만이고, 지금까지의 노력은 온전히 남습니다.",
+        "복잡한 자료 너머의 핵심을 꿰뚫어 보는 당신의 집중력을 응원합니다.",
+        "언제 어디서나 맡은 몫 이상을 해내는 당신의 저력을 믿습니다.",
+        "차분하게 정리된 계획 하나가 막연한 불안을 기분 좋은 확신으로 바꿉니다.",
+        "일과 마음의 균형을 지켜 나가는 당신만의 리듬을 소중히 응원합니다.",
+        "조급함을 내려놓는 순간 오히려 가장 정확한 판단이 찾아옵니다.",
+        "지금 들이는 정성이 결국 가장 믿음직한 결과로 빛나게 될 것입니다.",
+        "당신의 수고와 진심을 기억하며, 언제나 한결같이 응원합니다."
+    ];
+
+    function stopBlackHoleCheerRotation() {
+        clearTimeout(bhCheerDelayTimer);
+        clearInterval(bhCheerIntervalTimer);
+        clearTimeout(bhCheerFadeTimer);
+        bhCheerDelayTimer = null;
+        bhCheerIntervalTimer = null;
+        bhCheerFadeTimer = null;
+        const pill = document.getElementById("zen-bh-status-pill");
+        if (pill) pill.classList.remove("is-cheer-fading");
+    }
+
+    function setBlackHoleStatusPillTextFade(text) {
+        const pill = document.getElementById("zen-bh-status-pill");
+        if (!pill) return;
+        clearTimeout(bhCheerFadeTimer);
+        pill.classList.add("is-cheer-fading");
+        bhCheerFadeTimer = setTimeout(() => {
+            if (!bhIsOpen || !bhSwallowing) {
+                pill.classList.remove("is-cheer-fading");
+                return;
+            }
+            pill.textContent = text;
+            pill.classList.remove("is-cheer-fading");
+        }, 240);
+    }
+
+    function startBlackHoleCheerRotation(initialStatusText, initialHoldMs = 3500, stepMs = 4000) {
+        stopBlackHoleCheerRotation();
+        const pill = document.getElementById("zen-bh-status-pill");
+        if (pill && initialStatusText) {
+            pill.classList.remove("is-cheer-fading");
+            pill.textContent = initialStatusText;
+        }
+        if (!Array.isArray(BH_CHEER_MESSAGES) || BH_CHEER_MESSAGES.length === 0) return;
+
+        const showNextCheer = () => {
+            if (!bhIsOpen || !bhSwallowing) {
+                stopBlackHoleCheerRotation();
+                return;
+            }
+            let idx = parseInt(localStorage.getItem(BH_CHEER_IDX_KEY) || "0", 10);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= BH_CHEER_MESSAGES.length) {
+                idx = 0;
+            }
+            const msg = BH_CHEER_MESSAGES[idx];
+            localStorage.setItem(BH_CHEER_IDX_KEY, String((idx + 1) % BH_CHEER_MESSAGES.length));
+            setBlackHoleStatusPillTextFade(msg);
+        };
+
+        bhCheerDelayTimer = setTimeout(() => {
+            if (!bhIsOpen || !bhSwallowing) return;
+            showNextCheer();
+            bhCheerIntervalTimer = setInterval(showNextCheer, stepMs);
+        }, initialHoldMs);
+    }
 
     function initBlackHoleParticles() {
         bhOrbitDots = [];
-        for (let i = 0; i < 64; i++) {
+        for (let i = 0; i < 84; i++) {
             bhOrbitDots.push({
                 angle: Math.random() * Math.PI * 2,
-                radius: 0.43 + Math.random() * 0.42,
-                speed: (0.008 + Math.random() * 0.016) * (0.7 + (1 - i / 64) * 0.6),
-                size: 1.0 + Math.random() * 1.9,
-                alpha: 0.35 + Math.random() * 0.65,
+                radiusFactor: 0.36 + Math.random() * 0.72,
+                speed: (0.008 + Math.random() * 0.015) * (0.72 + (1 - i / 84) * 0.58),
+                size: 1.0 + Math.random() * 2.0,
+                alpha: 0.32 + Math.random() * 0.65,
                 hueMix: Math.random()
+            });
+        }
+        bhOuterStars = [];
+        for (let i = 0; i < 64; i++) {
+            bhOuterStars.push({
+                angle: Math.random() * Math.PI * 2,
+                rxRatio: 0.42 + Math.random() * 0.62,
+                ryRatio: 0.34 + Math.random() * 0.60,
+                speed: (0.0018 + Math.random() * 0.0042) * (i % 2 === 0 ? 1 : 0.75),
+                size: 0.8 + Math.random() * 1.5,
+                alpha: 0.22 + Math.random() * 0.52,
+                twinklePhase: Math.random() * Math.PI * 2,
+                hueType: i % 5
             });
         }
     }
@@ -1342,29 +1522,60 @@
         const cx = cw / 2;
         const cy = ch / 2;
         const maxR = Math.min(cw, ch) * 0.44;
+        const coreR = maxR * 0.27;
+        const diskRx = Math.max(maxR * 1.65, Math.min(cw * 0.46, maxR * 1.95));
+        const diskScaleY = 0.27;
 
         bhHoverLevel += (bhTargetHover - bhHoverLevel) * 0.14;
+        bhSwallowBoost += ((bhSwallowing ? 3.1 : 1.0) - bhSwallowBoost) * 0.06;
         bhFlashLevel *= 0.91;
 
         ctx.clearRect(0, 0, cw, ch);
         const isLightTheme = !!(document.body && document.body.classList.contains("light-theme"));
 
+        // 0. 캔버스 전역 외곽 배경 별무리 (넓은 우주 시야감)
+        for (const st of bhOuterStars) {
+            st.angle += st.speed * (1 + bhHoverLevel * 1.4 + (bhSwallowBoost - 1) * 1.1);
+            const sx = cx + Math.cos(st.angle) * (cw * 0.48 * st.rxRatio);
+            const sy = cy + Math.sin(st.angle) * (ch * 0.47 * st.ryRatio);
+            if (Math.hypot(sx - cx, sy - cy) < coreR * 1.15) continue;
+            const tw = 0.72 + 0.28 * Math.sin(ts * 0.003 + st.twinklePhase);
+            const a = Math.min(0.9, st.alpha * tw * (bhSwallowing ? 1.18 : 1));
+            if (isLightTheme) {
+                ctx.fillStyle = st.hueType === 0
+                    ? `rgba(180, 128, 44, ${a * 0.72})`
+                    : st.hueType === 1
+                        ? `rgba(59, 130, 246, ${a * 0.46})`
+                        : `rgba(100, 116, 139, ${a * 0.45})`;
+            } else {
+                ctx.fillStyle = st.hueType === 0
+                    ? `rgba(254, 243, 199, ${a * 0.85})`
+                    : st.hueType === 1
+                        ? `rgba(147, 197, 253, ${a * 0.72})`
+                        : `rgba(226, 232, 240, ${a * 0.65})`;
+            }
+            ctx.beginPath();
+            ctx.arc(sx, sy, st.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         // 1. 외곽 헤일로 (화이트 모드는 탁한 검은 안개를 걷어내고 맑은 샴페인 코로나 적용)
-        const halo = ctx.createRadialGradient(cx, cy, maxR * 0.24, cx, cy, maxR);
+        const haloR = maxR * 1.42;
+        const halo = ctx.createRadialGradient(cx, cy, coreR * 0.7, cx, cy, haloR);
         if (isLightTheme) {
-            halo.addColorStop(0, "rgba(15, 23, 42, 0.12)");
-            halo.addColorStop(0.45, `rgba(217, 165, 72, ${0.14 + bhHoverLevel * 0.08 + bhFlashLevel * 0.14})`);
-            halo.addColorStop(0.76, `rgba(226, 200, 145, ${0.08 + bhHoverLevel * 0.05})`);
+            halo.addColorStop(0, "rgba(15, 23, 42, 0.10)");
+            halo.addColorStop(0.42, `rgba(217, 165, 72, ${0.15 + bhHoverLevel * 0.08 + bhFlashLevel * 0.14})`);
+            halo.addColorStop(0.74, `rgba(226, 200, 145, ${0.08 + bhHoverLevel * 0.05})`);
             halo.addColorStop(1, "rgba(255, 255, 255, 0)");
         } else {
             halo.addColorStop(0, "rgba(0, 0, 0, 0.94)");
-            halo.addColorStop(0.48, "rgba(16, 18, 26, 0.78)");
-            halo.addColorStop(0.76, `rgba(180, 130, 55, ${0.16 + bhHoverLevel * 0.1 + bhFlashLevel * 0.2})`);
+            halo.addColorStop(0.42, "rgba(16, 18, 26, 0.72)");
+            halo.addColorStop(0.74, `rgba(180, 130, 55, ${0.18 + bhHoverLevel * 0.1 + bhFlashLevel * 0.2})`);
             halo.addColorStop(1, "rgba(15, 23, 42, 0)");
         }
         ctx.fillStyle = halo;
         ctx.beginPath();
-        ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+        ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
         ctx.fill();
 
         // 2. 후면 상/하 중력렌즈 아크
@@ -1372,42 +1583,42 @@
         ctx.translate(cx, cy);
         ctx.rotate(-0.22);
         for (const side of [-1, 1]) {
-            const lensGrad = ctx.createLinearGradient(-maxR * 0.55, 0, maxR * 0.55, 0);
+            const lensGrad = ctx.createLinearGradient(-maxR * 0.56, 0, maxR * 0.56, 0);
             if (isLightTheme) {
                 lensGrad.addColorStop(0, "rgba(180, 130, 50, 0)");
-                lensGrad.addColorStop(0.5, `rgba(180, 128, 42, ${0.38 + bhHoverLevel * 0.2})`);
+                lensGrad.addColorStop(0.5, `rgba(180, 128, 42, ${0.42 + bhHoverLevel * 0.2})`);
                 lensGrad.addColorStop(1, "rgba(180, 130, 50, 0)");
             } else {
                 lensGrad.addColorStop(0, "rgba(253, 230, 138, 0)");
-                lensGrad.addColorStop(0.5, `rgba(254, 240, 138, ${0.34 + bhHoverLevel * 0.22})`);
+                lensGrad.addColorStop(0.5, `rgba(254, 240, 138, ${0.38 + bhHoverLevel * 0.22})`);
                 lensGrad.addColorStop(1, "rgba(253, 230, 138, 0)");
             }
             ctx.strokeStyle = lensGrad;
-            ctx.lineWidth = isLightTheme ? 2.6 : 3.0;
+            ctx.lineWidth = isLightTheme ? 2.5 : 2.9;
             ctx.beginPath();
-            ctx.arc(0, side * 1.5, maxR * 0.42, side > 0 ? 0.18 : Math.PI + 0.18, side > 0 ? Math.PI - 0.18 : Math.PI * 2 - 0.18);
+            ctx.arc(0, side * 1.4, coreR * 1.32, side > 0 ? 0.16 : Math.PI + 0.16, side > 0 ? Math.PI - 0.16 : Math.PI * 2 - 0.16);
             ctx.stroke();
         }
         ctx.restore();
 
-        // 3. 기울어진 샴페인 골드 강착원반 & 궤도 입자
+        // 3. 넓게 펼쳐진 샴페인 골드 강착원반 & 궤도 입자
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.rotate(-0.26);
-        const diskScaleY = 0.31;
-        const speedBoost = 1 + bhHoverLevel * 1.9 + (bhSwallowing ? 1.4 : 0);
+        ctx.rotate(-0.24);
+        const speedBoost = (1 + bhHoverLevel * 1.8) * bhSwallowBoost;
 
         for (const p of bhOrbitDots) {
             p.angle += p.speed * speedBoost;
-            const px = Math.cos(p.angle) * (maxR * p.radius);
-            const py = Math.sin(p.angle) * (maxR * p.radius * diskScaleY);
+            const rDist = diskRx * p.radiusFactor;
+            const px = Math.cos(p.angle) * rDist;
+            const py = Math.sin(p.angle) * (rDist * diskScaleY);
             const isFront = Math.sin(p.angle) >= 0;
-            if (!isFront && Math.hypot(px, py) < maxR * 0.34) continue;
+            if (!isFront && Math.hypot(px, py) < coreR * 1.05) continue;
             const bright = Math.min(1, p.alpha + bhFlashLevel * 0.35);
             if (isLightTheme) {
                 ctx.fillStyle = p.hueMix > 0.42
                     ? `rgba(180, 128, 44, ${bright * 0.78})`
-                    : `rgba(120, 113, 108, ${bright * 0.52})`;
+                    : `rgba(120, 113, 108, ${bright * 0.50})`;
             } else {
                 ctx.fillStyle = p.hueMix > 0.42
                     ? `rgba(254, 243, 199, ${bright * 0.88})`
@@ -1418,28 +1629,133 @@
             ctx.fill();
         }
 
-        // 강착원반 밝은 링 레이어
+        // 강착원반 밝은 2중 링 레이어 (넓은 외곽 + 코어 인접 광자띠)
         ctx.scale(1, diskScaleY);
-        const diskRing = ctx.createRadialGradient(0, 0, maxR * 0.36, 0, 0, maxR * 0.9);
+        const diskRing = ctx.createRadialGradient(0, 0, coreR * 1.1, 0, 0, diskRx);
         if (isLightTheme) {
             diskRing.addColorStop(0, "rgba(217, 175, 95, 0)");
-            diskRing.addColorStop(0.24, `rgba(217, 165, 72, ${0.44 + bhFlashLevel * 0.22})`);
-            diskRing.addColorStop(0.55, `rgba(180, 130, 55, ${0.24 + bhHoverLevel * 0.14})`);
+            diskRing.addColorStop(0.18, `rgba(217, 165, 72, ${0.46 + bhFlashLevel * 0.22})`);
+            diskRing.addColorStop(0.48, `rgba(180, 130, 55, ${0.26 + bhHoverLevel * 0.14})`);
+            diskRing.addColorStop(0.78, `rgba(217, 165, 72, ${0.11 + bhHoverLevel * 0.08})`);
             diskRing.addColorStop(1, "rgba(180, 130, 55, 0)");
         } else {
             diskRing.addColorStop(0, "rgba(254, 249, 195, 0)");
-            diskRing.addColorStop(0.24, `rgba(254, 243, 199, ${0.56 + bhFlashLevel * 0.22})`);
-            diskRing.addColorStop(0.55, `rgba(217, 155, 58, ${0.34 + bhHoverLevel * 0.16})`);
+            diskRing.addColorStop(0.18, `rgba(254, 243, 199, ${0.58 + bhFlashLevel * 0.22})`);
+            diskRing.addColorStop(0.48, `rgba(217, 155, 58, ${0.36 + bhHoverLevel * 0.16})`);
+            diskRing.addColorStop(0.78, `rgba(180, 83, 9, ${0.14 + bhHoverLevel * 0.09})`);
             diskRing.addColorStop(1, "rgba(180, 83, 9, 0)");
         }
         ctx.fillStyle = diskRing;
         ctx.beginPath();
-        ctx.arc(0, 0, maxR * 0.92, 0, Math.PI * 2);
+        ctx.arc(0, 0, diskRx, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
+        // 3-2. 분석 중(bhSwallowing) 바깥에서 나선형으로 가속 회전하며 빨려 들어가는 행성 & 별
+        if (bhSwallowing && (ts - bhLastInfallSpawnTs >= 360) && bhInfallBodies.length < 9) {
+            bhLastInfallSpawnTs = ts;
+            const kindRoll = Math.random();
+            const bodyType = kindRoll < 0.34 ? "ringed" : kindRoll < 0.70 ? "planet" : "star";
+            const palette = [
+                { core: "#fde68a", glow: "rgba(217, 165, 72, 0.55)", ring: "#d97706" },
+                { core: "#93c5fd", glow: "rgba(59, 130, 246, 0.45)", ring: "#60a5fa" },
+                { core: "#fdba74", glow: "rgba(249, 115, 22, 0.45)", ring: "#fb923c" },
+                { core: "#e2e8f0", glow: "rgba(148, 163, 184, 0.50)", ring: "#cbd5e1" }
+            ];
+            const pal = palette[Math.floor(Math.random() * palette.length)];
+            const startR = Math.max(cw * 0.48, maxR * 1.82);
+            bhInfallBodies.push({
+                type: bodyType,
+                pal,
+                r: startR,
+                startR,
+                angle: Math.random() * Math.PI * 2,
+                baseAngular: 0.032 + Math.random() * 0.022,
+                infallSpeed: 1.05 + Math.random() * 0.55,
+                size: bodyType === "star" ? 3.2 + Math.random() * 1.8 : 4.2 + Math.random() * 2.8,
+                tilt: (Math.random() - 0.5) * 0.9,
+                trail: []
+            });
+        }
+
+        for (let i = bhInfallBodies.length - 1; i >= 0; i--) {
+            const b = bhInfallBodies[i];
+            const distRatio = Math.max(0.08, b.r / b.startR);
+            const keplerBoost = 1 + Math.pow(maxR / Math.max(b.r, coreR), 1.15) * 0.9;
+            b.angle += b.baseAngular * keplerBoost;
+            b.r -= b.infallSpeed * (1.1 + (1 - distRatio) * 2.3);
+
+            const bx = cx + Math.cos(b.angle) * b.r;
+            const by = cy + Math.sin(b.angle) * (b.r * 0.56);
+            b.trail.push({ x: bx, y: by });
+            if (b.trail.length > 8) b.trail.shift();
+
+            const scale = Math.max(0.26, Math.min(1, (b.r - coreR * 0.65) / (b.startR * 0.6)));
+            const fadeAlpha = Math.min(0.95, Math.max(0, (b.r - coreR * 0.9) / (coreR * 0.7)));
+
+            if (b.trail.length > 1) {
+                for (let tIdx = 1; tIdx < b.trail.length; tIdx++) {
+                    const p0 = b.trail[tIdx - 1];
+                    const p1 = b.trail[tIdx];
+                    const frac = tIdx / b.trail.length;
+                    ctx.strokeStyle = isLightTheme
+                        ? `rgba(180, 128, 44, ${fadeAlpha * frac * 0.42})`
+                        : `rgba(254, 243, 199, ${fadeAlpha * frac * 0.52})`;
+                    ctx.lineWidth = Math.max(0.8, b.size * scale * frac * 0.45);
+                    ctx.beginPath();
+                    ctx.moveTo(p0.x, p0.y);
+                    ctx.lineTo(p1.x, p1.y);
+                    ctx.stroke();
+                }
+            }
+
+            const drawR = b.size * scale;
+            ctx.save();
+            ctx.translate(bx, by);
+            ctx.globalAlpha = fadeAlpha;
+            if (b.type === "star") {
+                ctx.fillStyle = isLightTheme ? "#b45309" : "#fef3c7";
+                ctx.beginPath();
+                ctx.moveTo(0, -drawR * 1.45);
+                ctx.lineTo(drawR * 0.42, -drawR * 0.42);
+                ctx.lineTo(drawR * 1.45, 0);
+                ctx.lineTo(drawR * 0.42, drawR * 0.42);
+                ctx.lineTo(0, drawR * 1.45);
+                ctx.lineTo(-drawR * 0.42, drawR * 0.42);
+                ctx.lineTo(-drawR * 1.45, 0);
+                ctx.lineTo(-drawR * 0.42, -drawR * 0.42);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                const grad = ctx.createRadialGradient(-drawR * 0.3, -drawR * 0.3, drawR * 0.1, 0, 0, drawR);
+                grad.addColorStop(0, "#ffffff");
+                grad.addColorStop(0.45, b.pal.core);
+                grad.addColorStop(1, b.pal.ring);
+                ctx.fillStyle = grad;
+                ctx.shadowColor = b.pal.glow;
+                ctx.shadowBlur = 7;
+                ctx.beginPath();
+                ctx.arc(0, 0, drawR, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (b.type === "ringed") {
+                    ctx.rotate(b.tilt);
+                    ctx.strokeStyle = isLightTheme ? "rgba(180, 128, 44, 0.75)" : "rgba(254, 240, 138, 0.8)";
+                    ctx.lineWidth = Math.max(1, drawR * 0.22);
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, drawR * 1.85, drawR * 0.52, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+
+            if (b.r <= coreR * 1.04) {
+                bhInfallBodies.splice(i, 1);
+                bhFlashLevel = Math.max(bhFlashLevel, 0.34);
+            }
+        }
+
         // 4. 사상의 지평선(중앙 블랙 코어) + 광자 링
-        const coreR = maxR * 0.33;
         ctx.save();
         ctx.fillStyle = isLightTheme ? "#111827" : "#04060c";
         ctx.shadowColor = isLightTheme
@@ -1494,7 +1810,7 @@
             if (bhShockProgress >= 1) {
                 bhShockActive = false;
             } else {
-                const sr = coreR + bhShockProgress * (maxR - coreR);
+                const sr = coreR + bhShockProgress * (maxR * 1.35 - coreR);
                 ctx.strokeStyle = `rgba(254, 240, 138, ${(1 - bhShockProgress) * 0.75})`;
                 ctx.lineWidth = 2.4 * (1 - bhShockProgress) + 0.6;
                 ctx.beginPath();
@@ -1528,6 +1844,7 @@
         const hintEl = document.getElementById("zen-bh-mode-hint");
         if (hintEl) hintEl.textContent = meta.hint;
         if (!bhSwallowing) {
+            stopBlackHoleCheerRotation();
             const pill = document.getElementById("zen-bh-status-pill");
             if (pill) pill.textContent = meta.prompt || BH_DEFAULT_PROMPT;
         }
@@ -1541,6 +1858,7 @@
         bhSwallowTimer1 = null;
         bhSwallowTimer2 = null;
         bhRetractTimer = null;
+        stopBlackHoleCheerRotation();
     }
 
     function setBlackHoleSendingUi(isSending) {
@@ -1583,9 +1901,12 @@
 
         bindDesktopBridgeResponseListener();
         clearBlackHoleTimers();
-        if (bhOrbitDots.length === 0) initBlackHoleParticles();
+        if (bhOrbitDots.length === 0 || bhOuterStars.length === 0) initBlackHoleParticles();
         bhSwallowing = false;
+        bhSwallowBoost = 1.0;
         bhParticles = [];
+        bhInfallBodies = [];
+        bhLastInfallSpawnTs = 0;
         bhFlashLevel = 0;
         bhShockActive = false;
         bhTargetHover = 0;
@@ -1626,11 +1947,14 @@
         if (!layer || layer.style.display === "none") return;
 
         closeBlackHoleModelDropdown();
+        stopBlackHoleCheerRotation();
         clearTimeout(bhSwallowTimer1);
         clearTimeout(bhSwallowTimer2);
         bhSwallowTimer1 = null;
         bhSwallowTimer2 = null;
         bhSwallowing = false;
+        bhSwallowBoost = 1.0;
+        bhInfallBodies = [];
         setBlackHoleSendingUi(false);
         bhIsOpen = false;
         bhTargetHover = 0;
@@ -1675,10 +1999,10 @@
     }
 
     // ========================================================================
-    // 5-2. 블랙홀 AI 모델 선택 드롭다운 (디폴트: Solar Pro4, 문서 작업 특화)
+    // 5-2. 블랙홀 AI 모델 선택 드롭다운 (디폴트: Gemini 3.8 Flash)
     // ========================================================================
     const MYAI_MODEL_STORAGE_KEY = "zen_myai_selected_model";
-    const MYAI_DEFAULT_MODEL_ID = "solar-pro4";
+    const MYAI_DEFAULT_MODEL_ID = "gemini-3.8-flash";
 
     const MYAI_PROVIDER_ICONS = {
         upstage: `<svg viewBox="0 0 24 24" fill="none"><defs><linearGradient id="zen-solar-g" x1="5" y1="5" x2="19" y2="19" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="50%" stop-color="#6366F1"/><stop offset="100%" stop-color="#A855F7"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="#0B0F19"/><path d="M12 4.2L14.1 9.9L19.8 12L14.1 14.1L12 19.8L9.9 14.1L4.2 12L9.9 9.9L12 4.2Z" fill="url(#zen-solar-g)"/></svg>`,
@@ -1714,11 +2038,11 @@
 
     const MYAI_DEFAULT_MODELS = [
         {
-            id: "solar-pro4",
-            name: "Solar Pro4",
-            provider: "upstage",
+            id: "gemini-3.8-flash",
+            name: "Gemini 3.8 Flash",
+            provider: "google",
             group: "기본 추천 모델",
-            desc: "공문·글쓰기·한국어 문서 작업에 최적화 (기본)"
+            desc: "대용량 매뉴얼·PDF 초고속 분석 및 요약 (기본)"
         },
         {
             id: "claude-sonnet-5",
@@ -1735,11 +2059,11 @@
             desc: "최신 모델 · 복합 문서 구조화 분석"
         },
         {
-            id: "gemini-3.8-flash",
-            name: "Gemini 3.8 Flash",
-            provider: "google",
+            id: "solar-pro4",
+            name: "Solar Pro4",
+            provider: "upstage",
             group: "추천 문서 분석 모델",
-            desc: "대용량 매뉴얼·긴 문서 초고속 분석 및 요약"
+            desc: "한국어 공문·글쓰기 작업에 특화"
         },
         {
             id: "claude-sonnet-4-6",
@@ -1823,8 +2147,9 @@
             if (!item || !item.id) return;
             const normId = normalizeMyAiModelId(item.id);
             if (!normId) return;
-            // Responses API 전용 모델이나 비채팅 모델 제외
-            if (/^(gpt-5\.5-pro|gpt-5\.3-codex)$/i.test(normId) || /embedding|whisper|tts|dall-e|moderation/i.test(normId)) return;
+            // Responses API 전용 모델이나 비채팅/비요약 특수 모델 제외
+            if (/^(gpt-5\.5-pro|gpt-5\.3-codex)$/i.test(normId) ||
+                /embedding|whisper|tts|dall-e|moderation|realtime|audio|transcribe|search-preview|image-generation|imagen|veo|lyria|aqa|bison|gecko|computer-use|codex|sora|babbage|davinci/i.test(normId)) return;
             liveMap.set(normId, {
                 id: normId,
                 provider: item.provider || resolveMyAiProvider(normId),
@@ -1956,7 +2281,7 @@
             iconEl.innerHTML = getMyAiProviderIconSvg(meta.provider);
         }
         if (labelEl) {
-            labelEl.textContent = meta.name || "Solar Pro4";
+            labelEl.textContent = meta.name || "Gemini 3.8 Flash";
         }
         if (btn) {
             btn.title = `현재 선택된 AI 모델: ${meta.name} (${meta.desc})`;
@@ -2343,7 +2668,7 @@
                     userPrompt,
                     images: imageList
                 },
-                150000
+                210000
             );
             if (res && res.ok && res.content) {
                 if (/종료되었습니다|DIRECT_API_GUIDE/i.test(res.content)) {
@@ -2360,110 +2685,131 @@
         const candidateModels = [chosenModel];
         const fallbackPool = hasImages
             ? ["gemini-3.8-flash", "gpt-5.6-sol", "claude-sonnet-5"]
-            : ["solar-pro4", "claude-sonnet-5", "gpt-5.6-sol", "gemini-3.8-flash"];
+            : ["gemini-3.8-flash", "claude-sonnet-5", "gpt-5.6-sol", "solar-pro4"];
         for (const m of fallbackPool) {
             if (!candidateModels.includes(m)) candidateModels.push(m);
         }
 
+        const supportsOpenAiTemp = (mId) => {
+            const lm = String(mId || "").trim().toLowerCase();
+            if (!lm) return true;
+            if (lm.startsWith("gpt-5")) return false;
+            if (/^o[134](?:\b|-)/.test(lm)) return false;
+            return true;
+        };
+
         let lastErr = "Timely AI 서버 응답 실패";
         for (const modelName of candidateModels) {
-            try {
-                const provider = resolveMyAiProvider(modelName);
-                if (hasImages && provider === "upstage") continue;
-                let url = "";
-                let headers = { "Content-Type": "application/json" };
-                let payload = null;
+            const provider = resolveMyAiProvider(modelName);
+            if (hasImages && provider === "upstage") continue;
 
-                if (provider === "anthropic") {
-                    url = "https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/messages";
-                    headers["x-api-key"] = trimmedKey;
-                    headers["anthropic-version"] = "2023-06-01";
-                    const userContent = hasImages
-                        ? [
-                            ...imageList.map((img) => ({
-                                type: "image",
-                                source: { type: "base64", media_type: img.mimeType, data: img.base64 }
-                            })),
-                            { type: "text", text: userPrompt }
-                        ]
-                        : userPrompt;
-                    payload = {
-                        model: modelName,
-                        max_tokens: 8192,
-                        temperature: 0.0,
-                        system: systemPrompt,
-                        messages: [{ role: "user", content: userContent }]
-                    };
-                } else if (provider === "google") {
-                    url = `https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
-                    headers["x-goog-api-key"] = trimmedKey;
-                    const parts = hasImages
-                        ? [
-                            ...imageList.map((img) => ({
-                                inlineData: { mimeType: img.mimeType, data: img.base64 }
-                            })),
-                            { text: userPrompt }
-                        ]
-                        : [{ text: userPrompt }];
-                    payload = {
-                        systemInstruction: { parts: [{ text: systemPrompt }] },
-                        contents: [{ role: "user", parts }],
-                        generationConfig: { temperature: 0.0 }
-                    };
-                } else {
-                    url = provider === "upstage"
-                        ? "https://hello.timelyai.io/api/v2/chat/direct/upstage/v1/chat/completions"
-                        : "https://hello.timelyai.io/api/v2/chat/direct/openai/v1/chat/completions";
-                    headers["Authorization"] = `Bearer ${trimmedKey}`;
-                    const userMsgContent = hasImages
-                        ? [
-                            { type: "text", text: userPrompt },
-                            ...imageList.map((img) => ({
-                                type: "image_url",
-                                image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
-                            }))
-                        ]
-                        : userPrompt;
-                    payload = {
-                        model: modelName,
-                        messages: [
-                            { role: "system", content: systemPrompt },
-                            { role: "user", content: userMsgContent }
-                        ],
-                        temperature: 0.0
-                    };
-                }
+            let omitTemp = provider !== "upstage" && !supportsOpenAiTemp(modelName);
+            for (let tempAttempt = 0; tempAttempt < 2; tempAttempt++) {
+                try {
+                    let url = "";
+                    let headers = { "Content-Type": "application/json" };
+                    let payload = null;
 
-                const resp = await fetch(url, {
-                    method: "POST",
-                    headers,
-                    body: JSON.stringify(payload)
-                });
-                const data = await resp.json().catch(() => null);
-                let extractedText = "";
-                if (resp.ok && data) {
-                    if (provider === "anthropic" && Array.isArray(data.content)) {
-                        extractedText = data.content.filter((c) => c && c.type === "text").map((c) => c.text || "").join("\n");
-                    } else if (provider === "google" && Array.isArray(data.candidates)) {
-                        const parts = data.candidates[0]?.content?.parts || [];
-                        extractedText = parts.map((p) => p?.text || "").join("\n");
-                    } else if (Array.isArray(data.choices) && data.choices[0]?.message?.content) {
-                        extractedText = data.choices[0].message.content;
+                    if (provider === "anthropic") {
+                        url = "https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/messages";
+                        headers["x-api-key"] = trimmedKey;
+                        headers["anthropic-version"] = "2023-06-01";
+                        const userContent = hasImages
+                            ? [
+                                ...imageList.map((img) => ({
+                                    type: "image",
+                                    source: { type: "base64", media_type: img.mimeType, data: img.base64 }
+                                })),
+                                { type: "text", text: userPrompt }
+                            ]
+                            : userPrompt;
+                        payload = {
+                            model: modelName,
+                            max_tokens: 8192,
+                            temperature: 0.0,
+                            system: systemPrompt,
+                            messages: [{ role: "user", content: userContent }]
+                        };
+                    } else if (provider === "google") {
+                        url = `https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
+                        headers["x-goog-api-key"] = trimmedKey;
+                        const parts = hasImages
+                            ? [
+                                ...imageList.map((img) => ({
+                                    inlineData: { mimeType: img.mimeType, data: img.base64 }
+                                })),
+                                { text: userPrompt }
+                            ]
+                            : [{ text: userPrompt }];
+                        payload = {
+                            systemInstruction: { parts: [{ text: systemPrompt }] },
+                            contents: [{ role: "user", parts }],
+                            generationConfig: { temperature: 0.0 }
+                        };
+                    } else {
+                        url = provider === "upstage"
+                            ? "https://hello.timelyai.io/api/v2/chat/direct/upstage/v1/chat/completions"
+                            : "https://hello.timelyai.io/api/v2/chat/direct/openai/v1/chat/completions";
+                        headers["Authorization"] = `Bearer ${trimmedKey}`;
+                        const userMsgContent = hasImages
+                            ? [
+                                { type: "text", text: userPrompt },
+                                ...imageList.map((img) => ({
+                                    type: "image_url",
+                                    image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+                                }))
+                            ]
+                            : userPrompt;
+                        payload = {
+                            model: modelName,
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                { role: "user", content: userMsgContent }
+                            ]
+                        };
+                        if (!omitTemp) {
+                            payload.temperature = 0.0;
+                        }
                     }
+
+                    const resp = await fetch(url, {
+                        method: "POST",
+                        headers,
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await resp.json().catch(() => null);
+                    let extractedText = "";
+                    if (resp.ok && data) {
+                        if (provider === "anthropic" && Array.isArray(data.content)) {
+                            extractedText = data.content.filter((c) => c && c.type === "text").map((c) => c.text || "").join("\n");
+                        } else if (provider === "google" && Array.isArray(data.candidates)) {
+                            const parts = data.candidates[0]?.content?.parts || [];
+                            extractedText = parts.map((p) => p?.text || "").join("\n");
+                        } else if (Array.isArray(data.choices) && data.choices[0]?.message?.content) {
+                            extractedText = data.choices[0].message.content;
+                        }
+                    }
+                    if (extractedText && !/종료되었습니다|DIRECT_API_GUIDE/i.test(extractedText)) {
+                        return {
+                            ok: true,
+                            content: extractedText,
+                            model: modelName
+                        };
+                    }
+                    if (data && data.error) {
+                        lastErr = typeof data.error === "string" ? data.error : (data.error.message || lastErr);
+                    }
+                    if (!omitTemp && tempAttempt === 0 && (provider === "openai" || provider === "upstage") &&
+                        resp.status === 400 && /temperature/i.test(lastErr)) {
+                        omitTemp = true;
+                        continue;
+                    }
+                    if (resp.status === 401 || resp.status === 402) return { ok: false, error: lastErr };
+                    break;
+                } catch (err) {
+                    lastErr = String(err && err.message ? err.message : err);
+                    break;
                 }
-                if (extractedText && !/종료되었습니다|DIRECT_API_GUIDE/i.test(extractedText)) {
-                    return {
-                        ok: true,
-                        content: extractedText,
-                        model: modelName
-                    };
-                }
-                if (data && data.error) {
-                    lastErr = typeof data.error === "string" ? data.error : (data.error.message || lastErr);
-                }
-                if (resp.status === 401 || resp.status === 402) break;
-            } catch (err) {
-                lastErr = String(err && err.message ? err.message : err);
             }
         }
         return { ok: false, error: lastErr };
@@ -3182,6 +3528,9 @@
                     const normRespId = normalizeMyAiModelId(aiResp.model);
                     const matched = myAiActiveModels.find((m) => m.id === normRespId);
                     resolvedModelName = (matched && matched.name) ? matched.name : formatLiveModelDisplayName(normRespId);
+                    if (normRespId !== normalizeMyAiModelId(selectedModelMeta.id) && !autoSwitchedFrom) {
+                        autoSwitchedFrom = selectedModelMeta.name;
+                    }
                 }
                 aiData = parseAiStructuredJson(aiResp.content);
                 if (!aiData) {
@@ -3655,17 +4004,24 @@
             "2. 둘째 줄은 빈 줄로 두고, 셋째 줄부터 깔끔한 마크다운(소제목 ##/###, 글머리 목록, 표, 코드블록 등)으로 본문을 작성하세요."
         ].join("\n");
 
+        let autoSwitchedFromPrompt = "";
         const aiResp = await requestTimelyAiCompletion(savedApiKey, selectedModelMeta.id, systemPrompt, trimmedPrompt);
         if (aiResp && aiResp.ok && aiResp.content) {
             if (aiResp.model) {
                 const normRespId = normalizeMyAiModelId(aiResp.model);
                 const matched = myAiActiveModels.find((m) => m.id === normRespId);
                 resolvedModelName = (matched && matched.name) ? matched.name : formatLiveModelDisplayName(normRespId);
+                if (normRespId !== normalizeMyAiModelId(selectedModelMeta.id)) {
+                    autoSwitchedFromPrompt = selectedModelMeta.name;
+                }
             }
+            const promptModelBadge = autoSwitchedFromPrompt
+                ? `${autoSwitchedFromPrompt} → ${resolvedModelName} 자동 전환`
+                : resolvedModelName;
             const parsed = parsePromptOnlyAiResponse(aiResp.content, trimmedPrompt);
             const bodyHtml = renderPromptMarkdownToQuillHtml(parsed.markdownBody);
             const fullHtml = [
-                `<p><strong>[MY AI 프롬프트 답변 · ${escapeHtmlStr(resolvedModelName)}]</strong></p>`,
+                `<p><strong>[MY AI 프롬프트 답변 · ${escapeHtmlStr(promptModelBadge)}]</strong></p>`,
                 `<p><br></p>`,
                 bodyHtml
             ].join("");
@@ -3674,7 +4030,7 @@
                 html: fullHtml,
                 targetFolderId: null,
                 usedRealAi: true,
-                modelName: resolvedModelName
+                modelName: promptModelBadge
             };
         }
 
@@ -3876,11 +4232,8 @@
             return;
         }
 
-        const pill = document.getElementById("zen-bh-status-pill");
         const modelMeta = getSelectedMyAiModelMeta();
-        if (pill) {
-            pill.textContent = `${modelMeta.name} 모델이 쪽지 본문을 분석하고 있습니다...`;
-        }
+        startBlackHoleCheerRotation(`${modelMeta.name} 모델이 쪽지 본문을 분석하고 있습니다...`, 3500, 4000);
 
         const foldChecked = !!document.getElementById("zen-bh-folding-toggle")?.checked;
         const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
@@ -3926,6 +4279,7 @@
             const waitPromise = new Promise((resolve) => setTimeout(resolve, remainWait));
             [summaryResult] = await Promise.all([analysisPromise, waitPromise]);
         } finally {
+            stopBlackHoleCheerRotation();
             bhSwallowing = false;
             setBlackHoleSendingUi(false);
         }
@@ -3986,9 +4340,7 @@
 
         bhSwallowTimer1 = setTimeout(() => {
             if (!bhIsOpen) return;
-            if (pill) {
-                pill.textContent = `${modelMeta.name} 모델이 문서를 분석·요약하고 있습니다...`;
-            }
+            startBlackHoleCheerRotation(`${modelMeta.name} 모델이 문서를 분석·요약하고 있습니다...`, 3500, 4000);
         }, totalSwallowMs);
 
         const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
@@ -4005,6 +4357,7 @@
 
             [summaryResult] = await Promise.all([analysisPromise, minWaitPromise]);
         } finally {
+            stopBlackHoleCheerRotation();
             bhSwallowing = false;
             setBlackHoleSendingUi(false);
         }
@@ -4075,9 +4428,7 @@
         const minWaitMs = 1800;
         bhSwallowTimer1 = setTimeout(() => {
             if (!bhIsOpen) return;
-            if (pill) {
-                pill.textContent = `${modelMeta.name} 모델이 답변을 작성하고 있습니다...`;
-            }
+            startBlackHoleCheerRotation(`${modelMeta.name} 모델이 답변을 작성하고 있습니다...`, 3500, 4000);
         }, duration + 40);
 
         let promptResult = null;
@@ -4088,6 +4439,7 @@
             });
             [promptResult] = await Promise.all([promptPromise, minWaitPromise]);
         } finally {
+            stopBlackHoleCheerRotation();
             bhSwallowing = false;
             setBlackHoleSendingUi(false);
         }

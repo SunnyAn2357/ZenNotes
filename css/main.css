@@ -7720,6 +7720,11 @@ body.light-theme .tree-folder-icon.is-trash {
     word-break: keep-all;
     overflow: visible;
     text-overflow: clip;
+    transition: opacity 0.24s ease;
+}
+
+.zen-bh-status-pill.is-cheer-fading {
+    opacity: 0.22;
 }
 
 .zen-bh-options-divider {
