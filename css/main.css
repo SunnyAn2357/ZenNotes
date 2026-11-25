@@ -8008,6 +8008,16 @@ body.light-theme .zen-bh-model-opt-icon {
     box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.22), inset 0 0 32px rgba(251, 191, 36, 0.14);
 }
 
+#sts-memo-editor a {
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+#sts-memo-editor a:hover {
+    opacity: 0.8;
+}
+
 .zen-mt-modal-overlay {
     position: fixed;
     inset: 0;

@@ -787,6 +787,32 @@
                     li.setAttribute("data-list", cur === "checked" ? "unchecked" : "checked");
                     e.preventDefault();
                 }
+                return;
+            }
+
+            const anchor = e.target.closest("a");
+            if (!anchor) return;
+            const rawHref = (anchor.getAttribute("href") || "").trim();
+            if (!rawHref) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (typeof openLocalOrExternalLink === "function" && openLocalOrExternalLink(rawHref)) {
+                return;
+            }
+            if (isDesktopWebViewEnv()) {
+                try {
+                    window.chrome.webview.postMessage(JSON.stringify({ type: "openExternalUrl", url: rawHref }));
+                } catch { }
+                return;
+            }
+            if (/^(https?:\/\/|mailto:)/i.test(rawHref)) {
+                window.open(rawHref, "_blank", "noopener,noreferrer");
+                return;
+            }
+            if (typeof showToast === "function") {
+                showToast("로컬 파일 및 폴더 열기는 데스크톱 MY 노트 앱에서 지원됩니다.");
             }
         });
     }
@@ -2981,6 +3007,7 @@
                         folderLabel,
                         senderLabel: tuc.senderLabel || "",
                         windowTitle: tuc.windowTitle || "",
+                        sentAtText: tuc.sentAtText || tuc.capturedAtText || "",
                         capturedAtText: tuc.capturedAtText || "",
                         bodyText: tuc.bodyText || "",
                         bodyHtml: tuc.bodyHtml || "",
@@ -3260,6 +3287,7 @@
                         folderLabel,
                         senderLabel: tuc.senderLabel || "",
                         windowTitle: tuc.windowTitle || "",
+                        sentAtText: tuc.sentAtText || tuc.capturedAtText || "",
                         capturedAtText: tuc.capturedAtText || "",
                         bodyText: tuc.bodyText || "",
                         bodyHtml: tuc.bodyHtml || "",
@@ -3846,10 +3874,11 @@
         const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
         const userPromptText = (document.getElementById("zen-bh-user-prompt")?.value || "").trim();
         const refYear = Number(payload.referenceYear) > 2000 ? Number(payload.referenceYear) : new Date().getFullYear();
+        const sentAtText = String(payload.sentAtText || payload.capturedAtText || "").trim();
 
         const rawParts = [];
         if (payload.senderLabel) rawParts.push(`[보낸사람] ${payload.senderLabel}`);
-        if (payload.capturedAtText) rawParts.push(`[수집/기준 시각] ${payload.capturedAtText} (연도 생략 날짜 기준: ${refYear}년)`);
+        if (sentAtText) rawParts.push(`[발신일시] ${sentAtText} (본문에 연도가 생략된 날짜는 발신일시 기준 연도인 ${refYear}년으로 해석)`);
         if (payload.bodyText) rawParts.push(`[쪽지 본문]\n${String(payload.bodyText).slice(0, 140000)}`);
 
         const collectedImages = [];
