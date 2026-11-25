@@ -1221,8 +1221,8 @@
         memo: {
             label: "쪽지 분석",
             defaultFolding: true,
-            prompt: "받은 쪽지 창을 블랙홀에 끌어다 놓거나 파일을 던져 넣으세요(개인정보X, 비공개문서X).",
-            hint: "쪽지 본문 및 첨부파일을 함께 AI 전송·분석합니다."
+            prompt: "받은 쪽지를 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
+            hint: "쪽지 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         summary: {
             label: "문서 요약",
@@ -3123,7 +3123,7 @@
 
             const memoExtraRules = modeKey === "memo"
                 ? [
-                    `[쪽지 제목 초안 작성 규칙] 쪽지 헤더 제목은 비어 있는 경우가 많으므로 기존 파일명·빈 제목에 의존하지 말고 본문과 첨부파일의 핵심 업무를 압축한 명확하고 간결한 제목 초안(title)을 25자 이내로 직접 작성하세요.`,
+                    `[쪽지 제목 초안 작성 규칙] 쪽지 헤더 제목은 비어 있는 경우가 많으므로 기존 파일명·빈 제목에 의존하지 말고 쪽지 본문의 핵심 업무를 압축한 명확하고 간결한 제목 초안(title)을 25자 이내로 직접 작성하세요.`,
                     isForwardedMemo
                         ? `[전달 쪽지 처리 규칙] 이 쪽지는 전달된 쪽지입니다. '원본 내용' 구분선 아래의 원본 본문에서 핵심 일정·기한·제출처·요청사항을 우선 기준으로 추출하고, 상단 전달자의 추가 지시도 함께 반영하세요.`
                         : "",
@@ -3153,7 +3153,7 @@
                     reportStyleRule,
                     "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
                     "{",
-                    `  "title": "${modeKey === "memo" ? "본문과 첨부파일의 핵심 업무를 압축한 간결한 쪽지 제목 초안 (25자 이내)" : "원문에 명시된 공문 제목"}",`,
+                    `  "title": "${modeKey === "memo" ? "쪽지 본문의 핵심 업무를 압축한 간결한 쪽지 제목 초안 (25자 이내)" : "원문에 명시된 공문 제목"}",`,
                     '  "dueDate": "원문에 명시된 제출/회신 마감일 또는 일시 (연도가 생략된 경우 기준 연도를 보정해 YYYY-MM-DD 형식 또는 원문 그대로 기재, 마감일/기한이 없으면 반드시 빈 문자열 \\"\\")",',
                     '  "submitTarget": "원문에 명시된 제출처/회신처/장소 (원문에 제출처나 장소가 없으면 반드시 빈 문자열 \\"\\")",',
                     '  "summaryLead": "상단 인용구용 핵심 요지 (원문에 있는 사실만 1~2문장으로 간결히 기재)",',
@@ -3864,10 +3864,22 @@
             return;
         }
 
+        const bodyTextClean = String(payload.bodyText || "").trim();
+        if (!bodyTextClean) {
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+            const curPill = document.getElementById("zen-bh-status-pill");
+            if (curPill) curPill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt;
+            if (typeof showToast === "function") {
+                showToast("쪽지 본문이 비어 있어 AI 분석을 진행할 수 없습니다.");
+            }
+            return;
+        }
+
         const pill = document.getElementById("zen-bh-status-pill");
         const modelMeta = getSelectedMyAiModelMeta();
         if (pill) {
-            pill.textContent = `${modelMeta.name} 모델이 쪽지 본문과 첨부를 분석하고 있습니다...`;
+            pill.textContent = `${modelMeta.name} 모델이 쪽지 본문을 분석하고 있습니다...`;
         }
 
         const foldChecked = !!document.getElementById("zen-bh-folding-toggle")?.checked;
@@ -3879,62 +3891,19 @@
         const rawParts = [];
         if (payload.senderLabel) rawParts.push(`[보낸사람] ${payload.senderLabel}`);
         if (sentAtText) rawParts.push(`[발신일시] ${sentAtText} (본문에 연도가 생략된 날짜는 발신일시 기준 연도인 ${refYear}년으로 해석)`);
-        if (payload.bodyText) rawParts.push(`[쪽지 본문]\n${String(payload.bodyText).slice(0, 140000)}`);
+        rawParts.push(`[쪽지 본문]\n${bodyTextClean.slice(0, 140000)}`);
 
         const collectedImages = [];
         const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
         let primaryAttName = "";
-
         for (const att of attachments) {
-            if (!att || !att.name) continue;
-            if (!primaryAttName) primaryAttName = att.name;
-            if (att.extractedText) {
-                rawParts.push(`[첨부파일: ${att.name}]\n${String(att.extractedText).slice(0, 60000)}`);
-            }
-            if (att.embeddedPdfBase64) {
-                try {
-                    const pdfBytes = base64ToUint8Array(att.embeddedPdfBase64);
-                    const meta = await extractPdfTextMetaFromBytes(pdfBytes, 50);
-                    if (meta.text) {
-                        rawParts.push(`[첨부 PDF: ${att.name}]\n${meta.text.slice(0, 80000)}`);
-                    }
-                    if (isPdfTextTooSparse(meta.text, meta.totalPages, meta.textPageCount) && collectedImages.length < 20) {
-                        const scannedImgs = await renderScannedPdfPagesToImages(pdfBytes, 20 - collectedImages.length);
-                        for (const si of scannedImgs) {
-                            if (collectedImages.length >= 20) break;
-                            collectedImages.push(si);
-                        }
-                    }
-                } catch (err) {
-                    console.warn("[TUC 첨부 PDF 분석 실패]", err);
-                }
-            }
-            if (Array.isArray(att.embeddedImages) && att.embeddedImages.length > 0 && collectedImages.length < 20) {
-                for (const item of att.embeddedImages) {
-                    if (collectedImages.length >= 20) break;
-                    if (!item || !item.base64) continue;
-                    const mime = item.mimeType || "image/jpeg";
-                    const normalized = await resizeImageDataUrlToPayload(
-                        `data:${mime};base64,${item.base64}`,
-                        mime === "image/png" ? "image/png" : "image/jpeg",
-                        attachments.length > 10 ? 1500 : 2000,
-                        attachments.length > 10 ? 0.76 : 0.86
-                    );
-                    if (normalized) collectedImages.push(normalized);
-                }
+            if (att && att.name) {
+                primaryAttName = att.name;
+                break;
             }
         }
 
         const combinedText = rawParts.join("\n\n").slice(0, 200000);
-        if (collectedImages.length === 0 && combinedText.replace(/\s+/g, "").length < 30 && payload.screenshotBase64) {
-            const shotImg = await resizeImageDataUrlToPayload(
-                `data:image/png;base64,${payload.screenshotBase64}`,
-                "image/png",
-                1800,
-                0.86
-            );
-            if (shotImg) collectedImages.push(shotImg);
-        }
 
         let summaryResult = null;
         try {

@@ -274,12 +274,12 @@ button:hover {
     position: fixed;
     top: 24px;
     height: 36px;
-    right: 50px;
+    right: 48px;
     /* 상태알림과 상태점, 일정 아이콘을 우측 상단 삼점 가운데 높이와 일치 (모바일 별도) */
     z-index: 999;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     /* 상태알림과 상태점 사이의 여백 */
 }
 
@@ -3881,14 +3881,35 @@ body.light-theme {
     }
 
     /* [수정/추가] 모바일 터치 영역 최적화 (투명 방어막) */
-    /* 1. 상단 고정 버튼 (우측 삼점, 좌측 삼선): 사방으로 15px 확장 */
-    #global-menu-btn::after,
+    /* 1. 상단 고정 버튼 (좌측 삼선: 사방 확장, 우측 삼점 & 일정관리: 인접 경계 겹침 없이 동일 수준 확장) */
     #mobile-left-menu-btn::after {
         content: '';
         position: absolute;
         top: -15px;
         left: -15px;
         right: -15px;
+        bottom: -12px;
+    }
+
+    #global-menu-btn::after {
+        content: '';
+        position: absolute;
+        top: -15px;
+        left: -2px;
+        right: -15px;
+        bottom: -12px;
+    }
+
+    .zen-send-schedule-btn {
+        position: relative;
+    }
+
+    .zen-send-schedule-btn::after {
+        content: '';
+        position: absolute;
+        top: -15px;
+        left: -8px;
+        right: -2px;
         bottom: -12px;
     }
 
@@ -6906,14 +6927,14 @@ body.light-theme .tree-folder-icon.is-trash {
     transform: rotate(180deg);
 }
 
-/* 우측 상단 상태 표시줄 우측(삼점 왼쪽): MY 일정관리로 보내기 (무테두리 단색 Zen 아이콘) */
+/* 우측 상단 상태 표시줄 우측(삼점 왼쪽): MY 일정관리로 보내기 (무테두리 단색 Zen 아이콘, 삼점 버튼과 동일 36x36 클릭 영역) */
 .zen-send-schedule-btn {
-    width: 24px;
-    height: 24px;
+    width: 36px;
+    height: 36px;
     padding: 0;
-    margin: 0 0 0 4px;
+    margin: 0;
     border: none;
-    border-radius: 6px;
+    border-radius: 50%;
     background: transparent;
     box-shadow: none;
     color: var(--text-muted);
@@ -6925,11 +6946,11 @@ body.light-theme .tree-folder-icon.is-trash {
     user-select: none;
     caret-color: transparent;
     animation: zenLivingPulseBlue 4.2s ease-in-out infinite;
-    transition: color 0.16s ease, transform 0.12s ease;
+    transition: background-color 0.16s ease, color 0.16s ease, transform 0.12s ease;
 }
 
 .zen-send-schedule-btn:hover {
-    background: transparent;
+    background: var(--surface-hover);
     color: var(--accent);
     border: none;
 }
