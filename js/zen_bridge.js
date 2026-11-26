@@ -1225,7 +1225,7 @@
             hint: "쪽지 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         summary: {
-            label: "문서 요약",
+            label: "문서 분석",
             defaultFolding: false,
             prompt: "요약하고 싶은 문서를 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
             hint: "AI가 문서를 요약해 줍니다."
@@ -1868,7 +1868,7 @@
         sendBtn.disabled = !!isSending || !isSummaryMode;
         sendBtn.title = isSummaryMode
             ? "문서 없이 프롬프트만 AI에 전송 (Ctrl+Enter)"
-            : "문서 없이 프롬프트 전송은 '문서 요약' 탭에서 사용할 수 있습니다.";
+            : "문서 없이 프롬프트 전송은 '문서 분석' 탭에서 사용할 수 있습니다.";
     }
 
     function notifyDesktopBlackHolePortalState(isOpen) {
@@ -2575,7 +2575,14 @@
 
     async function ensureBlackHoleTargetNoteFolder(modeKey) {
         if (typeof db === "undefined" || !db) return null;
-        const folderTitle = modeKey === "official" ? "공문" : modeKey === "memo" ? "쪽지" : "문서";
+        const sysType = modeKey === "official" ? "bh_official" : modeKey === "memo" ? "bh_memo" : "bh_doc";
+        const syncId = modeKey === "official" ? "sys_bh_official" : modeKey === "memo" ? "sys_bh_memo" : "sys_bh_doc";
+        const folderTitle = modeKey === "official" ? "공문 분석" : modeKey === "memo" ? "쪽지 분석" : "문서 분석";
+        const globalId = modeKey === "official"
+            ? (typeof globalBhOfficialFolderId !== "undefined" ? globalBhOfficialFolderId : null)
+            : modeKey === "memo"
+                ? (typeof globalBhMemoFolderId !== "undefined" ? globalBhMemoFolderId : null)
+                : (typeof globalBhDocFolderId !== "undefined" ? globalBhDocFolderId : null);
 
         return new Promise((resolve) => {
             try {
@@ -2592,20 +2599,38 @@
                             m.type === "folder" &&
                             !m.isDeleted &&
                             !m.isPermanentlyDeleted &&
-                            !m.isSystem &&
-                            (m.parentId === null || m.parentId === undefined) &&
-                            String(m.title || "").trim() === folderTitle
+                            (
+                                m.isSystem === sysType ||
+                                m.syncId === syncId ||
+                                (globalId !== null && m.id === globalId) ||
+                                (!m.isSystem && (m.parentId === null || m.parentId === undefined) && String(m.title || "").trim() === folderTitle)
+                            )
                     );
                     if (existing && existing.id !== undefined && existing.id !== null) {
+                        let changed = false;
+                        if (existing.isSystem !== sysType) {
+                            existing.isSystem = sysType;
+                            changed = true;
+                        }
+                        if (existing.syncId !== syncId) {
+                            existing.syncId = syncId;
+                            changed = true;
+                        }
+                        if (existing.title !== folderTitle) {
+                            existing.title = folderTitle;
+                            changed = true;
+                        }
+                        if (changed) store.put(existing);
                         resolvedId = existing.id;
                         return;
                     }
                     const addReq = store.add({
                         title: folderTitle,
                         type: "folder",
+                        isSystem: sysType,
                         parentId: null,
                         parentSyncId: null,
-                        syncId: typeof generateSyncId === "function" ? generateSyncId() : Date.now().toString(36),
+                        syncId,
                         updatedAt: Date.now(),
                         isDeleted: false
                     });
@@ -2617,6 +2642,13 @@
                 tx.oncomplete = () => {
                     try {
                         if (resolvedId !== null && resolvedId !== undefined) {
+                            if (modeKey === "official" && typeof globalBhOfficialFolderId !== "undefined") {
+                                globalBhOfficialFolderId = resolvedId;
+                            } else if (modeKey === "memo" && typeof globalBhMemoFolderId !== "undefined") {
+                                globalBhMemoFolderId = resolvedId;
+                            } else if (modeKey === "summary" && typeof globalBhDocFolderId !== "undefined") {
+                                globalBhDocFolderId = resolvedId;
+                            }
                             if (typeof ensureSidebarExpandedInitialized === "function") {
                                 ensureSidebarExpandedInitialized();
                             }
@@ -3667,7 +3699,7 @@
             const noteTitle = rawSubj;
             if (!aiData) {
                 const errHtml = [
-                    `<p><strong>[MY AI 문서 요약 · ${escapeHtmlStr(displayModelBadge)}]</strong></p>`,
+                    `<p><strong>[MY AI 문서 분석 · ${escapeHtmlStr(displayModelBadge)}]</strong></p>`,
                     `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 요약할 수 없습니다.")}</blockquote>`,
                     linksHtml
                 ].join("");
@@ -4374,7 +4406,7 @@
         if (!bhIsOpen || bhSwallowing) return;
         if (bhCurrentMode !== "summary") {
             if (typeof showToast === "function") {
-                showToast("문서 없이 프롬프트 전송은 '문서 요약' 탭에서 사용할 수 있습니다.");
+                showToast("문서 없이 프롬프트 전송은 '문서 분석' 탭에서 사용할 수 있습니다.");
             }
             return;
         }

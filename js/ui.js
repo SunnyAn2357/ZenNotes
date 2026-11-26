@@ -472,35 +472,122 @@ function executeUndo() {
 }
 
 if ("serviceWorker" in navigator) {
+  window.__zenLastUserInputTs = 0;
+  document.addEventListener(
+    "input",
+    () => {
+      window.__zenLastUserInputTs = Date.now();
+    },
+    true,
+  );
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (
+        e.target &&
+        (e.target.id === "memo-title-input" ||
+          (e.target.closest && e.target.closest("#editor")))
+      ) {
+        window.__zenLastUserInputTs = Date.now();
+      }
+    },
+    true,
+  );
+
+  function isSafeForSilentAutoReload() {
+    if (Date.now() - (window.__zenLastUserInputTs || 0) < 2500) {
+      return false;
+    }
+    if (typeof isSaving !== "undefined" && isSaving) {
+      return false;
+    }
+    const blockingModalIds = [
+      "fm-security-modal",
+      "app-lock-setup-modal",
+      "send-to-schedule-modal",
+      "zen-blackhole-portal-layer",
+      "zen-memo-title-modal",
+      "fm-name-prompt-modal",
+      "link-insert-modal",
+      "settings-modal",
+    ];
+    for (let i = 0; i < blockingModalIds.length; i++) {
+      const el = document.getElementById(blockingModalIds[i]);
+      if (el && el.style && el.style.display === "flex") {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  let autoReloadPending = false;
+  function scheduleSafeAutoUpdateReload() {
+    if (refreshing || autoReloadPending) return;
+    autoReloadPending = true;
+
+    const updateToast = document.getElementById("update-toast");
+    if (updateToast) updateToast.style.display = "none";
+
+    const runReloadWhenSafe = () => {
+      if (refreshing) return;
+      if (!isSafeForSilentAutoReload()) {
+        setTimeout(runReloadWhenSafe, 1200);
+        return;
+      }
+      refreshing = true;
+      if (
+        typeof saveTimer !== "undefined" &&
+        saveTimer &&
+        typeof forceSaveImmediate === "function"
+      ) {
+        try {
+          forceSaveImmediate();
+        } catch {}
+      }
+      try {
+        sessionStorage.setItem("zen_just_auto_updated", "1");
+      } catch {}
+      setTimeout(() => {
+        window.location.reload();
+      }, 350);
+    };
+
+    runReloadWhenSafe();
+  }
+
   window.addEventListener("load", () => {
+    try {
+      if (sessionStorage.getItem("zen_just_auto_updated") === "1") {
+        sessionStorage.removeItem("zen_just_auto_updated");
+        setTimeout(() => {
+          if (typeof showToast === "function") {
+            showToast("최신 버전으로 자동 업데이트되었습니다.");
+          }
+        }, 900);
+      }
+    } catch {}
+
     const isDesktopWebView = !!(window.chrome && window.chrome.webview);
     if (isDesktopWebView) return;
+
     navigator.serviceWorker
-      .register("./sw.js")
+      .register("./sw.js", { updateViaCache: "none" })
       .then((registration) => {
         console.log("✅ 서비스 워커 등록 완료! Scope:", registration.scope);
 
-        // 🎯 업데이트 팝업(토스트) 표시 헬퍼 함수
-        const showUpdateToast = (worker) => {
-          const updateToast = document.getElementById("update-toast");
-          if (!updateToast) return;
-          updateToast.style.display = "flex";
-
-          const updateBtn = document.getElementById("update-btn");
-          if (updateBtn) {
-            updateBtn.onclick = () => {
-              updateToast.style.display = "none";
-              worker.postMessage({ type: "SKIP_WAITING" });
-            };
-          }
+        const triggerSilentSkipWaiting = (worker) => {
+          if (!worker) return;
+          try {
+            worker.postMessage({ type: "SKIP_WAITING" });
+          } catch {}
         };
 
-        // 🎯 1. 이미 백그라운드에 다운로드되어 대기(waiting) 중인 새 워커가 있다면 즉시 팝업 표시
+        // 1. 이미 대기(waiting) 중인 새 워커가 있으면 즉시 활성화 요청
         if (registration.waiting && navigator.serviceWorker.controller) {
-          showUpdateToast(registration.waiting);
+          triggerSilentSkipWaiting(registration.waiting);
         }
 
-        // 🎯 2. 새로운 버전의 서비스 워커 설치가 발견되었을 때
+        // 2. 새로운 버전의 서비스 워커 설치가 완료되면 즉시 활성화 요청
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
           if (!newWorker) return;
@@ -510,26 +597,42 @@ if ("serviceWorker" in navigator) {
               newWorker.state === "installed" &&
               navigator.serviceWorker.controller
             ) {
-              showUpdateToast(newWorker);
+              triggerSilentSkipWaiting(newWorker);
             }
           });
         });
 
-        // 🎯 3. 깃허브 호스팅 환경: 앱 접속 시 서버의 최신 sw.js 즉시 확인 요청
+        // 3. 앱 접속 시 서버의 최신 sw.js 즉시 확인
         try {
-          registration.update();
-        } catch (e) {}
+          registration.update().catch(() => {});
+        } catch {}
+
+        // 4. 브라우저/PWA 복귀 시(30초 디바운스) 및 1시간 주기 자동 업데이트 확인
+        let lastSwUpdateCheckAt = Date.now();
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            const nowTs = Date.now();
+            if (nowTs - lastSwUpdateCheckAt >= 30000) {
+              lastSwUpdateCheckAt = nowTs;
+              try {
+                registration.update().catch(() => {});
+              } catch {}
+            }
+          }
+        });
+        setInterval(() => {
+          try {
+            registration.update().catch(() => {});
+          } catch {}
+        }, 60 * 60 * 1000);
       })
       .catch((error) => {
         console.error("❌ 서비스 워커 등록 실패:", error);
       });
 
-    // 🎯 대기 중이던 새 워커가 권한을 넘겨받고 활성화되면 페이지를 1회 새로고침하여 새 화면 표시
+    // 새 워커가 제어권을 넘겨받으면 안전 시점에 미저장본 저장 후 무인 자동 새로고침
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
+      scheduleSafeAutoUpdateReload();
     });
   });
 }
@@ -1387,6 +1490,18 @@ function triggerBankAutoLock(reason = "auto") {
       }
       lockAppScreen(reason);
     }
+  }
+
+  // [2중 잠금] 보안 폴더 오토락 해제 상태이면 자동 잠금(minimize/blur/visibility 등) 생략 (수동 '지금 잠그기'는 항상 잠금)
+  const isSecAutoLockOn =
+    typeof isSecurityAutoLockEnabled === "function"
+      ? isSecurityAutoLockEnabled()
+      : localStorage.getItem("zen_sec_autolock") !== "false";
+  if (reason !== "securityOnly" && !isSecAutoLockOn) {
+    if (typeof saveTimer !== "undefined" && saveTimer && typeof forceSaveImmediate === "function") {
+      forceSaveImmediate();
+    }
+    return;
   }
 
   // [2중 잠금] 보안 폴더 암호화 자동 저장 + 암호키 파기 + 보안 노트 대피 + 보안 폴더 퇴거

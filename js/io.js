@@ -2302,7 +2302,10 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
       item.isSystem === "desktop" ||
       item.isSystem === "backup" ||
       item.isSystem === "security" ||
-      item.isSystem === "trash"
+      item.isSystem === "trash" ||
+      item.isSystem === "bh_official" ||
+      item.isSystem === "bh_memo" ||
+      item.isSystem === "bh_doc"
     ) {
       return item.isSystem;
     }
@@ -2310,7 +2313,28 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
     if (item.syncId === "sys_backup") return "backup";
     if (item.syncId === "sys_security") return "security";
     if (item.syncId === "sys_trash") return "trash";
+    if (item.syncId === "sys_bh_official") return "bh_official";
+    if (item.syncId === "sys_bh_memo") return "bh_memo";
+    if (item.syncId === "sys_bh_doc") return "bh_doc";
     if (item.title === "바탕 화면" || item.title === "임시 폴더") return "desktop";
+    if (
+      (item.parentId === null || item.parentId === undefined) &&
+      (item.title === "공문" || item.title === "공문 분석")
+    ) {
+      return "bh_official";
+    }
+    if (
+      (item.parentId === null || item.parentId === undefined) &&
+      (item.title === "쪽지" || item.title === "쪽지 분석")
+    ) {
+      return "bh_memo";
+    }
+    if (
+      (item.parentId === null || item.parentId === undefined) &&
+      (item.title === "문서" || item.title === "문서 분석")
+    ) {
+      return "bh_doc";
+    }
     if (
       (item.parentId === null || item.parentId === undefined) &&
       (item.title === "쓸어 담기" || item.title === "임시 저장")
@@ -2361,6 +2385,9 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
       backup: desktopMasterId,
       security: typeof globalSecurityFolderId !== "undefined" ? globalSecurityFolderId : null,
       trash: typeof globalTrashFolderId !== "undefined" ? globalTrashFolderId : null,
+      bh_official: typeof globalBhOfficialFolderId !== "undefined" ? globalBhOfficialFolderId : null,
+      bh_memo: typeof globalBhMemoFolderId !== "undefined" ? globalBhMemoFolderId : null,
+      bh_doc: typeof globalBhDocFolderId !== "undefined" ? globalBhDocFolderId : null,
     };
 
     const existingBySyncId = new Map();
@@ -2429,6 +2456,18 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
       syncIdToNewId.set("sys_trash", sysMasterByType.trash);
       newIdToSyncId.set(sysMasterByType.trash, "sys_trash");
     }
+    if (sysMasterByType.bh_official) {
+      syncIdToNewId.set("sys_bh_official", sysMasterByType.bh_official);
+      newIdToSyncId.set(sysMasterByType.bh_official, "sys_bh_official");
+    }
+    if (sysMasterByType.bh_memo) {
+      syncIdToNewId.set("sys_bh_memo", sysMasterByType.bh_memo);
+      newIdToSyncId.set(sysMasterByType.bh_memo, "sys_bh_memo");
+    }
+    if (sysMasterByType.bh_doc) {
+      syncIdToNewId.set("sys_bh_doc", sysMasterByType.bh_doc);
+      newIdToSyncId.set(sysMasterByType.bh_doc, "sys_bh_doc");
+    }
 
     function resolveParentId(item, isFolder) {
       if (item.parentId !== undefined && item.parentId !== null) {
@@ -2453,6 +2492,9 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
       if (pSyncId === "sys_backup" && sysMasterByType.backup) return sysMasterByType.backup;
       if (pSyncId === "sys_security" && sysMasterByType.security) return sysMasterByType.security;
       if (pSyncId === "sys_trash" && sysMasterByType.trash) return sysMasterByType.trash;
+      if (pSyncId === "sys_bh_official" && sysMasterByType.bh_official) return sysMasterByType.bh_official;
+      if (pSyncId === "sys_bh_memo" && sysMasterByType.bh_memo) return sysMasterByType.bh_memo;
+      if (pSyncId === "sys_bh_doc" && sysMasterByType.bh_doc) return sysMasterByType.bh_doc;
 
       if (isFolder) return null;
       return sysMasterByType.desktop;

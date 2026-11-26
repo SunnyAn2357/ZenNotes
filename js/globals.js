@@ -20,8 +20,9 @@ let selectedTrashMemos = new Set(), displayedTrashMemos = [], lastSelectedTrashI
 // 🎯 [모바일 다중선택]
 let isMultiSelectMode = false, isTrashMultiSelectMode = false, pressTimer = null, isPressTriggered = false;
 
-// 🎯 [폴더 시스템 3대장] (임시 폴더, 보안 폴더, 휴지통; backup은 하위 호환용 null)
+// 🎯 [폴더 시스템 3대장 + 블랙홀 분석 3종] (임시 폴더, 보안 폴더, 휴지통, 공문/쪽지/문서 분석; backup은 하위 호환용 null)
 let globalDesktopFolderId = null, globalSecurityFolderId = null, globalTrashFolderId = null, globalBackupFolderId = null;
+let globalBhOfficialFolderId = null, globalBhMemoFolderId = null, globalBhDocFolderId = null;
 
 function getRootDriveLabel() {
   if (typeof window !== "undefined" && window.ZEN_ROOT_DRIVE_LABEL) {

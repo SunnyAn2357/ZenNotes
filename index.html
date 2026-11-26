@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.8.7">
-    <link rel="manifest" href="manifest.json?v=1.8.7">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.8.10">
+    <link rel="manifest" href="manifest.json?v=1.8.10">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.8.7">
+    <link rel="stylesheet" href="css/main.css?v=1.8.10">
 
 </head>
 
@@ -266,6 +266,7 @@
                         비밀번호를 입력하세요.</div>
                     <input type="password" id="sec-password-input" class="sec-input" placeholder="••••••••" autocomplete="off"
                         enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false"
+                        oninput="handleSecurityPasswordInputLive()"
                         onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitSecurityPassword();}"
                         onclick="event.stopPropagation()">
                 </div>
@@ -907,7 +908,7 @@
                         </button>
                         <button type="button" class="zen-settings-sub-btn" onclick="saveMyAiApiKey()">저장</button>
                     </div>
-                    <div class="zen-settings-item-desc">공문 · 쪽지 · 문서 요약 시 TimelyGPT(MY AI) 호출에 사용할 개인 인증 키입니다.</div>
+                    <div class="zen-settings-item-desc">공문 · 쪽지 · 문서 분석 시 TimelyGPT(MY AI) 호출에 사용할 개인 인증 키입니다.</div>
                 </div>
             </div>
 
@@ -1133,7 +1134,7 @@
             <div class="zen-bh-mode-tabs" role="tablist" aria-label="투입 유형">
                 <button type="button" class="zen-bh-mode-btn active" data-bh-mode="official" onclick="setBlackHoleMode('official')">공문 분석</button>
                 <button type="button" class="zen-bh-mode-btn" data-bh-mode="memo" onclick="setBlackHoleMode('memo')">쪽지 분석</button>
-                <button type="button" class="zen-bh-mode-btn" data-bh-mode="summary" onclick="setBlackHoleMode('summary')">문서 요약</button>
+                <button type="button" class="zen-bh-mode-btn" data-bh-mode="summary" onclick="setBlackHoleMode('summary')">문서 분석</button>
             </div>
             <div id="zen-bh-orb-dropzone" class="zen-bh-orb-dropzone" onclick="triggerBlackHoleFilePick()" title="파일을 끌어다 놓거나 클릭해 선택하세요">
                 <canvas id="zen-bh-canvas" class="zen-bh-canvas"></canvas>
@@ -1158,7 +1159,7 @@
                     </label>
                     <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">공문 본문만 AI 전송·분석합니다(첨부 제외).</div>
                 </div>
-                <button type="button" id="zen-bh-prompt-send-btn" class="zen-bh-act-btn zen-bh-prompt-send-btn" onclick="submitBlackHolePromptOnly()" disabled title="문서 없이 프롬프트 전송은 '문서 요약' 탭에서 사용할 수 있습니다.">문서없이 프롬프트 전송</button>
+                <button type="button" id="zen-bh-prompt-send-btn" class="zen-bh-act-btn zen-bh-prompt-send-btn" onclick="submitBlackHolePromptOnly()" disabled title="문서 없이 프롬프트 전송은 '문서 분석' 탭에서 사용할 수 있습니다.">문서없이 프롬프트 전송</button>
             </div>
         </div>
     </div>
@@ -1191,20 +1192,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.8.7"></script>
-    <script src="js/db.js?v=1.8.7"></script>
-    <script src="js/ui.js?v=1.8.7"></script>
-    <script src="js/editor.js?v=1.8.7"></script>
-    <script src="js/file_manager.js?v=1.8.7"></script>
-    <script src="js/io.js?v=1.8.7"></script>
-    <script src="js/auth.js?v=1.8.7"></script>
-    <script src="js/zen_bridge.js?v=1.8.7"></script>
+    <script src="js/globals.js?v=1.8.10"></script>
+    <script src="js/db.js?v=1.8.10"></script>
+    <script src="js/ui.js?v=1.8.10"></script>
+    <script src="js/editor.js?v=1.8.10"></script>
+    <script src="js/file_manager.js?v=1.8.10"></script>
+    <script src="js/io.js?v=1.8.10"></script>
+    <script src="js/auth.js?v=1.8.10"></script>
+    <script src="js/zen_bridge.js?v=1.8.10"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.8.7");
+            console.log("[ZenNotes] 현재 버전: V1.8.10");
             console.log("=========================================");
         });
     </script>

@@ -1,37 +1,38 @@
 // 캐시 이름 (앱을 업데이트할 때마다 v2, v3... 로 숫자를 올려주세요!)
-const CACHE_NAME = 'zennotes-cache-v1.8.7';
+const CACHE_NAME = 'zennotes-cache-v1.8.10';
 
 // 반드시 캐싱해야 할 내 서버의 기본 파일들
 const STATIC_ASSETS = [
     './',
     './index.html',
     './manifest.json',
-    './css/main.css?v=1.8.7',
-    './js/globals.js?v=1.8.7',
-    './js/db.js?v=1.8.7',
-    './js/ui.js?v=1.8.7',
-    './js/editor.js?v=1.8.7',
-    './js/file_manager.js?v=1.8.7',
-    './js/io.js?v=1.8.7',
-    './js/auth.js?v=1.8.7',
-    './js/zen_bridge.js?v=1.8.7',
+    './css/main.css?v=1.8.10',
+    './js/globals.js?v=1.8.10',
+    './js/db.js?v=1.8.10',
+    './js/ui.js?v=1.8.10',
+    './js/editor.js?v=1.8.10',
+    './js/file_manager.js?v=1.8.10',
+    './js/io.js?v=1.8.10',
+    './js/auth.js?v=1.8.10',
+    './js/zen_bridge.js?v=1.8.10',
     './img192.png',
     './img512.png',
     './miryang_bi.png'
 ];
 
-// 1. 설치(Install) 이벤트: 워커가 설치될 때 기본 파일들을 미리 저장합니다.
+// 1. 설치(Install) 이벤트: 새 버전 기본 파일을 캐싱하고 즉시 활성화 대기열에 진입합니다.
 self.addEventListener('install', event => {
-    // 🎯 [수정됨] self.skipWaiting(); 제거! (사용자가 알림창 버튼을 누를 때까지 얌전히 대기하도록 만듭니다)
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
             console.log('✅ 워커: 기본 파일 캐싱 완료');
-            return cache.addAll(STATIC_ASSETS);
-        })
+            return Promise.allSettled(
+                STATIC_ASSETS.map(url => cache.add(url))
+            );
+        }).then(() => self.skipWaiting())
     );
 });
 
-// 2. 활성화(Activate) 이벤트: 새로운 버전(v2, v3..)이 나오면 옛날 캐시 쓰레기를 비워줍니다.
+// 2. 활성화(Activate) 이벤트: 구버전 캐시를 정리하고 즉시 열린 클라이언트를 인계받습니다.
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(keys => {
@@ -42,11 +43,11 @@ self.addEventListener('activate', event => {
                     }
                 })
             );
-        })
+        }).then(() => self.clients.claim())
     );
 });
 
-// 3. 패치(Fetch) 이벤트: 앱이 무언가를 요청할 때 워커가 중간에 가로챕니다. (핵심 로직)
+// 3. 패치(Fetch) 이벤트: Stale-While-Revalidate + 오프라인 폴백
 self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') return;
     // 🎯 [V4.3.1] http/https 요청만 처리 (크롬 확장 프로그램 chrome-extension:// 등 캐시 불가 스키마 제외)
@@ -60,20 +61,23 @@ self.addEventListener('fetch', event => {
 
     event.respondWith(
         caches.match(event.request).then(cachedResponse => {
-            // 3-1. 캐시에 이미 저장된 파일이 있으면 인터넷을 거치지 않고 바로 줍니다. (오프라인 작동!)
             if (cachedResponse) {
+                // 캐시 응답을 즉시 제공하면서 백그라운드에서 최신 파일을 페치해 캐시 갱신
+                fetch(event.request).then(networkResponse => {
+                    if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+                        const responseToCache = networkResponse.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+                    }
+                }).catch(() => {});
                 return cachedResponse;
             }
 
-            // 3-2. 캐시에 없는 새로운 요청이면 실제 인터넷(네트워크)으로 요청을 보냅니다.
             const fetchRequest = event.request.clone();
             return fetch(fetchRequest).then(networkResponse => {
-                // 정상적인 응답이 아니면 캐싱하지 않고 그냥 반환합니다.
                 if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
                     return networkResponse;
                 }
 
-                // 정상적으로 인터넷에서 가져왔다면, 다음 오프라인 때를 대비해 캐시에 복사본을 몰래 넣어둡니다.
                 const responseToCache = networkResponse.clone();
                 caches.open(CACHE_NAME).then(cache => {
                     cache.put(event.request, responseToCache);
@@ -81,7 +85,9 @@ self.addEventListener('fetch', event => {
 
                 return networkResponse;
             }).catch(() => {
-                // 오프라인 상태인데 캐시에도 파일이 없을 때 유효한 503 Response 반환
+                if (event.request.mode === 'navigate') {
+                    return caches.match('./index.html').then(r => r || caches.match('./'));
+                }
                 console.log('❌ 워커: 오프라인 상태이며 캐시가 없습니다:', event.request.url);
                 return new Response('', { status: 503, statusText: 'Offline' });
             });
@@ -89,10 +95,10 @@ self.addEventListener('fetch', event => {
     );
 });
 
-// 4. 업데이트 강제 수신기: index.html의 알림창에서 '새로고침' 버튼을 누르면 이 신호를 받습니다.
+// 4. 업데이트 강제 수신기: 즉시 새 워커로 교체합니다.
 self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting(); // 🎯 이때 비로소 이전 버전을 밀어내고 새 버전으로 강제 교체합니다!
+    if (event.data && (event.data.type === 'SKIP_WAITING' || event.data === 'skipWaiting')) {
+        self.skipWaiting();
     }
 });
 

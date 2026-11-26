@@ -431,6 +431,87 @@ async function initFileSystem() {
             item.parentId = null;
             needsUpdate = true;
           }
+        } else if (
+          item.isSystem === "bh_official" ||
+          item.syncId === "sys_bh_official" ||
+          ((item.parentId === null || item.parentId === undefined) &&
+            (item.title === "공문" || item.title === "공문 분석"))
+        ) {
+          if (item.isSystem !== "bh_official") {
+            item.isSystem = "bh_official";
+            needsUpdate = true;
+          }
+          if (item.title !== "공문 분석") {
+            item.title = "공문 분석";
+            needsUpdate = true;
+          }
+          if (item.syncId !== "sys_bh_official") {
+            item.syncId = "sys_bh_official";
+            needsUpdate = true;
+          }
+          if (item.isDeleted) {
+            item.isDeleted = false;
+            delete item.deletedAt;
+            needsUpdate = true;
+          }
+          if (item.parentId !== null) {
+            item.parentId = null;
+            needsUpdate = true;
+          }
+        } else if (
+          item.isSystem === "bh_memo" ||
+          item.syncId === "sys_bh_memo" ||
+          ((item.parentId === null || item.parentId === undefined) &&
+            (item.title === "쪽지" || item.title === "쪽지 분석"))
+        ) {
+          if (item.isSystem !== "bh_memo") {
+            item.isSystem = "bh_memo";
+            needsUpdate = true;
+          }
+          if (item.title !== "쪽지 분석") {
+            item.title = "쪽지 분석";
+            needsUpdate = true;
+          }
+          if (item.syncId !== "sys_bh_memo") {
+            item.syncId = "sys_bh_memo";
+            needsUpdate = true;
+          }
+          if (item.isDeleted) {
+            item.isDeleted = false;
+            delete item.deletedAt;
+            needsUpdate = true;
+          }
+          if (item.parentId !== null) {
+            item.parentId = null;
+            needsUpdate = true;
+          }
+        } else if (
+          item.isSystem === "bh_doc" ||
+          item.syncId === "sys_bh_doc" ||
+          ((item.parentId === null || item.parentId === undefined) &&
+            (item.title === "문서" || item.title === "문서 분석"))
+        ) {
+          if (item.isSystem !== "bh_doc") {
+            item.isSystem = "bh_doc";
+            needsUpdate = true;
+          }
+          if (item.title !== "문서 분석") {
+            item.title = "문서 분석";
+            needsUpdate = true;
+          }
+          if (item.syncId !== "sys_bh_doc") {
+            item.syncId = "sys_bh_doc";
+            needsUpdate = true;
+          }
+          if (item.isDeleted) {
+            item.isDeleted = false;
+            delete item.deletedAt;
+            needsUpdate = true;
+          }
+          if (item.parentId !== null) {
+            item.parentId = null;
+            needsUpdate = true;
+          }
         } else if (item.title === "휴지통" || item.syncId === "sys_trash") {
           if (item.isSystem !== "trash") {
             item.isSystem = "trash";
@@ -470,10 +551,16 @@ async function initFileSystem() {
       const desktopFolder = pickMasterFolder("desktop");
       const securityFolder = pickMasterFolder("security");
       const trashFolder = pickMasterFolder("trash");
+      const bhOfficialFolder = pickMasterFolder("bh_official");
+      const bhMemoFolder = pickMasterFolder("bh_memo");
+      const bhDocFolder = pickMasterFolder("bh_doc");
 
       globalDesktopFolderId = desktopFolder ? desktopFolder.id : null;
       globalSecurityFolderId = securityFolder ? securityFolder.id : null;
       globalTrashFolderId = trashFolder ? trashFolder.id : null;
+      globalBhOfficialFolderId = bhOfficialFolder ? bhOfficialFolder.id : null;
+      globalBhMemoFolderId = bhMemoFolder ? bhMemoFolder.id : null;
+      globalBhDocFolderId = bhDocFolder ? bhDocFolder.id : null;
       globalBackupFolderId = null;
 
       needsMigration = allData.filter((item) => item && item.type === undefined);
@@ -645,6 +732,47 @@ async function initFileSystem() {
           globalTrashFolderId = ev.target.result;
         };
       }
+
+      // 6. 블랙홀 분석 전용 폴더 3종(공문 분석, 쪽지 분석, 문서 분석) 사전 생성
+      if (!globalBhOfficialFolderId) {
+        store.add({
+          title: "공문 분석",
+          type: "folder",
+          isSystem: "bh_official",
+          parentId: null,
+          updatedAt: Date.now(),
+          isDeleted: false,
+          syncId: "sys_bh_official",
+        }).onsuccess = (ev) => {
+          globalBhOfficialFolderId = ev.target.result;
+        };
+      }
+      if (!globalBhMemoFolderId) {
+        store.add({
+          title: "쪽지 분석",
+          type: "folder",
+          isSystem: "bh_memo",
+          parentId: null,
+          updatedAt: Date.now(),
+          isDeleted: false,
+          syncId: "sys_bh_memo",
+        }).onsuccess = (ev) => {
+          globalBhMemoFolderId = ev.target.result;
+        };
+      }
+      if (!globalBhDocFolderId) {
+        store.add({
+          title: "문서 분석",
+          type: "folder",
+          isSystem: "bh_doc",
+          parentId: null,
+          updatedAt: Date.now(),
+          isDeleted: false,
+          syncId: "sys_bh_doc",
+        }).onsuccess = (ev) => {
+          globalBhDocFolderId = ev.target.result;
+        };
+      }
     };
     tx.oncomplete = () => {
       resolve();
@@ -666,8 +794,8 @@ function healDatabase(callback) {
     const allData = e.target.result;
     let needsUpdate = false;
 
-    // 1. 3대 시스템 폴더(+잔여 구 backup 폴더) 종류별로 수집
-    const sysGroups = { desktop: [], security: [], trash: [], backup: [] };
+    // 1. 시스템 폴더(+잔여 구 backup 폴더) 종류별로 수집
+    const sysGroups = { desktop: [], security: [], trash: [], bh_official: [], bh_memo: [], bh_doc: [], backup: [] };
     allData.forEach((m) => {
       if (m && m.isSystem && !m.isPermanentlyDeleted && sysGroups[m.isSystem]) {
         sysGroups[m.isSystem].push(m);
@@ -679,7 +807,7 @@ function healDatabase(callback) {
     const validIds = new Set();
 
     // 2. 중복 폴더 색출 및 파괴
-    ["desktop", "security", "trash"].forEach((sysType) => {
+    ["desktop", "security", "trash", "bh_official", "bh_memo", "bh_doc"].forEach((sysType) => {
       const group = sysGroups[sysType];
       if (group.length > 0) {
         group.sort((a, b) => a.id - b.id);
@@ -696,6 +824,30 @@ function healDatabase(callback) {
         }
         if (sysType === "security") globalSecurityFolderId = masterId;
         if (sysType === "trash") globalTrashFolderId = masterId;
+        if (sysType === "bh_official") {
+          globalBhOfficialFolderId = masterId;
+          if (master.title !== "공문 분석") {
+            master.title = "공문 분석";
+            store.put(master);
+            needsUpdate = true;
+          }
+        }
+        if (sysType === "bh_memo") {
+          globalBhMemoFolderId = masterId;
+          if (master.title !== "쪽지 분석") {
+            master.title = "쪽지 분석";
+            store.put(master);
+            needsUpdate = true;
+          }
+        }
+        if (sysType === "bh_doc") {
+          globalBhDocFolderId = masterId;
+          if (master.title !== "문서 분석") {
+            master.title = "문서 분석";
+            store.put(master);
+            needsUpdate = true;
+          }
+        }
 
         for (let i = 1; i < group.length; i++) {
           const dupId = group[i].id;
