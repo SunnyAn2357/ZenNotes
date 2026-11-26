@@ -524,21 +524,44 @@ const quill = new Quill('#editor', {
                 }
             }
         },
-        // 🎯 [신규 장착] 클립보드 복사/붙여넣기 시 강제 서식 제거 엔진 (V2.0 기능 통합본)
+        // 🎯 [신규 장착] 클립보드 복사/붙여넣기 시 강제 서식 제거 엔진 (V2.0 기능 통합본 + V1.8.11 표/형광펜 매처)
         clipboard: {
             matchers: [
                 // 모든 HTML 요소(Node.ELEMENT_NODE)를 붙여넣을 때 발동
                 [Node.ELEMENT_NODE, function (node, delta) {
+                    const isZenHighlight = node && node.nodeType === 1 && (
+                        node.tagName === 'MARK' ||
+                        (typeof node.hasAttribute === 'function' && node.hasAttribute('data-zen-highlight'))
+                    );
+                    const hasOwnBg = node && node.nodeType === 1 && (
+                        Boolean(node.style && (node.style.backgroundColor || node.style.background)) ||
+                        Boolean(node.classList && Array.from(node.classList).some(c => c.startsWith('ql-bg-')))
+                    );
                     delta.ops.forEach(op => {
                         // 만약 글자에 서식(attributes)이 묻어있다면
                         if (op.attributes) {
-                            // 외부에서 묻어온 글자색, 배경색, 폰트를 가차 없이 삭제하여 앱 테마를 따르게 함
+                            // 외부에서 묻어온 글자색, 배경색, 폰트를 삭제하여 앱 테마를 따르게 함 (형광펜 <mark> 제외)
                             delete op.attributes.color;
-                            delete op.attributes.background;
+                            if (!isZenHighlight && hasOwnBg) {
+                                if (!node.querySelector || !node.querySelector('mark, [data-zen-highlight]') || op.attributes.background !== '#fef08a') {
+                                    delete op.attributes.background;
+                                }
+                            }
                             delete op.attributes.font;
                         }
                     });
                     return delta;
+                }],
+                ['mark', function (node, delta) {
+                    const Delta = Quill.import('delta');
+                    return delta.reduce((acc, op) => {
+                        if (!op.insert) return acc;
+                        return acc.insert(op.insert, { ...(op.attributes || {}), background: '#fef08a' });
+                    }, new Delta());
+                }],
+                ['br.ql-softbreak', function () {
+                    const Delta = Quill.import('delta');
+                    return new Delta().insert({ softbreak: true });
                 }]
             ]
         },
@@ -1481,9 +1504,473 @@ function dataUrlToImageFile(dataUrl, index = 0) {
     }
 }
 
+// 🎯 [V1.8.11] AI 웹/마크다운 붙여넣기 정규화 및 Ctrl+Shift+V 원문 유지 엔진
+const ZEN_QUILL_CODE_LANGUAGES = new Set([
+    'plain', 'javascript', 'typescript', 'html', 'css', 'json',
+    'python', 'java', 'cpp', 'csharp', 'sql', 'bash', 'markdown',
+    'yaml', 'rust', 'go', 'php', 'kotlin', 'swift'
+]);
+
+const ZEN_CODE_LANG_ALIASES = {
+    js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', node: 'javascript',
+    ts: 'typescript', tsx: 'typescript',
+    py: 'python', py3: 'python', python3: 'python',
+    sh: 'bash', shell: 'bash', zsh: 'bash', console: 'bash', terminal: 'bash', shellsession: 'bash',
+    cmd: 'bash', bat: 'bash', batch: 'bash', dos: 'bash', powershell: 'bash', ps1: 'bash', pwsh: 'bash',
+    htm: 'html', xml: 'html', svg: 'html', xhtml: 'html',
+    scss: 'css', sass: 'css', less: 'css',
+    jsonc: 'json', json5: 'json',
+    c: 'cpp', 'c++': 'cpp', cc: 'cpp', cxx: 'cpp', h: 'cpp', hpp: 'cpp',
+    'c#': 'csharp', cs: 'csharp', dotnet: 'csharp',
+    mysql: 'sql', postgresql: 'sql', postgres: 'sql', pgsql: 'sql', sqlite: 'sql', tsql: 'sql', plsql: 'sql',
+    yml: 'yaml',
+    md: 'markdown', mdx: 'markdown',
+    rs: 'rust',
+    golang: 'go',
+    kt: 'kotlin', kts: 'kotlin',
+    txt: 'plain', text: 'plain', plaintext: 'plain', 'plain text': 'plain', nohighlight: 'plain', none: 'plain'
+};
+
+function normalizePastedCodeLanguage(raw) {
+    if (!raw || typeof raw !== 'string') return '';
+    const cleaned = raw.toLowerCase().trim().replace(/^[.:#]+/, '');
+    if (!cleaned) return '';
+    if (ZEN_QUILL_CODE_LANGUAGES.has(cleaned)) return cleaned;
+    if (ZEN_CODE_LANG_ALIASES[cleaned]) return ZEN_CODE_LANG_ALIASES[cleaned];
+    return '';
+}
+
+function detectCodeLanguageFromElement(el) {
+    if (!el || el.nodeType !== 1) return '';
+    const attrNames = ['data-language', 'data-lang', 'lang', 'data-code-language'];
+    for (const attr of attrNames) {
+        const val = el.getAttribute && el.getAttribute(attr);
+        const norm = normalizePastedCodeLanguage(val);
+        if (norm) return norm;
+    }
+    const cls = (el.getAttribute && el.getAttribute('class')) || '';
+    if (cls) {
+        const tokens = cls.split(/\s+/);
+        for (const tok of tokens) {
+            const m = tok.match(/^(?:language-|lang-|brush:|highlight-source-)([a-zA-Z0-9_+#.-]+)$/i);
+            if (m && m[1]) {
+                const norm = normalizePastedCodeLanguage(m[1]);
+                if (norm) return norm;
+            }
+        }
+        if (/\bhljs\b/i.test(cls)) {
+            for (const tok of tokens) {
+                if (tok === 'hljs') continue;
+                const norm = normalizePastedCodeLanguage(tok);
+                if (norm && norm !== 'plain') return norm;
+            }
+        }
+    }
+    return '';
+}
+
+function tryParseCodeHeaderText(headerEl) {
+    if (!headerEl || headerEl.nodeType !== 1) return { matched: false, lang: '' };
+    if (headerEl.querySelector && headerEl.querySelector('table, pre, ul, ol, h1, h2, h3, h4, h5, h6, img')) {
+        return { matched: false, lang: '' };
+    }
+    const rawText = (headerEl.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!rawText || rawText.length > 45) return { matched: false, lang: '' };
+
+    const copyRegex = /(코드\s*복사|복사하기|복사됨|복사|copy\s*code|copied!?|copy|줄바꿈|wrap|다운로드|download)/gi;
+    const hasCopyWord = copyRegex.test(rawText) || Boolean(headerEl.querySelector && headerEl.querySelector('button'));
+    const remainder = rawText
+        .replace(copyRegex, ' ')
+        .replace(/[|·•:/\\()[\]]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (hasCopyWord) {
+        if (!remainder) return { matched: true, lang: '' };
+        const norm = normalizePastedCodeLanguage(remainder);
+        if (norm) return { matched: true, lang: norm };
+        return { matched: false, lang: '' };
+    }
+
+    const cls = (headerEl.getAttribute && headerEl.getAttribute('class')) || '';
+    const exactLang = normalizePastedCodeLanguage(rawText);
+    if (exactLang && (headerEl.tagName !== 'P' || /(code|lang|header|title)/i.test(cls))) {
+        return { matched: true, lang: exactLang };
+    }
+    return { matched: false, lang: '' };
+}
+
+function tryExtractAndRemoveCodeHeaderSibling(preEl, doc) {
+    if (!preEl || !doc || !doc.body) return '';
+    let cur = preEl;
+    for (let depth = 0; depth < 3 && cur && cur !== doc.body; depth++) {
+        const prev = cur.previousElementSibling;
+        if (prev) {
+            const parsed = tryParseCodeHeaderText(prev);
+            if (parsed.matched) {
+                prev.remove();
+                return parsed.lang;
+            }
+            break;
+        }
+        const parent = cur.parentElement;
+        if (!parent || parent === doc.body || parent.children.length > 2) break;
+        cur = parent;
+    }
+    return '';
+}
+
+function extractCodeLinesFromElement(rootEl) {
+    const clone = rootEl.cloneNode(true);
+    clone.querySelectorAll(
+        'button, svg, select, .ql-ui, .copy-button, .hljs-ln-numbers, .line-numbers-rows, .gutter, [aria-label*="복사" i], [aria-label*="copy" i]'
+    ).forEach(el => el.remove());
+
+    let out = '';
+    let justClosedLineWrapper = false;
+    const lineWrapperClassRe = /\b(line|code-line|token-line|cm-line|view-line|hljs-ln-code|ec-line|shiki-line|ql-code-block)\b/i;
+
+    function isLineWrapper(el) {
+        const tag = el.tagName;
+        if (tag === 'DIV' || tag === 'P' || tag === 'LI' || tag === 'TR') return true;
+        if (tag === 'SPAN') {
+            const cls = (el.getAttribute && el.getAttribute('class')) || '';
+            if (lineWrapperClassRe.test(cls)) return true;
+            const style = (el.getAttribute && el.getAttribute('style')) || '';
+            if (/display\s*:\s*(block|flex|table-row)\b/i.test(style)) return true;
+        }
+        return false;
+    }
+
+    function walk(node) {
+        if (!node) return;
+        if (node.nodeType === 3) {
+            let text = (node.nodeValue || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+            if (justClosedLineWrapper && text.startsWith('\n')) {
+                text = text.slice(1);
+            }
+            if (text.length > 0) {
+                out += text;
+                justClosedLineWrapper = false;
+            }
+            return;
+        }
+        if (node.nodeType !== 1) return;
+        const tag = node.tagName;
+        if (tag === 'BR') {
+            out += '\n';
+            justClosedLineWrapper = false;
+            return;
+        }
+        if (isLineWrapper(node)) {
+            if (out.length > 0 && !out.endsWith('\n')) {
+                out += '\n';
+            }
+            const lenBefore = out.length;
+            Array.from(node.childNodes).forEach(walk);
+            if (out.length === lenBefore || !out.endsWith('\n')) {
+                out += '\n';
+            }
+            justClosedLineWrapper = true;
+            return;
+        }
+        Array.from(node.childNodes).forEach(walk);
+    }
+
+    Array.from(clone.childNodes).forEach(walk);
+
+    let normalized = out.replace(/\r\n?/g, '\n');
+    if (normalized.endsWith('\n')) {
+        normalized = normalized.slice(0, -1);
+    }
+    return normalized ? normalized.split('\n') : [''];
+}
+
+function flattenCellContentForQuill(srcCell, destTd, doc) {
+    const blockTags = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'LI']);
+    const inlineTags = new Set(['STRONG', 'B', 'EM', 'I', 'U', 'S', 'DEL', 'STRIKE', 'CODE', 'A', 'MARK', 'SPAN', 'SUB', 'SUP', 'SMALL']);
+
+    function appendSoftBreakIfNeeded() {
+        const last = destTd.lastChild;
+        if (!last) return;
+        if (last.nodeType === 1 && last.tagName === 'BR') return;
+        const br = doc.createElement('br');
+        br.className = 'ql-softbreak';
+        destTd.appendChild(br);
+    }
+
+    function hasMeaningfulContent(container) {
+        return Array.from(container.childNodes).some(n => {
+            if (n.nodeType === 3) return (n.nodeValue || '').trim().length > 0;
+            if (n.nodeType === 1) return n.tagName !== 'BR' || n.classList.contains('ql-softbreak');
+            return false;
+        });
+    }
+
+    function walkCell(node, target) {
+        if (!node) return;
+        if (node.nodeType === 3) {
+            const val = (node.nodeValue || '').replace(/\r?\n/g, ' ');
+            if (val.trim().length > 0 || (val === ' ' && target.lastChild && target.lastChild.nodeType === 1)) {
+                target.appendChild(doc.createTextNode(val));
+            }
+            return;
+        }
+        if (node.nodeType !== 1) return;
+        const tag = node.tagName;
+        if (tag === 'BR') {
+            if (target === destTd) {
+                appendSoftBreakIfNeeded();
+            } else {
+                const br = doc.createElement('br');
+                br.className = 'ql-softbreak';
+                target.appendChild(br);
+            }
+            return;
+        }
+        if (tag === 'IMG') {
+            const src = node.getAttribute('src') || '';
+            if (/^(data:image\/|https?:\/\/)/i.test(src)) {
+                const img = doc.createElement('img');
+                img.setAttribute('src', src);
+                if (node.hasAttribute('alt')) img.setAttribute('alt', node.getAttribute('alt'));
+                target.appendChild(img);
+            }
+            return;
+        }
+        if (blockTags.has(tag)) {
+            if (hasMeaningfulContent(destTd)) {
+                appendSoftBreakIfNeeded();
+            }
+            if (tag === 'LI' && node.parentElement && node.parentElement.tagName === 'UL') {
+                destTd.appendChild(doc.createTextNode('• '));
+            }
+            Array.from(node.childNodes).forEach(ch => walkCell(ch, destTd));
+            return;
+        }
+        if (inlineTags.has(tag)) {
+            const el = doc.createElement(tag.toLowerCase());
+            if (tag === 'A' && node.hasAttribute('href')) {
+                el.setAttribute('href', node.getAttribute('href'));
+            }
+            if (tag === 'MARK') {
+                el.setAttribute('data-zen-highlight', '1');
+            }
+            Array.from(node.childNodes).forEach(ch => walkCell(ch, el));
+            if (el.childNodes.length > 0) {
+                target.appendChild(el);
+            }
+            return;
+        }
+        Array.from(node.childNodes).forEach(ch => walkCell(ch, target));
+    }
+
+    Array.from(srcCell.childNodes).forEach(ch => walkCell(ch, destTd));
+
+    while (destTd.lastChild && destTd.lastChild.nodeType === 1 && destTd.lastChild.tagName === 'BR') {
+        destTd.removeChild(destTd.lastChild);
+    }
+
+    if (srcCell.tagName === 'TH' && (destTd.textContent || '').trim().length > 0) {
+        const onlyChild = destTd.childNodes.length === 1 ? destTd.firstChild : null;
+        const alreadyBold = onlyChild && onlyChild.nodeType === 1 && (onlyChild.tagName === 'STRONG' || onlyChild.tagName === 'B');
+        if (!alreadyBold) {
+            const strong = doc.createElement('strong');
+            while (destTd.firstChild) strong.appendChild(destTd.firstChild);
+            destTd.appendChild(strong);
+        }
+    }
+
+    if (destTd.childNodes.length === 0) {
+        destTd.appendChild(doc.createElement('br'));
+    }
+}
+
+function normalizePastedHtmlForQuill(htmlData) {
+    const doc = new DOMParser().parseFromString(htmlData, 'text/html');
+    if (!doc || !doc.body) return htmlData;
+
+    // 1. 비-<pre> 코드블록 컨테이너(.ql-code-block-container, white-space: pre, prism/shiki/hljs 등)를 <pre>로 통합
+    const nonPreCandidates = Array.from(doc.body.querySelectorAll(
+        '.ql-code-block-container, [style*="white-space"], .prism-code, .shiki, .hljs, .code-block, .codeblock'
+    ));
+    for (const el of nonPreCandidates) {
+        if (!el.isConnected) continue;
+        if (el.closest('pre, table')) continue;
+        if (el.querySelector('pre')) continue;
+
+        const isQuillBlock = el.classList.contains('ql-code-block-container');
+        const styleAttr = el.getAttribute('style') || '';
+        const hasWhiteSpacePre = /white-space\s*:\s*(?:pre|pre-wrap|break-spaces)\b/i.test(styleAttr);
+        const isCodeClass = /\b(prism-code|shiki|hljs|code-block|codeblock)\b/i.test(el.getAttribute('class') || '');
+        const hasLineChildren = Boolean(el.querySelector('.ql-code-block, .line, .code-line, .token-line, .cm-line, .view-line, br'));
+        const hasNewlines = (el.textContent || '').includes('\n');
+
+        if (!isQuillBlock && !((hasWhiteSpacePre || isCodeClass) && (hasNewlines || hasLineChildren))) {
+            continue;
+        }
+        if (el.tagName === 'SPAN' && !hasNewlines && !hasLineChildren) continue;
+
+        let lang = detectCodeLanguageFromElement(el);
+        if (!lang && isQuillBlock) {
+            const firstCodeLine = el.querySelector('.ql-code-block[data-language]');
+            if (firstCodeLine) lang = detectCodeLanguageFromElement(firstCodeLine);
+        }
+        if (!lang) {
+            const siblingLang = tryExtractAndRemoveCodeHeaderSibling(el, doc);
+            if (siblingLang) lang = siblingLang;
+        }
+        const lines = extractCodeLinesFromElement(el);
+        const pre = doc.createElement('pre');
+        pre.setAttribute('data-language', lang || 'plain');
+        pre.textContent = (lines[0] === '' ? '\n' : '') + lines.join('\n');
+        el.replaceWith(pre);
+    }
+
+    // 2. 모든 <pre> 코드블록 언어/줄바꿈 정규화
+    const preEls = Array.from(doc.body.querySelectorAll('pre')).filter(p => !p.parentElement.closest('pre'));
+    for (const preEl of preEls) {
+        if (!preEl.isConnected) continue;
+        let lang = detectCodeLanguageFromElement(preEl);
+        if (!lang) {
+            const codeChild = preEl.querySelector('code');
+            if (codeChild) lang = detectCodeLanguageFromElement(codeChild);
+        }
+        if (!lang && preEl.firstElementChild && preEl.firstElementChild.tagName !== 'CODE') {
+            const innerHeader = tryParseCodeHeaderText(preEl.firstElementChild);
+            if (innerHeader.matched) {
+                if (innerHeader.lang) lang = innerHeader.lang;
+                preEl.firstElementChild.remove();
+            }
+        }
+        if (!lang && preEl.parentElement && preEl.parentElement !== doc.body) {
+            lang = detectCodeLanguageFromElement(preEl.parentElement);
+        }
+        const siblingLang = tryExtractAndRemoveCodeHeaderSibling(preEl, doc);
+        if (!lang && siblingLang) lang = siblingLang;
+
+        const lines = extractCodeLinesFromElement(preEl);
+        const cleanPre = doc.createElement('pre');
+        cleanPre.setAttribute('data-language', lang || 'plain');
+        cleanPre.textContent = (lines[0] === '' ? '\n' : '') + lines.join('\n');
+        preEl.replaceWith(cleanPre);
+    }
+
+    // 3. 모든 <table>의 <thead>/<th> -> Quill 2 표준 <tbody>/<tr>/<td data-row="...">로 정규화
+    const tables = Array.from(doc.body.querySelectorAll('table'));
+    for (const table of tables) {
+        if (!table.isConnected) continue;
+        const rows = Array.from(table.querySelectorAll('tr')).filter(tr => tr.closest('table') === table);
+        if (rows.length === 0) continue;
+
+        const newTbody = doc.createElement('tbody');
+        for (const srcRow of rows) {
+            const cellNodes = Array.from(srcRow.children).filter(ch => ch.tagName === 'TD' || ch.tagName === 'TH');
+            if (cellNodes.length === 0) continue;
+
+            const rowId = 'row-' + Math.random().toString(36).slice(2, 8);
+            const cleanTr = doc.createElement('tr');
+            for (const srcCell of cellNodes) {
+                const td = doc.createElement('td');
+                td.setAttribute('data-row', rowId);
+                flattenCellContentForQuill(srcCell, td, doc);
+                cleanTr.appendChild(td);
+
+                const colspan = Math.min(20, Math.max(1, parseInt(srcCell.getAttribute('colspan') || '1', 10) || 1));
+                for (let k = 1; k < colspan; k++) {
+                    const padTd = doc.createElement('td');
+                    padTd.setAttribute('data-row', rowId);
+                    padTd.appendChild(doc.createElement('br'));
+                    cleanTr.appendChild(padTd);
+                }
+            }
+            newTbody.appendChild(cleanTr);
+        }
+
+        if (newTbody.children.length > 0) {
+            table.innerHTML = '';
+            table.appendChild(newTbody);
+        }
+    }
+
+    return doc.body.innerHTML;
+}
+
+function looksLikeMarkdownText(plainText) {
+    if (!plainText || typeof plainText !== 'string') return false;
+    const text = plainText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (!text.trim()) return false;
+
+    let score = 0;
+
+    // 1. 코드펜스 쌍 (``` ... ```)
+    const fenceLines = text.match(/^```[a-zA-Z0-9_\-+]*\s*$/gm);
+    if (fenceLines && fenceLines.length >= 2) score += 3;
+
+    // 2. 마크다운 표 (헤더 + 구분선)
+    if (/^\|.+\|\s*\n\|(\s*:?-{2,}:?\s*\|)+\s*$/m.test(text)) score += 3;
+
+    // 3. ATX 제목 (# ~ ###### 뒤 공백)
+    if (/^#{1,6}\s+\S/m.test(text)) score += 2;
+
+    // 4. 체크리스트 (- [ ] / [x])
+    if (/^\s*(?:[-*+]\s+)?\[[ xX]\]\s+\S/m.test(text)) score += 2;
+
+    // 5. 마크다운 링크 / 이미지 ([label](url))
+    if (/!?\[[^\]\n]+\]\((?:https?:\/\/|mailto:|file:\/\/|[a-zA-Z]:[\\/])[^)\n]+\)/.test(text)) score += 2;
+
+    // 6. 인라인 강조 (**굵게**, ==형광펜==, ~~취소선~~)
+    if (/\*\*[^*\n]+?\*\*/.test(text)) score += 2;
+    if (/==[^=\n]+?==/.test(text)) score += 2;
+    if (/~~[^~\n]+?~~/.test(text)) score += 2;
+
+    // 7. 인용구 (> text)
+    if (/^>\s+\S/m.test(text)) score += 1.5;
+
+    // 8. 가로 구분선 (전체 문서에 다른 줄이 있는 경우)
+    if (text.includes('\n') && /^(?:---+|\*\*\*+|___+)\s*$/m.test(text)) score += 1.5;
+
+    // 9. 인라인 코드 (`code`)
+    if (/`[^`\n]+`/.test(text)) score += 1;
+
+    // 10. 글머리 기호 (* / - / +) 및 번호 목록
+    const bulletMatches = text.match(/^\s*[-*+]\s+\S/gm);
+    if (bulletMatches) score += bulletMatches.length >= 2 ? 1 : 0.5;
+    const orderedMatches = text.match(/^\s*\d+\.\s+\S/gm);
+    if (orderedMatches && orderedMatches.length >= 2) score += 0.5;
+
+    return score >= 2;
+}
+
+let plainPasteRequestedUntil = 0;
+quill.root.addEventListener('keydown', function (e) {
+    const isV = (e.code === 'KeyV') || (String(e.key || '').toLowerCase() === 'v');
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && isV) {
+        plainPasteRequestedUntil = Date.now() + 800;
+    }
+}, true);
+
 quill.root.addEventListener('paste', function (e) {
     const clipboard = e.clipboardData || window.clipboardData;
     if (!clipboard) return;
+
+    const isShiftPlainPaste = Date.now() <= plainPasteRequestedUntil;
+    plainPasteRequestedUntil = 0;
+    const plainText = clipboard.getData ? clipboard.getData('text/plain') : '';
+
+    // 0. Ctrl+Shift+V: 마크다운/HTML 서식 변환 없이 순수 원문 텍스트로 붙여넣기
+    if (isShiftPlainPaste && plainText) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const range = quill.getSelection(true);
+        if (range) {
+            quill.clipboard.onPaste(range, { html: '', text: plainText });
+        }
+        setTimeout(() => {
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+        }, 30);
+        return;
+    }
 
     const files = extractClipboardFiles(clipboard);
     const imageFiles = files.filter(f => f.type && f.type.startsWith('image/'));
@@ -1503,7 +1990,7 @@ quill.root.addEventListener('paste', function (e) {
         return;
     }
 
-    // 2. HTML 클립보드 검사: 텍스트·문서 구조·에디터 내부 이미지 복사본은 Quill 순정 붙여넣기로 통과
+    // 2. HTML 클립보드 검사: 표/코드블록 정규화 후 Quill 붙여넣기 (에디터 이미지 복사본 보존)
     const htmlData = clipboard.getData ? clipboard.getData('text/html') : '';
     if (htmlData) {
         const doc = new DOMParser().parseFromString(htmlData, 'text/html');
@@ -1526,7 +2013,34 @@ quill.root.addEventListener('paste', function (e) {
                 if (range) {
                     quill.clipboard.onPaste(range, {
                         html: htmlData,
-                        text: clipboard.getData ? clipboard.getData('text/plain') : ''
+                        text: plainText
+                    });
+                }
+                setTimeout(() => {
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                }, 30);
+                return;
+            }
+
+            const curRange = quill.getSelection(true);
+            let inCodeBlock = false;
+            if (curRange) {
+                const [curLine] = quill.getLine(curRange.index);
+                const curFormats = (curLine && typeof curLine.formats === 'function') ? curLine.formats() : quill.getFormat(curRange.index);
+                inCodeBlock = isLineCodeBlock(curLine, curFormats);
+            }
+            const needsHtmlNorm = Boolean(body && body.querySelector(
+                'table, pre, [style*="white-space"], .ql-code-block-container, .hljs, .shiki, .prism-code, .code-block, .codeblock'
+            ));
+
+            if (!inCodeBlock && needsHtmlNorm) {
+                const normalizedHtml = normalizePastedHtmlForQuill(htmlData);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (curRange) {
+                    quill.clipboard.onPaste(curRange, {
+                        html: normalizedHtml,
+                        text: plainText
                     });
                 }
             }
@@ -1557,6 +2071,33 @@ quill.root.addEventListener('paste', function (e) {
         e.stopImmediatePropagation();
         handleImageFiles(imageFiles);
         return;
+    }
+
+    // 4. 순수 텍스트(text/plain) 마크다운 원문 스마트 자동 변환 (AI 본문 복사 등)
+    if ((!htmlData || !htmlData.trim()) && plainText && typeof convertMarkdownToHTML === 'function') {
+        const range = quill.getSelection(true);
+        if (range) {
+            const [line] = quill.getLine(range.index);
+            const lineFormats = (line && typeof line.formats === 'function') ? line.formats() : quill.getFormat(range.index);
+            const inCodeBlock = isLineCodeBlock(line, lineFormats);
+            const inTable = Boolean(
+                (lineFormats && lineFormats.table) ||
+                (line && line.domNode && line.domNode.closest && line.domNode.closest('table'))
+            );
+            if (!inCodeBlock && !inTable && looksLikeMarkdownText(plainText)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                const mdHtml = convertMarkdownToHTML(plainText, { forClipboard: true });
+                quill.clipboard.onPaste(range, {
+                    html: mdHtml,
+                    text: plainText
+                });
+                setTimeout(() => {
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                }, 30);
+                return;
+            }
+        }
     }
     // 💡 일반 텍스트/서식 붙여넣기라면 Quill의 기본 텍스트 세탁 로직이 작동합니다.
 }, true);

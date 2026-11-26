@@ -1431,9 +1431,41 @@ async function exportMD() {
   }, 100);
 }
 
-// 🎯 [V3.3.3] 마크다운(.md) 텍스트를 위지윅(Quill) HTML로 변환하는 파서
-function convertMarkdownToHTML(mdText) {
+// 🎯 [V3.3.3 / V1.8.11] 마크다운(.md) 텍스트를 위지윅(Quill) HTML로 변환하는 파서
+function normalizeMarkdownCodeLang(raw) {
+  const key = String(raw || "").toLowerCase().trim();
+  if (!key) return "plain";
+  const supported = new Set([
+    "plain", "javascript", "typescript", "html", "css", "json",
+    "python", "java", "cpp", "csharp", "sql", "bash", "markdown",
+    "yaml", "rust", "go", "php", "kotlin", "swift"
+  ]);
+  if (supported.has(key)) return key;
+  const aliasMap = {
+    js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript", node: "javascript",
+    ts: "typescript", tsx: "typescript",
+    py: "python", py3: "python", python3: "python",
+    sh: "bash", shell: "bash", zsh: "bash", console: "bash", terminal: "bash", shellsession: "bash",
+    cmd: "bash", bat: "bash", batch: "bash", dos: "bash", powershell: "bash", ps1: "bash", pwsh: "bash",
+    htm: "html", xml: "html", svg: "html", xhtml: "html",
+    scss: "css", sass: "css", less: "css",
+    jsonc: "json", json5: "json",
+    c: "cpp", "c++": "cpp", cc: "cpp", cxx: "cpp", h: "cpp", hpp: "cpp",
+    "c#": "csharp", cs: "csharp", dotnet: "csharp",
+    mysql: "sql", postgresql: "sql", postgres: "sql", pgsql: "sql", sqlite: "sql", tsql: "sql", plsql: "sql",
+    yml: "yaml",
+    md: "markdown", mdx: "markdown",
+    rs: "rust",
+    golang: "go",
+    kt: "kotlin", kts: "kotlin",
+    txt: "plain", text: "plain", plaintext: "plain", nohighlight: "plain", none: "plain"
+  };
+  return aliasMap[key] || "plain";
+}
+
+function convertMarkdownToHTML(mdText, options = {}) {
   if (!mdText) return "";
+  const forClipboard = Boolean(options && options.forClipboard);
 
   // 줄바꿈 정규화
   const lines = mdText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
@@ -1461,32 +1493,59 @@ function convertMarkdownToHTML(mdText) {
   }
 
   // 인라인 서식 변환 헬퍼 (XSS 방어 및 마크다운 기호 -> 태그)
+  function formatInlineStyles(str) {
+    let out = str;
+    // 형광펜: ==text==
+    out = out.replace(/==([^=\n]+?)==/g, forClipboard
+      ? '<mark data-zen-highlight="1">$1</mark>'
+      : '<span style="background-color: #fef08a;">$1</span>');
+    // 굵게: **text**
+    out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // 밑줄: __text__ (단어/식별자 내부 밑줄 보호) 또는 <u>text</u> 또는 <ins>text</ins>
+    out = out.replace(/(?<![\p{L}\p{N}_])__([^_\n]+?)__(?![\p{L}\p{N}_])/gu, '<u>$1</u>');
+    out = out.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/gi, '<u>$1</u>');
+    out = out.replace(/&lt;ins&gt;(.*?)&lt;\/ins&gt;/gi, '<u>$1</u>');
+    // 취소선: ~~text~~
+    out = out.replace(/~~(.+?)~~/g, '<s>$1</s>');
+    // 기울임꼴: *text* 또는 _text_ (단어/식별자 내부 밑줄 보호)
+    out = out.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+    out = out.replace(/(?<![\p{L}\p{N}_])_([^_\n]+?)_(?![\p{L}\p{N}_])/gu, '<em>$1</em>');
+    return out;
+  }
+
   function parseInline(raw) {
     let s = raw
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
+    const placeholders = [];
+    const pushPlaceholder = (html) => {
+      const token = `\u0000ZENINL${placeholders.length}\u0000`;
+      placeholders.push(html);
+      return token;
+    };
+
+    // 1. 인라인 코드(`code`) 최우선 격리 (내부 _ / * / <br> 등 오염 방지)
+    s = s.replace(/`([^`\n]+)`/g, (_, code) => pushPlaceholder(`<code>${code}</code>`));
+
     // 표 셀 내부 <br> 줄바꿈 태그 원복 (Quill 2의 SoftBreakBlot 클래스 부여하여 보존)
     s = s.replace(/&lt;br\s*\/?&gt;/gi, '<br class="ql-softbreak">');
 
-    // 1. 이미지: ![alt](url)
-    s = s.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1">');
-    // 2. 링크: [text](url)
-    s = s.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
-    // 3. 인라인 코드: `code`
-    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // 4. 굵게: **text**
-    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // 5. 밑줄: __text__ 또는 <u>text</u> 또는 <ins>text</ins>
-    s = s.replace(/__(.+?)__/g, '<u>$1</u>');
-    s = s.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/gi, '<u>$1</u>');
-    s = s.replace(/&lt;ins&gt;(.*?)&lt;\/ins&gt;/gi, '<u>$1</u>');
-    // 6. 취소선: ~~text~~
-    s = s.replace(/~~(.+?)~~/g, '<s>$1</s>');
-    // 7. 기울임꼴: *text* 또는 _text_
-    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+    // 2. 이미지: ![alt](url) 및 링크: [text](url) 격리 (URL 내 _ 보호)
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, url) => pushPlaceholder(`<img src="${url}" alt="${alt}">`));
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
+      const formattedLabel = formatInlineStyles(label);
+      return pushPlaceholder(`<a href="${url}" target="_blank">${formattedLabel}</a>`);
+    });
+
+    // 3. 나머지 인라인 서식 변환
+    s = formatInlineStyles(s);
+
+    // 4. 격리 토큰 복원
+    while (/\u0000ZENINL(\d+)\u0000/.test(s)) {
+      s = s.replace(/\u0000ZENINL(\d+)\u0000/g, (_, idx) => placeholders[Number(idx)] ?? "");
+    }
 
     // 이스케이프된 파이프 문자 원복
     s = s.replace(/\\\|/g, "|");
@@ -1501,24 +1560,29 @@ function convertMarkdownToHTML(mdText) {
     return Math.min(8, Math.floor(spaces / 2));
   }
 
+  function isListContinuationLine(nextLine) {
+    if (typeof nextLine !== "string" || nextLine.trim() === "") return false;
+    if (!/^(?: {2,}|\t)/.test(nextLine)) return false;
+    const trimmed = nextLine.trim();
+    if (/^```/.test(trimmed)) return false;
+    if (/^\|(.+)\|$/.test(trimmed)) return false;
+    if (/^#{1,6}\s+/.test(nextLine)) return false;
+    if (/^>\s?/.test(nextLine)) return false;
+    if (/^(\-{3,}|\*{3,}|_{3,})$/.test(trimmed)) return false;
+    if (/^\s*(?:(\*|-|\+)\s+)?\[([ xX])\]\s*/.test(nextLine)) return false;
+    if (/^\s*\d+\.\s+/.test(nextLine)) return false;
+    if (/^\s*(\*|-|\+)\s+/.test(nextLine)) return false;
+    return true;
+  }
+
   while (i < lines.length) {
     const line = lines[i];
 
     // A. 코드 블록 (``` ~ ```)
     if (/^```/.test(line.trim())) {
-      // 🎯 [V4.3.4] 코드 블록 언어 태그 파싱 (GFM: ```javascript, ```python 등)
+      // 🎯 [V4.3.4 / V1.8.11] 코드 블록 언어 태그 파싱 및 표준 언어 키 정규화
       const langMatch = line.trim().match(/^```([a-zA-Z0-9_\-+]+)?/);
-      let lang = (langMatch && langMatch[1]) ? langMatch[1].toLowerCase().trim() : "plain";
-      if (lang === "js") lang = "javascript";
-      else if (lang === "ts") lang = "typescript";
-      else if (lang === "py") lang = "python";
-      else if (lang === "sh" || lang === "shell" || lang === "zsh") lang = "bash";
-      else if (lang === "c++") lang = "cpp";
-      else if (lang === "c#") lang = "csharp";
-      else if (lang === "yml") lang = "yaml";
-      else if (lang === "md") lang = "markdown";
-      else if (lang === "htm") lang = "html";
-
+      const lang = normalizeMarkdownCodeLang(langMatch && langMatch[1] ? langMatch[1] : "plain");
       const dataLangAttr = (lang && lang !== "plain") ? ` data-language="${lang}"` : "";
 
       const codeLines = [];
@@ -1533,23 +1597,32 @@ function convertMarkdownToHTML(mdText) {
         i++;
       }
       i++; // 닫는 ``` 건너뜀
-      // Quill의 code-block 클래스 컨테이너와 동기화
-      const codeHtml = codeLines
-        .map((cl) => `<div class="ql-code-block"${dataLangAttr}>${cl || "<br>"}</div>`)
-        .join("");
-      htmlParts.push(
-        `<div class="ql-code-block-container" spellcheck="false"${dataLangAttr}>${codeHtml}</div>`
-      );
+
+      if (forClipboard) {
+        // Quill clipboard.convert()는 <pre> 내부에서만 줄바꿈(\n)과 들여쓰기를 100% 보존함
+        const prefixNewline = (codeLines.length > 0 && codeLines[0] === "") ? "\n" : "";
+        htmlParts.push(`<pre data-language="${lang}">${prefixNewline}${codeLines.join("\n")}</pre>`);
+      } else {
+        // Quill의 code-block 클래스 컨테이너와 동기화 (innerHTML 직접 삽입용)
+        const codeHtml = codeLines
+          .map((cl) => `<div class="ql-code-block"${dataLangAttr}>${cl || "<br>"}</div>`)
+          .join("");
+        htmlParts.push(
+          `<div class="ql-code-block-container" spellcheck="false"${dataLangAttr}>${codeHtml}</div>`
+        );
+      }
       continue;
     }
 
     // B. 표 (Markdown Table: | col | col |)
     if (/^\|(.+)\|$/.test(line.trim())) {
       const rows = [];
+      let hasSeparator = false;
       while (i < lines.length && /^\|(.+)\|$/.test(lines[i].trim())) {
         const curLine = lines[i].trim();
         // 구분선 행 (| --- | :---: | --- |) 건너뜀
         if (/^\|(\s*[-:]+[-|\s:]*)\|$/.test(curLine)) {
+          hasSeparator = true;
           i++;
           continue;
         }
@@ -1563,15 +1636,22 @@ function convertMarkdownToHTML(mdText) {
       }
 
       if (rows.length > 0) {
+        const maxCols = rows.reduce((m, r) => Math.max(m, r.length), 0);
         let tableHtml = "<table><tbody>";
         rows.forEach((r, rIdx) => {
           // 🎯 Quill 2.0 엔진은 <th>를 미인식하여 파괴하며, 고유한 data-row 속성이 없으면 모든 행을 1개 행으로 병합합니다.
           const rowId = `row-${Math.random().toString(36).slice(2, 8)}`;
           tableHtml += "<tr>";
-          r.forEach((cell) => {
-            const cellContent = parseInline(cell) || "<br>";
-            tableHtml += `<td data-row="${rowId}">${cellContent}</td>`;
-          });
+          for (let cIdx = 0; cIdx < maxCols; cIdx++) {
+            const cell = r[cIdx] ?? "";
+            let cellContent = parseInline(cell);
+            if (rIdx === 0 && hasSeparator && cellContent) {
+              if (!/^<strong>(?:(?!<\/strong>).)*<\/strong>$/i.test(cellContent)) {
+                cellContent = `<strong>${cellContent}</strong>`;
+              }
+            }
+            tableHtml += `<td data-row="${rowId}">${cellContent || "<br>"}</td>`;
+          }
           tableHtml += "</tr>";
         });
         tableHtml += "</tbody></table>";
@@ -1619,12 +1699,16 @@ function convertMarkdownToHTML(mdText) {
         const cm = lines[i].match(/^(\s*)(?:(\*|-|\+)\s+)?\[([ xX])\]\s*(.*)$/);
         const indentLvl = getLeadingIndent(cm[1]);
         const isChecked = cm[3].toLowerCase() === "x";
-        const text = parseInline(cm[4]);
+        let itemText = parseInline(cm[4]);
+        i++;
+        while (i < lines.length && isListContinuationLine(lines[i])) {
+          itemText += `<br class="ql-softbreak">${parseInline(lines[i].trim())}`;
+          i++;
+        }
         const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
         htmlParts.push(
-          `<li data-list="${isChecked ? "checked" : "unchecked"}"${indentClass}>${text || "<br>"}</li>`
+          `<li data-list="${isChecked ? "checked" : "unchecked"}"${indentClass}>${itemText || "<br>"}</li>`
         );
-        i++;
       }
       continue;
     }
@@ -1634,10 +1718,14 @@ function convertMarkdownToHTML(mdText) {
       while (i < lines.length && /^\s*\d+\.\s+(.*)$/.test(lines[i])) {
         const om = lines[i].match(/^(\s*)\d+\.\s+(.*)$/);
         const indentLvl = getLeadingIndent(om[1]);
-        const text = parseInline(om[2]);
-        const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
-        htmlParts.push(`<li data-list="ordered"${indentClass}>${text || "<br>"}</li>`);
+        let itemText = parseInline(om[2]);
         i++;
+        while (i < lines.length && isListContinuationLine(lines[i])) {
+          itemText += `<br class="ql-softbreak">${parseInline(lines[i].trim())}`;
+          i++;
+        }
+        const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
+        htmlParts.push(`<li data-list="ordered"${indentClass}>${itemText || "<br>"}</li>`);
       }
       continue;
     }
@@ -1651,10 +1739,14 @@ function convertMarkdownToHTML(mdText) {
       ) {
         const bm = lines[i].match(/^(\s*)(\*|-|\+)\s+(.*)$/);
         const indentLvl = getLeadingIndent(bm[1]);
-        const text = parseInline(bm[3]);
-        const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
-        htmlParts.push(`<li data-list="bullet"${indentClass}>${text || "<br>"}</li>`);
+        let itemText = parseInline(bm[3]);
         i++;
+        while (i < lines.length && isListContinuationLine(lines[i])) {
+          itemText += `<br class="ql-softbreak">${parseInline(lines[i].trim())}`;
+          i++;
+        }
+        const indentClass = indentLvl > 0 ? ` class="ql-indent-${indentLvl}"` : "";
+        htmlParts.push(`<li data-list="bullet"${indentClass}>${itemText || "<br>"}</li>`);
       }
       continue;
     }
@@ -1675,6 +1767,28 @@ function convertMarkdownToHTML(mdText) {
     // J. 일반 문단 (p)
     htmlParts.push(`<p>${parseInline(line)}</p>`);
     i++;
+  }
+
+  if (forClipboard) {
+    const grouped = [];
+    let openList = false;
+    for (const part of htmlParts) {
+      if (part.startsWith("<li")) {
+        if (!openList) {
+          grouped.push("<ol>");
+          openList = true;
+        }
+        grouped.push(part);
+      } else {
+        if (openList) {
+          grouped.push("</ol>");
+          openList = false;
+        }
+        grouped.push(part);
+      }
+    }
+    if (openList) grouped.push("</ol>");
+    return grouped.join("");
   }
 
   return htmlParts.join("");
