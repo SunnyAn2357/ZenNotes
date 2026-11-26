@@ -295,7 +295,7 @@ const exportThemeCSS_Light = `
     .zen-export-wrapper .hljs-built_in, .zen-export-wrapper .hljs-class { color: #e36209 !important; }
     
     .zen-export-wrapper .ql-strike-line-true { color: #94a3b8; text-decoration: line-through; }
-    .zen-export-wrapper a { color: #2563eb; text-decoration: underline; }
+    .zen-export-wrapper a { color: #2563eb; text-decoration: none; }
 </style>
 `;
 
@@ -432,7 +432,7 @@ const exportThemeCSS_Dual = `
     .ql-editor li.ql-quote-item-true { border-left: 3px solid var(--zen-accent); background-color: var(--zen-quote-bg); margin: 12px 0; padding: 10px 16px; color: var(--zen-quote-text); border-radius: 0 6px 6px 0; font-style: normal; }
 
     /* 링크 및 서식 */
-    .ql-editor a { color: var(--zen-accent); text-decoration: underline; }
+    .ql-editor a { color: var(--zen-accent); text-decoration: none; }
     .ql-editor img { max-width: 100%; height: auto; border-radius: 0; display: inline-block; vertical-align: top; margin: 0; box-sizing: border-box; }
     .ql-editor .ql-strike-line-true { text-decoration: line-through; opacity: 0.6; }
 

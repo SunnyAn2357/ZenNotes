@@ -2251,6 +2251,20 @@ body.dark-theme .image-context-menu {
     transition: all 0.2s ease;
 }
 
+/* 🎯 [V1.8.14] 에디터 본문 링크 Zen 스타일 (밑줄 제거, 호버 시 부드러운 투명도 반응) */
+.ql-snow .ql-editor a,
+.ql-editor a {
+    color: var(--accent);
+    text-decoration: none !important;
+    transition: opacity 0.15s ease;
+}
+
+.ql-snow .ql-editor a:hover,
+.ql-editor a:hover {
+    text-decoration: none !important;
+    opacity: 0.78;
+}
+
 /* 🎯 [추가] 유튜브 및 임베드 영상 반응형 와이드 확장 (16:9 비율) */
 .ql-editor .ql-video {
     display: block;
@@ -4420,7 +4434,7 @@ body.light-theme {
 
     .ql-editor a {
         color: #2563eb !important;
-        text-decoration: underline !important;
+        text-decoration: none !important;
     }
 
     .ql-editor img {
@@ -8100,11 +8114,11 @@ body.light-theme .zen-bh-model-opt-icon {
 
 #sts-memo-editor a {
     cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    text-decoration: none !important;
 }
 
 #sts-memo-editor a:hover {
+    text-decoration: none !important;
     opacity: 0.8;
 }
 
