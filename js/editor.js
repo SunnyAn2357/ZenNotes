@@ -1987,7 +1987,73 @@ function normalizePastedHtmlForQuill(htmlData) {
         }
     }
 
+    // 4. <pre>/<table> 바깥 UI 컨트롤 제거, 빈 래퍼 정리 및 표·코드블록 직전 유령 빈 줄 제거
+    cleanupEmptyWrappersAndLeadingBlanks(doc);
+
     return doc.body.innerHTML;
+}
+
+function cleanupEmptyWrappersAndLeadingBlanks(doc) {
+    if (!doc || !doc.body) return;
+    const isBlankText = (str) => String(str || '').replace(/[\u200B-\u200D\uFEFF\u00A0\s]/g, '') === '';
+
+    // 4-1. <pre> 바깥의 비콘텐츠 웹 UI 컨트롤(표/코드 복사 아이콘 버튼 등) 제거
+    doc.body.querySelectorAll('button, svg, select, input, textarea, script, style, noscript').forEach(el => {
+        if (!el.closest('pre')) {
+            el.remove();
+        }
+    });
+
+    // 4-2. 하위에서 상위로 올라가며 비어버린 래퍼 컨테이너 제거
+    const wrappers = Array.from(doc.body.querySelectorAll('div, header, section, aside, nav, figure, figcaption, footer, span')).reverse();
+    for (const el of wrappers) {
+        if (!el.isConnected || el.closest('pre, table')) continue;
+        if (isBlankText(el.textContent) && !el.querySelector('img, table, pre, hr, video, iframe, br')) {
+            el.remove();
+        }
+    }
+
+    // 4-3. <table>과 <pre> 바로 앞의 빈 문단/래퍼/<br>/공백 텍스트 노드 제거 (일반 문단 사이 빈 줄은 보존)
+    const blockTargets = Array.from(doc.body.querySelectorAll('table, pre'));
+    for (const targetEl of blockTargets) {
+        if (!targetEl.isConnected) continue;
+        let cur = targetEl;
+        for (let depth = 0; depth < 6 && cur && cur !== doc.body; depth++) {
+            while (cur.previousSibling) {
+                const prev = cur.previousSibling;
+                if (prev.nodeType === 8) {
+                    prev.remove();
+                    continue;
+                }
+                if (prev.nodeType === 3) {
+                    if (isBlankText(prev.nodeValue)) {
+                        prev.remove();
+                        continue;
+                    }
+                    cur = null;
+                    break;
+                }
+                if (prev.nodeType === 1) {
+                    if (prev.tagName === 'BR') {
+                        prev.remove();
+                        continue;
+                    }
+                    if (/^(P|DIV|HEADER|SECTION|FIGURE|SPAN)$/.test(prev.tagName) &&
+                        isBlankText(prev.textContent) &&
+                        !prev.querySelector('img, table, pre, hr, video, iframe')) {
+                        prev.remove();
+                        continue;
+                    }
+                    cur = null;
+                    break;
+                }
+                cur = null;
+                break;
+            }
+            if (!cur) break;
+            cur = cur.parentElement;
+        }
+    }
 }
 
 function looksLikeMarkdownText(plainText) {
