@@ -537,6 +537,15 @@ const quill = new Quill('#editor', {
                         Boolean(node.style && (node.style.backgroundColor || node.style.background)) ||
                         Boolean(node.classList && Array.from(node.classList).some(c => c.startsWith('ql-bg-')))
                     );
+                    const tagUpper = node && node.nodeType === 1 ? String(node.tagName || '').toUpperCase() : '';
+                    const inPre = node && node.nodeType === 1 && node.closest && Boolean(node.closest('pre'));
+                    const inlineWeight = node && node.nodeType === 1 && node.style ? String(node.style.fontWeight || '').trim() : '';
+                    const weightNum = parseInt(inlineWeight, 10);
+                    const clsStr = (node && node.nodeType === 1 && node.getAttribute) ? (node.getAttribute('class') || '') : '';
+                    const hasSemiOrTailwindBold = !inPre && !/^(H[1-6]|PRE|CODE)$/.test(tagUpper) && (
+                        (!Number.isNaN(weightNum) && weightNum >= 600 && weightNum < 700) ||
+                        /\b(font-bold|font-semibold|font-extrabold|font-black)\b/i.test(clsStr)
+                    );
                     delta.ops.forEach(op => {
                         // 만약 글자에 서식(attributes)이 묻어있다면
                         if (op.attributes) {
@@ -548,6 +557,9 @@ const quill = new Quill('#editor', {
                                 }
                             }
                             delete op.attributes.font;
+                        }
+                        if (hasSemiOrTailwindBold && typeof op.insert === 'string' && !/^\n+$/.test(op.insert)) {
+                            op.attributes = { ...(op.attributes || {}), bold: true };
                         }
                     });
                     return delta;
@@ -1528,7 +1540,9 @@ const ZEN_CODE_LANG_ALIASES = {
     rs: 'rust',
     golang: 'go',
     kt: 'kotlin', kts: 'kotlin',
-    txt: 'plain', text: 'plain', plaintext: 'plain', 'plain text': 'plain', nohighlight: 'plain', none: 'plain'
+    txt: 'plain', text: 'plain', plaintext: 'plain', 'plain text': 'plain', nohighlight: 'plain', none: 'plain',
+    'bash / shell': 'bash', 'shell script': 'bash', 'c / c++': 'cpp', 'html / xml': 'html',
+    dockerfile: 'bash', makefile: 'bash', toml: 'yaml', dotenv: 'bash', env: 'bash'
 };
 
 function normalizePastedCodeLanguage(raw) {
@@ -1571,13 +1585,13 @@ function detectCodeLanguageFromElement(el) {
 
 function tryParseCodeHeaderText(headerEl) {
     if (!headerEl || headerEl.nodeType !== 1) return { matched: false, lang: '' };
-    if (headerEl.querySelector && headerEl.querySelector('table, pre, ul, ol, h1, h2, h3, h4, h5, h6, img')) {
+    if (headerEl.querySelector && headerEl.querySelector('table, pre, ul, ol, h1, h2, h3, h4, h5, h6')) {
         return { matched: false, lang: '' };
     }
     const rawText = (headerEl.textContent || '').replace(/\s+/g, ' ').trim();
     if (!rawText || rawText.length > 45) return { matched: false, lang: '' };
 
-    const copyRegex = /(코드\s*복사|복사하기|복사됨|복사|copy\s*code|copied!?|copy|줄바꿈|wrap|다운로드|download)/gi;
+    const copyRegex = /(코드\s*복사|복사하기|복사됨|복사|copy\s*code|copied!?|copy|자동\s*줄바꿈|줄바꿈|wrap|다운로드|download|실행|run|접기|펼치기|확장|expand|collapse|미리보기|preview)/gi;
     const hasCopyWord = copyRegex.test(rawText) || Boolean(headerEl.querySelector && headerEl.querySelector('button'));
     const remainder = rawText
         .replace(copyRegex, ' ')
@@ -1586,36 +1600,57 @@ function tryParseCodeHeaderText(headerEl) {
         .trim();
 
     if (hasCopyWord) {
-        if (!remainder) return { matched: true, lang: '' };
+        if (!remainder || remainder === '코드' || remainder.toLowerCase() === 'code') {
+            return { matched: true, lang: '' };
+        }
         const norm = normalizePastedCodeLanguage(remainder);
         if (norm) return { matched: true, lang: norm };
         return { matched: false, lang: '' };
     }
 
-    const cls = (headerEl.getAttribute && headerEl.getAttribute('class')) || '';
     const exactLang = normalizePastedCodeLanguage(rawText);
-    if (exactLang && (headerEl.tagName !== 'P' || /(code|lang|header|title)/i.test(cls))) {
+    if (exactLang && rawText.length <= 24 && !/[.?!,:;]/.test(rawText)) {
         return { matched: true, lang: exactLang };
     }
     return { matched: false, lang: '' };
 }
 
+function isEmptyDecorativeEl(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if ((el.textContent || '').trim()) return false;
+    return !el.querySelector || !el.querySelector('img, table, pre, hr');
+}
+
 function tryExtractAndRemoveCodeHeaderSibling(preEl, doc) {
     if (!preEl || !doc || !doc.body) return '';
     let cur = preEl;
-    for (let depth = 0; depth < 3 && cur && cur !== doc.body; depth++) {
-        const prev = cur.previousElementSibling;
+    let foundLang = '';
+    for (let depth = 0; depth < 6 && cur && cur !== doc.body; depth++) {
+        let prev = cur.previousElementSibling;
+        while (prev && isEmptyDecorativeEl(prev)) {
+            prev = prev.previousElementSibling;
+        }
         if (prev) {
             const parsed = tryParseCodeHeaderText(prev);
             if (parsed.matched) {
+                if (!foundLang && parsed.lang) foundLang = parsed.lang;
+                let prev2 = prev.previousElementSibling;
+                while (prev2 && isEmptyDecorativeEl(prev2)) {
+                    prev2 = prev2.previousElementSibling;
+                }
                 prev.remove();
-                return parsed.lang;
+                if (prev2) {
+                    const parsed2 = tryParseCodeHeaderText(prev2);
+                    if (parsed2.matched) {
+                        if (!foundLang && parsed2.lang) foundLang = parsed2.lang;
+                        prev2.remove();
+                    }
+                }
+                return foundLang;
             }
             break;
         }
-        const parent = cur.parentElement;
-        if (!parent || parent === doc.body || parent.children.length > 2) break;
-        cur = parent;
+        cur = cur.parentElement;
     }
     return '';
 }
@@ -1686,6 +1721,46 @@ function extractCodeLinesFromElement(rootEl) {
     return normalized ? normalized.split('\n') : [''];
 }
 
+function detectInlineTextFormatFromElement(el) {
+    if (!el || el.nodeType !== 1 || !el.getAttribute) {
+        return { bold: false, italic: false, underline: false, strike: false };
+    }
+    const style = el.getAttribute('style') || '';
+    const cls = el.getAttribute('class') || '';
+    return {
+        bold: /font-weight\s*:\s*(?:bold|bolder|[6-9]\d\d)\b/i.test(style) || /\b(font-bold|font-semibold|font-extrabold|font-black)\b/i.test(cls),
+        italic: /font-style\s*:\s*(?:italic|oblique)\b/i.test(style) || /\bitalic\b/i.test(cls),
+        underline: /text-decoration(?:-line)?\s*:[^;]*\bunderline\b/i.test(style) || /\bunderline\b/i.test(cls),
+        strike: /text-decoration(?:-line)?\s*:[^;]*\bline-through\b/i.test(style) || /\bline-through\b/i.test(cls)
+    };
+}
+
+function wrapNodeWithFormats(doc, nodeToWrap, fmt, skipTag) {
+    let wrapped = nodeToWrap;
+    const skip = String(skipTag || '').toUpperCase();
+    if (fmt.strike && skip !== 'S' && skip !== 'DEL' && skip !== 'STRIKE') {
+        const s = doc.createElement('s');
+        s.appendChild(wrapped);
+        wrapped = s;
+    }
+    if (fmt.underline && skip !== 'U') {
+        const u = doc.createElement('u');
+        u.appendChild(wrapped);
+        wrapped = u;
+    }
+    if (fmt.italic && skip !== 'EM' && skip !== 'I') {
+        const em = doc.createElement('em');
+        em.appendChild(wrapped);
+        wrapped = em;
+    }
+    if (fmt.bold && skip !== 'STRONG' && skip !== 'B') {
+        const strong = doc.createElement('strong');
+        strong.appendChild(wrapped);
+        wrapped = strong;
+    }
+    return wrapped;
+}
+
 function flattenCellContentForQuill(srcCell, destTd, doc) {
     const blockTags = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'LI']);
     const inlineTags = new Set(['STRONG', 'B', 'EM', 'I', 'U', 'S', 'DEL', 'STRIKE', 'CODE', 'A', 'MARK', 'SPAN', 'SUB', 'SUP', 'SMALL']);
@@ -1745,7 +1820,16 @@ function flattenCellContentForQuill(srcCell, destTd, doc) {
             if (tag === 'LI' && node.parentElement && node.parentElement.tagName === 'UL') {
                 destTd.appendChild(doc.createTextNode('• '));
             }
-            Array.from(node.childNodes).forEach(ch => walkCell(ch, destTd));
+            const blockFmt = detectInlineTextFormatFromElement(node);
+            if (blockFmt.bold || blockFmt.italic || blockFmt.underline || blockFmt.strike) {
+                const span = doc.createElement('span');
+                Array.from(node.childNodes).forEach(ch => walkCell(ch, span));
+                if (span.childNodes.length > 0) {
+                    destTd.appendChild(wrapNodeWithFormats(doc, span, blockFmt, ''));
+                }
+            } else {
+                Array.from(node.childNodes).forEach(ch => walkCell(ch, destTd));
+            }
             return;
         }
         if (inlineTags.has(tag)) {
@@ -1758,7 +1842,8 @@ function flattenCellContentForQuill(srcCell, destTd, doc) {
             }
             Array.from(node.childNodes).forEach(ch => walkCell(ch, el));
             if (el.childNodes.length > 0) {
-                target.appendChild(el);
+                const fmt = detectInlineTextFormatFromElement(node);
+                target.appendChild(wrapNodeWithFormats(doc, el, fmt, tag));
             }
             return;
         }
@@ -1771,13 +1856,24 @@ function flattenCellContentForQuill(srcCell, destTd, doc) {
         destTd.removeChild(destTd.lastChild);
     }
 
-    if (srcCell.tagName === 'TH' && (destTd.textContent || '').trim().length > 0) {
+    const cellFmt = detectInlineTextFormatFromElement(srcCell);
+    if (srcCell.tagName === 'TH') {
+        cellFmt.bold = true;
+    }
+    if ((destTd.textContent || '').trim().length > 0 &&
+        (cellFmt.bold || cellFmt.italic || cellFmt.underline || cellFmt.strike)) {
         const onlyChild = destTd.childNodes.length === 1 ? destTd.firstChild : null;
-        const alreadyBold = onlyChild && onlyChild.nodeType === 1 && (onlyChild.tagName === 'STRONG' || onlyChild.tagName === 'B');
-        if (!alreadyBold) {
-            const strong = doc.createElement('strong');
-            while (destTd.firstChild) strong.appendChild(destTd.firstChild);
-            destTd.appendChild(strong);
+        const onlyTag = onlyChild && onlyChild.nodeType === 1 ? String(onlyChild.tagName || '').toUpperCase() : '';
+        const wrapFmt = {
+            bold: cellFmt.bold && onlyTag !== 'STRONG' && onlyTag !== 'B',
+            italic: cellFmt.italic && onlyTag !== 'EM' && onlyTag !== 'I',
+            underline: cellFmt.underline && onlyTag !== 'U',
+            strike: cellFmt.strike && onlyTag !== 'S' && onlyTag !== 'DEL' && onlyTag !== 'STRIKE'
+        };
+        if (wrapFmt.bold || wrapFmt.italic || wrapFmt.underline || wrapFmt.strike) {
+            const frag = doc.createDocumentFragment();
+            while (destTd.firstChild) frag.appendChild(destTd.firstChild);
+            destTd.appendChild(wrapNodeWithFormats(doc, frag, wrapFmt, ''));
         }
     }
 
@@ -1816,10 +1912,8 @@ function normalizePastedHtmlForQuill(htmlData) {
             const firstCodeLine = el.querySelector('.ql-code-block[data-language]');
             if (firstCodeLine) lang = detectCodeLanguageFromElement(firstCodeLine);
         }
-        if (!lang) {
-            const siblingLang = tryExtractAndRemoveCodeHeaderSibling(el, doc);
-            if (siblingLang) lang = siblingLang;
-        }
+        const siblingLang = tryExtractAndRemoveCodeHeaderSibling(el, doc);
+        if (!lang && siblingLang) lang = siblingLang;
         const lines = extractCodeLinesFromElement(el);
         const pre = doc.createElement('pre');
         pre.setAttribute('data-language', lang || 'plain');
@@ -1836,10 +1930,10 @@ function normalizePastedHtmlForQuill(htmlData) {
             const codeChild = preEl.querySelector('code');
             if (codeChild) lang = detectCodeLanguageFromElement(codeChild);
         }
-        if (!lang && preEl.firstElementChild && preEl.firstElementChild.tagName !== 'CODE') {
+        if (preEl.firstElementChild && preEl.firstElementChild.tagName !== 'CODE') {
             const innerHeader = tryParseCodeHeaderText(preEl.firstElementChild);
             if (innerHeader.matched) {
-                if (innerHeader.lang) lang = innerHeader.lang;
+                if (!lang && innerHeader.lang) lang = innerHeader.lang;
                 preEl.firstElementChild.remove();
             }
         }
