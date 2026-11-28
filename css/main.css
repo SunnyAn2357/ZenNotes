@@ -1416,8 +1416,8 @@ body.light-theme .util-btn-share .util-ext-badge {
 }
 
 .util-note-move-card {
-    padding: 10px 12px;
-    border-radius: 11px;
+    padding: 9px 12px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.07);
 }
@@ -1479,7 +1479,7 @@ body.light-theme .util-note-move-card:hover {
     justify-content: center;
     align-items: center;
     gap: 5px;
-    padding: 10px 8px;
+    padding: 9px 8px;
     border-radius: 10px;
     font-size: 12.5px;
     font-weight: 600;
@@ -1526,6 +1526,16 @@ body.light-theme .util-note-card.is-pinned {
     opacity: 0.48;
 }
 
+.util-export-section {
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+body.light-theme .util-export-section {
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
 .util-export-list {
     display: flex;
     flex-direction: column;
@@ -1547,7 +1557,7 @@ body.light-theme .util-export-list {
 }
 
 .util-mgmt-section {
-    padding-top: 12px;
+    padding-top: 14px;
     border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -1558,16 +1568,16 @@ body.light-theme .util-mgmt-section {
 .util-mgmt-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 7px;
 }
 
 .util-mgmt-card {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 6px;
-    padding: 13px 8px;
-    border-radius: 11px;
+    gap: 5px;
+    padding: 9px 8px;
+    border-radius: 10px;
     font-size: 12.5px;
     font-weight: 600;
     background: rgba(255, 255, 255, 0.03);
@@ -1576,7 +1586,7 @@ body.light-theme .util-mgmt-section {
 }
 
 .util-mgmt-card i {
-    font-size: 14.5px;
+    font-size: 13.5px;
 }
 
 .util-mgmt-card:hover {

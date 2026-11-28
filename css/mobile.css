@@ -776,19 +776,33 @@
     }
 
     /* =========================================
-       2. 우측 메뉴창 간격 재정돈 (3단 균형)
+       2. 우측 메뉴창 간격 재정돈 (3단 균형 · 스크롤 최소화)
     ========================================= */
     .col-right {
-        gap: 14px !important;
-        padding-top: calc(20px + env(safe-area-inset-top)) !important;
+        gap: 10px !important;
+        padding-top: calc(16px + env(safe-area-inset-top)) !important;
+        padding-bottom: calc(14px + env(safe-area-inset-bottom)) !important;
+    }
+
+    .right-pane-header {
+        padding-bottom: 10px !important;
     }
 
     .util-section {
-        gap: 8px !important;
+        gap: 6px !important;
+    }
+
+    .util-export-section {
+        margin-top: 0 !important;
+        padding-top: 10px !important;
+    }
+
+    .util-mgmt-section {
+        padding-top: 10px !important;
     }
 
     .util-btn.util-btn-export {
-        padding: 8.5px 10px !important;
+        padding: 7.5px 10px !important;
     }
 
     /* =========================================
