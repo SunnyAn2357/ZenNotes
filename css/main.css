@@ -7419,8 +7419,9 @@ body.light-theme .tree-folder-icon.is-trash {
 .zen-bh-portal-shell {
     width: 100%;
     max-width: 452px;
+    min-height: 458px;
     border-radius: 22px;
-    padding: 20px 22px 18px;
+    padding: 20px 22px 20px;
     background: rgba(16, 19, 27, 0.96);
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 36px rgba(0, 0, 0, 0.25);
@@ -7428,7 +7429,8 @@ body.light-theme .tree-folder-icon.is-trash {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    justify-content: space-between;
+    gap: 16px;
     transform: translate(0, 0) scale(1);
     opacity: 1;
     transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease;
@@ -7461,24 +7463,26 @@ body.light-theme .tree-folder-icon.is-trash {
 }
 
 .zen-bh-shell-title {
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     color: #60a5fa;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .zen-bh-model-picker-wrap {
     position: relative;
     display: inline-flex;
     align-items: center;
-    flex: 1;
-    max-width: 230px;
+    flex: 0 1 174px;
+    max-width: 174px;
+    min-width: 0;
 }
 
 .zen-bh-model-btn {
     width: 100%;
-    min-width: 158px;
+    min-width: 118px;
     height: 28px;
     padding: 0 10px 0 9px;
     border-radius: 7px;
@@ -7689,26 +7693,40 @@ body.light-theme .tree-folder-icon.is-trash {
 .zen-bh-orb-dropzone {
     position: relative;
     width: 100%;
-    height: 214px;
-    border-radius: 0;
+    height: 262px;
+    margin: 4px 0;
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: transform 0.24s ease, filter 0.24s ease;
+    transition: transform 0.24s ease, filter 0.24s ease, box-shadow 0.24s ease;
 }
 
 .zen-bh-orb-dropzone.is-drag-hover {
-    transform: scale(1.06);
+    transform: scale(1.05);
     filter: brightness(1.12);
 }
 
 .zen-bh-canvas {
     width: 100%;
-    height: 214px;
+    height: 262px;
     border-radius: 0;
     display: block;
     pointer-events: none;
+}
+
+.zen-bh-minimal-footer {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.light-theme .zen-bh-minimal-footer {
+    border-top-color: #eef2f6;
 }
 
 .zen-bh-prompt-section {
@@ -7785,20 +7803,24 @@ body.light-theme .tree-folder-icon.is-trash {
 
 .zen-bh-status-pill {
     width: 100%;
-    padding: 8px 14px;
-    border-radius: 10px;
+    min-height: 40px;
+    padding: 9px 16px;
+    border-radius: 11px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #60a5fa;
-    font-size: 12px;
+    font-size: 12.2px;
     font-weight: 500;
     line-height: 1.45;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     white-space: normal;
     word-break: keep-all;
     overflow: visible;
     text-overflow: clip;
-    transition: opacity 0.24s ease;
+    transition: opacity 0.24s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .zen-bh-status-pill.is-cheer-fading {

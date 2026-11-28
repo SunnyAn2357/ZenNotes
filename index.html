@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.8.15">
-    <link rel="manifest" href="manifest.json?v=1.8.15">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.8.16">
+    <link rel="manifest" href="manifest.json?v=1.8.16">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.8.15">
+    <link rel="stylesheet" href="css/main.css?v=1.8.16">
 
 </head>
 
@@ -1112,12 +1112,12 @@
         </div>
     </div>
 
-    <!-- [V1.7.5] 좌측 블랙홀 버튼 원점 출현 · AI 선택 · 사용자 프롬프트 · 개조식 체크 · 프롬프트만 전송 포털 -->
+    <!-- [V1.8.16] 좌측 블랙홀 미니멀 포털 (공문·쪽지·일반문서 자동 판별) -->
     <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
         <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
             <div class="zen-bh-shell-head">
                 <div class="zen-bh-head-left">
-                    <span class="zen-bh-shell-title">MY AI 문서 분석</span>
+                    <span class="zen-bh-shell-title">ZenNotes 공문/쪽지/문서 분석</span>
                     <div class="zen-bh-model-picker-wrap">
                         <button type="button" id="zen-bh-model-btn" class="zen-bh-model-btn" onclick="toggleBlackHoleModelDropdown(event)" title="문서 분석·요약에 사용할 AI 모델 선택">
                             <span id="zen-bh-model-btn-icon" class="zen-bh-model-icon"></span>
@@ -1131,35 +1131,16 @@
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            <div class="zen-bh-mode-tabs" role="tablist" aria-label="투입 유형">
-                <button type="button" class="zen-bh-mode-btn active" data-bh-mode="official" onclick="setBlackHoleMode('official')">공문 분석</button>
-                <button type="button" class="zen-bh-mode-btn" data-bh-mode="memo" onclick="setBlackHoleMode('memo')">쪽지 분석</button>
-                <button type="button" class="zen-bh-mode-btn" data-bh-mode="summary" onclick="setBlackHoleMode('summary')">문서 분석</button>
-            </div>
-            <div id="zen-bh-orb-dropzone" class="zen-bh-orb-dropzone" onclick="triggerBlackHoleFilePick()" title="파일을 끌어다 놓거나 클릭해 선택하세요">
+            <div id="zen-bh-orb-dropzone" class="zen-bh-orb-dropzone" onclick="triggerBlackHoleFilePick()" title="공문·쪽지 창이나 일반 문서를 끌어다 놓거나 클릭해 선택하세요">
                 <canvas id="zen-bh-canvas" class="zen-bh-canvas"></canvas>
                 <input type="file" id="zen-bh-file-input" multiple style="display: none;">
             </div>
-            <div id="zen-bh-status-pill" class="zen-bh-status-pill" style="display: none;"></div>
-            <div class="zen-bh-options-divider" role="separator" aria-label="옵션">
-                <span>옵션</span>
-            </div>
-            <div class="zen-bh-prompt-section">
-                <textarea id="zen-bh-user-prompt" class="zen-bh-user-prompt" rows="2" placeholder="(옵션) 사용자 프롬프트 입력란"></textarea>
+            <div id="zen-bh-status-pill" class="zen-bh-status-pill">공문·쪽지 창이나 (일반) 문서를 블랙홀에 던져 넣으세요.</div>
+            <div class="zen-bh-minimal-footer">
                 <label class="zen-bh-summary-check">
                     <input type="checkbox" id="zen-bh-concise-toggle">
-                    <span>문서 요약(개조식, 1장 보고서)</span>
+                    <span>문서 요약(일반 문서를 개조식·1장 보고서로 만들기)</span>
                 </label>
-            </div>
-            <div class="zen-bh-bottom-row">
-                <div class="zen-bh-bottom-left">
-                    <label class="zen-bh-fold-check">
-                        <input type="checkbox" id="zen-bh-folding-toggle" checked>
-                        <span id="zen-bh-folding-label">자동 폴더링(폴더를 만들어 공문 저장)</span>
-                    </label>
-                    <div id="zen-bh-mode-hint" class="zen-bh-mode-hint">공문 본문만 AI 전송·분석합니다(첨부 제외).</div>
-                </div>
-                <button type="button" id="zen-bh-prompt-send-btn" class="zen-bh-act-btn zen-bh-prompt-send-btn" onclick="submitBlackHolePromptOnly()" disabled title="문서 없이 프롬프트 전송은 '문서 분석' 탭에서 사용할 수 있습니다.">문서없이 프롬프트 전송</button>
             </div>
         </div>
     </div>
@@ -1192,20 +1173,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.8.15"></script>
-    <script src="js/db.js?v=1.8.15"></script>
-    <script src="js/ui.js?v=1.8.15"></script>
-    <script src="js/editor.js?v=1.8.15"></script>
-    <script src="js/file_manager.js?v=1.8.15"></script>
-    <script src="js/io.js?v=1.8.15"></script>
-    <script src="js/auth.js?v=1.8.15"></script>
-    <script src="js/zen_bridge.js?v=1.8.15"></script>
+    <script src="js/globals.js?v=1.8.16"></script>
+    <script src="js/db.js?v=1.8.16"></script>
+    <script src="js/ui.js?v=1.8.16"></script>
+    <script src="js/editor.js?v=1.8.16"></script>
+    <script src="js/file_manager.js?v=1.8.16"></script>
+    <script src="js/io.js?v=1.8.16"></script>
+    <script src="js/auth.js?v=1.8.16"></script>
+    <script src="js/zen_bridge.js?v=1.8.16"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.8.15");
+            console.log("[ZenNotes] 현재 버전: V1.8.16");
             console.log("=========================================");
         });
     </script>

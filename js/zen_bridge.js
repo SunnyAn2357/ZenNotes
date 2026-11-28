@@ -1043,10 +1043,16 @@
                     }
                 }
 
-                if (payload.type === "externalMemoDragState" && typeof handleExternalMemoDragStateEvent === "function") {
-                    handleExternalMemoDragStateEvent(payload);
-                } else if (payload.type === "miryangMemoCaptureStarted" && typeof handleMiryangMemoCaptureStartedEvent === "function") {
-                    handleMiryangMemoCaptureStartedEvent(payload);
+                if (payload.type === "externalWindowDragState" && typeof handleExternalWindowDragStateEvent === "function") {
+                    handleExternalWindowDragStateEvent(payload);
+                } else if (payload.type === "externalMemoDragState" && typeof handleExternalWindowDragStateEvent === "function") {
+                    handleExternalWindowDragStateEvent(Object.assign({ kind: "memo" }, payload));
+                } else if (payload.type === "externalWindowCaptureStarted" && typeof handleExternalWindowCaptureStartedEvent === "function") {
+                    handleExternalWindowCaptureStartedEvent(payload);
+                } else if (payload.type === "miryangMemoCaptureStarted" && typeof handleExternalWindowCaptureStartedEvent === "function") {
+                    handleExternalWindowCaptureStartedEvent(Object.assign({ kind: "memo" }, payload));
+                } else if (payload.type === "onnaraOfficialCaptured" && typeof handleCapturedOnnaraOfficialPayload === "function") {
+                    handleCapturedOnnaraOfficialPayload(payload);
                 } else if (payload.type === "miryangMemoCaptured" && typeof handleCapturedMiryangMemoPayload === "function") {
                     handleCapturedMiryangMemoPayload(payload);
                 }
@@ -1208,31 +1214,30 @@
     }
 
     // ========================================================================
-    // 5. 좌측 상단 블랙홀 버튼 + NASA 골드 블랙홀 등장/꿀꺽/퇴장 껍데기
+    // 5. 좌측 상단 블랙홀 버튼 + NASA 골드 블랙홀 등장/꿀꺽/퇴장 미니멀 포털
     // ========================================================================
-    const BH_DEFAULT_PROMPT = "";
+    const BH_DEFAULT_PROMPT = "공문·쪽지 창이나 (일반) 문서를 블랙홀에 던져 넣으세요.";
+    const BH_RUNNING_NOTICE = {
+        official: "범정부 AI(HCX-GOV)로 공문 본문을 안전하게 분석하고 있습니다.",
+        memo: "쪽지 분석 중에는 '마우스·키보드'를 사용하지 마세요. AI가 사용하고 있습니다.",
+        summary: "비공개 문서·개인 정보 포함 문서를 분석하지 마세요."
+    };
     const BH_MODE_META = {
         official: {
             label: "공문 분석",
-            defaultFolding: true,
-            prompt: "",
-            hint: "공문 본문만 AI 전송·분석합니다(첨부 제외)."
+            defaultFolding: true
         },
         memo: {
             label: "쪽지 분석",
-            defaultFolding: true,
-            prompt: "쪽지 분석 중에는 '마우스·키보드'를 사용하지 마세요. AI가 사용하고 있습니다.",
-            hint: "쪽지 본문만 AI 전송·분석합니다(첨부 제외)."
+            defaultFolding: true
         },
         summary: {
             label: "문서 분석",
-            defaultFolding: false,
-            prompt: "요약하고 싶은 문서를 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
-            hint: "AI가 문서를 요약해 줍니다."
+            defaultFolding: false
         }
     };
 
-    let bhCurrentMode = "official";
+    let bhCurrentMode = "summary";
     let bhIsOpen = false;
     let bhRafId = null;
     let bhOrbitDots = [];
@@ -1398,34 +1403,40 @@
         }, 240);
     }
 
-    function startBlackHoleCheerRotation(initialStatusText, initialHoldMs = 3500, stepMs = 4000) {
+    function startBlackHoleAlternatingRotation(noticeText, stepMs = 3800) {
         stopBlackHoleCheerRotation();
+        const safeNotice = String(noticeText || BH_DEFAULT_PROMPT).trim();
         const pill = document.getElementById("zen-bh-status-pill");
-        if (pill && initialStatusText) {
+        if (pill && safeNotice) {
             pill.classList.remove("is-cheer-fading");
-            setBlackHoleStatusPillText(initialStatusText);
+            setBlackHoleStatusPillText(safeNotice);
         }
         if (!Array.isArray(BH_CHEER_MESSAGES) || BH_CHEER_MESSAGES.length === 0) return;
 
-        const showNextCheer = () => {
+        let stepCounter = 0;
+        bhCheerIntervalTimer = setInterval(() => {
             if (!bhIsOpen || !bhSwallowing) {
                 stopBlackHoleCheerRotation();
                 return;
             }
-            let idx = parseInt(localStorage.getItem(BH_CHEER_IDX_KEY) || "0", 10);
-            if (!Number.isFinite(idx) || idx < 0 || idx >= BH_CHEER_MESSAGES.length) {
-                idx = 0;
+            stepCounter++;
+            if (stepCounter % 2 === 1) {
+                let idx = parseInt(localStorage.getItem(BH_CHEER_IDX_KEY) || "0", 10);
+                if (!Number.isFinite(idx) || idx < 0 || idx >= BH_CHEER_MESSAGES.length) {
+                    idx = 0;
+                }
+                const cheerMsg = BH_CHEER_MESSAGES[idx];
+                localStorage.setItem(BH_CHEER_IDX_KEY, String((idx + 1) % BH_CHEER_MESSAGES.length));
+                setBlackHoleStatusPillTextFade(cheerMsg);
+            } else {
+                setBlackHoleStatusPillTextFade(safeNotice);
             }
-            const msg = BH_CHEER_MESSAGES[idx];
-            localStorage.setItem(BH_CHEER_IDX_KEY, String((idx + 1) % BH_CHEER_MESSAGES.length));
-            setBlackHoleStatusPillTextFade(msg);
-        };
+        }, stepMs);
+    }
 
-        bhCheerDelayTimer = setTimeout(() => {
-            if (!bhIsOpen || !bhSwallowing) return;
-            showNextCheer();
-            bhCheerIntervalTimer = setInterval(showNextCheer, stepMs);
-        }, initialHoldMs);
+    function startBlackHoleCheerRotation(initialStatusText, initialHoldMs = 3500, stepMs = 3800) {
+        _ = initialHoldMs;
+        startBlackHoleAlternatingRotation(initialStatusText, stepMs);
     }
 
     function initBlackHoleParticles() {
@@ -1525,7 +1536,7 @@
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = canvas.getBoundingClientRect();
         const cw = Math.max(160, Math.round(rect.width || 400));
-        const ch = Math.max(160, Math.round(rect.height || 214));
+        const ch = Math.max(160, Math.round(rect.height || 262));
         if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
             canvas.width = cw * dpr;
             canvas.height = ch * dpr;
@@ -1535,9 +1546,9 @@
 
         const cx = cw / 2;
         const cy = ch / 2;
-        const maxR = Math.min(cw, ch) * 0.44;
-        const coreR = maxR * 0.27;
-        const diskRx = Math.max(maxR * 1.65, Math.min(cw * 0.46, maxR * 1.95));
+        const maxR = Math.min(cw, ch) * 0.43;
+        const coreR = maxR * 0.265;
+        const diskRx = Math.max(maxR * 1.72, Math.min(cw * 0.46, maxR * 2.02));
         const diskScaleY = 0.27;
 
         bhHoverLevel += (bhTargetHover - bhHoverLevel) * 0.14;
@@ -1837,29 +1848,10 @@
     }
 
     function setBlackHoleMode(modeKey) {
-        const meta = BH_MODE_META[modeKey] || BH_MODE_META.official;
-        bhCurrentMode = BH_MODE_META[modeKey] ? modeKey : "official";
-
-        const layer = document.getElementById("zen-blackhole-portal-layer");
-        if (!layer) return;
-        layer.querySelectorAll(".zen-bh-mode-btn").forEach((btn) => {
-            btn.classList.toggle("active", btn.getAttribute("data-bh-mode") === bhCurrentMode);
-        });
-        const foldToggle = document.getElementById("zen-bh-folding-toggle");
-        if (foldToggle) foldToggle.checked = !!meta.defaultFolding;
-        const foldLabelEl = document.getElementById("zen-bh-folding-label");
-        if (foldLabelEl) {
-            foldLabelEl.textContent = bhCurrentMode === "official"
-                ? "자동 폴더링(폴더를 만들어 공문 저장)"
-                : bhCurrentMode === "memo"
-                    ? "자동 폴더링(폴더를 만들어 쪽지 저장)"
-                    : "자동 폴더링(폴더를 만들어 문서 저장)";
-        }
-        const hintEl = document.getElementById("zen-bh-mode-hint");
-        if (hintEl) hintEl.textContent = meta.hint;
+        bhCurrentMode = BH_MODE_META[modeKey] ? modeKey : "summary";
         if (!bhSwallowing) {
             stopBlackHoleCheerRotation();
-            setBlackHoleStatusPillText(meta.prompt || BH_DEFAULT_PROMPT);
+            setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
         }
         setBlackHoleSendingUi(bhSwallowing);
     }
@@ -1875,13 +1867,10 @@
     }
 
     function setBlackHoleSendingUi(isSending) {
-        const sendBtn = document.getElementById("zen-bh-prompt-send-btn");
-        if (!sendBtn) return;
-        const isSummaryMode = bhCurrentMode === "summary";
-        sendBtn.disabled = !!isSending || !isSummaryMode;
-        sendBtn.title = isSummaryMode
-            ? "문서 없이 프롬프트만 AI에 전송 (Ctrl+Enter)"
-            : "문서 없이 프롬프트 전송은 '문서 분석' 탭에서 사용할 수 있습니다.";
+        const dropZone = document.getElementById("zen-bh-orb-dropzone");
+        if (dropZone) {
+            dropZone.style.pointerEvents = isSending ? "none" : "";
+        }
     }
 
     function notifyDesktopBlackHolePortalState(isOpen) {
@@ -1928,7 +1917,8 @@
         closeBlackHoleModelDropdown();
         syncBlackHoleModelPickerUI();
         syncTimelyAiLiveModels(false);
-        setBlackHoleMode(bhCurrentMode || "official");
+        setBlackHoleMode("summary");
+        setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
         setBlackHoleSendingUi(false);
 
         updateBlackHoleButtonOriginVars();
@@ -2860,17 +2850,54 @@
         return { ok: false, error: lastErr };
     }
 
+    async function requestGovAiCompletion(systemPrompt, userPrompt, schemaObj) {
+        if (!isDesktopWebViewEnv()) {
+            return {
+                ok: false,
+                error: "공문 분석(범정부 AI)은 사내 행정망 PC의 MY 노트 데스크톱 앱에서만 사용할 수 있습니다."
+            };
+        }
+        const res = await callDesktopBridgeRequest(
+            "govAiChatRequest",
+            {
+                systemPrompt: String(systemPrompt || ""),
+                userPrompt: String(userPrompt || ""),
+                jsonSchemaJson: schemaObj ? JSON.stringify(schemaObj) : ""
+            },
+            210000
+        );
+        if (res && res.ok && res.content) {
+            return {
+                ok: true,
+                content: res.content,
+                model: res.model || "HCX-GOV-THINK-V2-30B"
+            };
+        }
+        return {
+            ok: false,
+            error: (res && (res.error || res.message)) || "범정부 AI 호출에 실패했습니다."
+        };
+    }
+
     function parseAiStructuredJson(rawContent) {
         if (!rawContent || typeof rawContent !== "string") return null;
-        let text = rawContent.trim();
+        let text = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
         const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
         if (fenced && fenced[1]) {
             text = fenced[1].trim();
         } else {
+            const firstBracket = text.indexOf("[");
             const firstBrace = text.indexOf("{");
-            const lastBrace = text.lastIndexOf("}");
-            if (firstBrace >= 0 && lastBrace > firstBrace) {
-                text = text.slice(firstBrace, lastBrace + 1);
+            if (firstBracket >= 0 && (firstBrace < 0 || firstBracket < firstBrace)) {
+                const lastBracket = text.lastIndexOf("]");
+                if (lastBracket > firstBracket) {
+                    text = text.slice(firstBracket, lastBracket + 1);
+                }
+            } else if (firstBrace >= 0) {
+                const lastBrace = text.lastIndexOf("}");
+                if (lastBrace > firstBrace) {
+                    text = text.slice(firstBrace, lastBrace + 1);
+                }
             }
         }
         try {
@@ -3495,7 +3522,7 @@
             autoSwitchedFrom = visionPick.switchedFrom;
         }
 
-        if (!savedApiKey) {
+        if (modeKey !== "official" && !savedApiKey) {
             aiErrorNotice = "환경설정 > MY AI 개인 API 키에 연동 키(tgpt_s...)를 먼저 저장해 주세요.";
         } else if (!rawFileText && !hasImages) {
             aiErrorNotice = "이 문서 형식에서 텍스트 본문이나 이미지를 추출할 수 없습니다.";
@@ -3520,36 +3547,86 @@
                         : "",
                     `[기준 연도 안내] 이 쪽지의 발신·수신 기준 연도는 ${referenceYear}년입니다. 본문에 '11.23.(월)'처럼 연도가 생략된 날짜가 있으면 반드시 '${referenceYear}-MM-DD' 형식으로 표기하세요.`
                 ].filter(Boolean).join("\n")
-                : "";
+                : modeKey === "official"
+                    ? `[기준 연도 안내] 이 공문의 시행·기준 연도는 ${referenceYear}년입니다. 날짜가 확인되는 경우 가급적 'YYYY-MM-DD' 형식으로 정확히 표기하고, 불확실하면 빈 문자열("")로 두세요.`
+                    : "";
+
+            const officialGovSchema = modeKey === "official"
+                ? {
+                    type: "object",
+                    properties: {
+                        title: { type: "string" },
+                        docNumber: { type: "string" },
+                        dueDate: { type: "string" },
+                        submitTarget: { type: "string" },
+                        submitBy: { type: "string" },
+                        summaryLead: { type: "string" },
+                        coreContent: { type: "string" },
+                        keyPoints: { type: "array", items: { type: "string" } },
+                        events: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    task: { type: "string" },
+                                    deadline: { type: ["string", "null"] },
+                                    submit_to: { type: "string" },
+                                    submit_by: { type: "string" },
+                                    details: { type: "string" }
+                                },
+                                required: ["task", "deadline", "submit_to", "submit_by", "details"]
+                            }
+                        }
+                    },
+                    required: ["title", "dueDate", "submitTarget", "summaryLead", "coreContent", "keyPoints", "events"]
+                }
+                : null;
 
             const systemPrompt = modeKey === "summary"
-                ? [
-                    "당신은 정확하고 신뢰할 수 있는 문서 요약 AI입니다.",
-                    zeroHallucinationRules,
-                    reportStyleRule,
-                    "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
-                    "{",
-                    '  "title": "원문에 기반한 문서 제목 (원문 제목이 있으면 그대로 사용)",',
-                    '  "overview": "상단 인용구용 문서 전체 핵심 요지 (원문 사실만 1~2문장으로 간결히 기재)",',
-                    '  "highlightSentence": "문서에서 가장 핵심이 되는 1문장 (원문 사실만 기재)",',
-                    '  "sections": [',
-                    '    { "heading": "주제/장절 제목", "points": ["원문에 근거한 세부 정리 내용..."] }',
-                    "  ]",
-                    "}"
-                ].join("\n")
+                ? (conciseReportMode
+                    ? [
+                        "당신은 정확하고 신뢰할 수 있는 대한민국 행정·업무 문서 요약 전문가입니다.",
+                        zeroHallucinationRules,
+                        "[작성 규칙 - 개조식·1장 보고서 요약 모드]",
+                        "- 전체 분량은 A4 1장에 깔끔히 담길 수 있도록 군더더기 없이 핵심만 압축해 개조식으로 작성하세요.",
+                        "- 첫 줄에는 반드시 `TITLE: 문서의 핵심을 담은 간결한 제목` 형식으로 작성하세요.",
+                        "- 둘째 줄은 빈 줄로 두고, 셋째 줄부터 마크다운 문법으로 본문을 작성하세요.",
+                        "- 최상단에는 `> 핵심 요지: ...` 인용구 1~2문장을 배치하세요.",
+                        "- `##` 소제목과 계층형 개조식 글머리(`- **항목명**: 핵심 내용`, 하위 `- 세부 요점`)로 구조화하고, 핵심 일정/수치/제출처 비교가 있으면 짧은 마크다운 표(`| 항목 | 내용 |`) 1개를 포함하세요.",
+                        "- **굵은 강조**와 ==핵심 강조==를 절제 있게 활용해 한눈에 보고 내용이 들어오게 정리하세요."
+                    ].join("\n")
+                    : [
+                        "당신은 정확하고 신뢰할 수 있는 문서 분석·정리 전문가입니다.",
+                        zeroHallucinationRules,
+                        "[작성 규칙 - 리치 마크다운 문서 분석 모드]",
+                        "- 첫 줄에는 반드시 `TITLE: 원문에 기반한 명확한 문서 제목` 형식으로 작성하세요.",
+                        "- 둘째 줄은 빈 줄로 두고, 셋째 줄부터 가독성이 뛰어나고 세련된 마크다운 문서를 작성하세요.",
+                        "- 다음 마크다운 요소를 문서 성격에 맞게 적극 활용하세요:",
+                        "  1) 상단 `> ` 인용구로 문서 전체의 핵심 요지·결론 제시",
+                        "  2) `##`, `###` 소제목과 체계적인 구분선(`---`)",
+                        "  3) 수치·비교·일정·항목 정리는 마크다운 표(`| 구분 | 내용 |`)로 시각화",
+                        "  4) 명령어·경로·서식 예시·코드·규격은 코드블록(``` ... ```) 또는 인라인 코드(`...`)로 깔끔히 격리",
+                        "  5) 핵심 키워드와 주의사항은 `**굵게**` 강조와 글머리 목록(`-`), 번호 목록(`1.`)을 적절히 조합",
+                        "- 분량 제한 없이 원문의 중요한 맥락과 세부 정보를 충실하게 정리하세요."
+                    ].join("\n"))
                 : [
                     `당신은 대한민국 행정·업무 ${modeKey === "official" ? "공문서" : "쪽지"} 분석 AI입니다.`,
                     zeroHallucinationRules,
                     memoExtraRules,
                     reportStyleRule,
-                    "반드시 아래 JSON 스키마 형식으로만 응답하세요 (코드블록 없이 순수 JSON만 출력):",
+                    "반드시 아래 JSON 스키마 형식으로만 응답하세요 (마크다운 코드블록 및 설명 문구 없이 순수 JSON만 출력):",
                     "{",
                     `  "title": "${modeKey === "memo" ? "쪽지 본문의 핵심 업무를 압축한 간결한 쪽지 제목 초안 (25자 이내)" : "원문에 명시된 공문 제목"}",`,
-                    '  "dueDate": "원문에 명시된 제출/회신 마감일 또는 일시 (연도가 생략된 경우 기준 연도를 보정해 YYYY-MM-DD 형식 또는 원문 그대로 기재, 마감일/기한이 없으면 반드시 빈 문자열 \\"\\")",',
-                    '  "submitTarget": "원문에 명시된 제출처/회신처/장소 (원문에 제출처나 장소가 없으면 반드시 빈 문자열 \\"\\")",',
+                    modeKey === "official" ? '  "docNumber": "시행번호 또는 문서번호 (없으면 \\"\\")",' : "",
+                    '  "dueDate": "원문에 명시된 대표 제출/회신 마감일 (YYYY-MM-DD 형식 우선, 마감일/기한이 없으면 반드시 빈 문자열 \\"\\")",',
+                    '  "submitTarget": "원문에 명시된 제출처/회신처/장소 (없으면 반드시 빈 문자열 \\"\\")",',
+                    modeKey === "official" ? '  "submitBy": "제출 주체/담당 부서 (없으면 \\"\\")",' : "",
                     '  "summaryLead": "상단 인용구용 핵심 요지 (원문에 있는 사실만 1~2문장으로 간결히 기재)",',
                     '  "coreContent": "표의 핵심 내용 칸에 들어갈 요지 (원문에 있는 사실만 기재)",',
                     '  "keyPoints": ["원문에 명시된 본문 내용, 세부 사항, 협조·조치 사항 등을 제한 없이 충실히 정리..."]',
+                    modeKey === "official"
+                        ? ',\n  "events": [ { "task": "해야 할 일", "deadline": "YYYY-MM-DD 또는 null", "submit_to": "제출처", "submit_by": "제출 주체", "details": "세부 내용" } ]'
+                        : "",
                     "}"
                 ].filter(Boolean).join("\n");
 
@@ -3559,39 +3636,47 @@
             }
             if (rawFileText && hasImages) {
                 userPromptSections.push(`파일명: ${rawFileName}\n\n[문서 원문(일부 추출)]\n${rawFileText}`);
-                userPromptSections.push(`[첨부 이미지/스캔 문서(${extractedImages.length}장)도 함께 정밀 판독하여 텍스트·표·도표 내용을 모두 반영해 위 JSON 스키마 형식으로 분석·요약하세요.]`);
+                userPromptSections.push(`[첨부 이미지/스캔 문서(${extractedImages.length}장)도 함께 정밀 판독하여 텍스트·표·도표 내용을 모두 반영해 위 형식대로 분석·정리하세요.]`);
             } else if (rawFileText) {
                 userPromptSections.push(`파일명: ${rawFileName}\n\n[문서 원문]\n${rawFileText}`);
             } else {
-                userPromptSections.push(`파일명: ${rawFileName}\n\n[첨부 이미지/스캔 문서(${extractedImages.length}장)를 직접 판독해 위 JSON 스키마 형식으로 분석·요약하세요.]`);
+                userPromptSections.push(`파일명: ${rawFileName}\n\n[첨부 이미지/스캔 문서(${extractedImages.length}장)를 직접 판독해 위 형식대로 분석·정리하세요.]`);
             }
             const userPrompt = userPromptSections.join("\n\n");
-            const aiResp = await requestTimelyAiCompletion(savedApiKey, targetModelId, systemPrompt, userPrompt, extractedImages);
+
+            if (modeKey === "official") {
+                resolvedModelName = "HCX-GOV-THINK-V2-30B (범정부 AI)";
+            }
+
+            const aiResp = modeKey === "official"
+                ? await requestGovAiCompletion(systemPrompt, userPrompt, officialGovSchema)
+                : await requestTimelyAiCompletion(savedApiKey, targetModelId, systemPrompt, userPrompt, extractedImages);
 
             if (aiResp && aiResp.ok && aiResp.content) {
-                if (aiResp.model) {
-                    const normRespId = normalizeMyAiModelId(aiResp.model);
-                    const matched = myAiActiveModels.find((m) => m.id === normRespId);
-                    resolvedModelName = (matched && matched.name) ? matched.name : formatLiveModelDisplayName(normRespId);
-                    if (normRespId !== normalizeMyAiModelId(selectedModelMeta.id) && !autoSwitchedFrom) {
-                        autoSwitchedFrom = selectedModelMeta.name;
-                    }
-                }
-                aiData = parseAiStructuredJson(aiResp.content);
-                if (!aiData) {
-                    const cleanLines = aiResp.content
-                        .replace(/```[\s\S]*?```/g, "")
-                        .split(/\r?\n/)
-                        .map((l) => l.replace(/^[-*•\d.)\s]+/, "").trim())
-                        .filter(Boolean);
-                    if (modeKey === "summary") {
+                if (modeKey === "official") {
+                    resolvedModelName = `${aiResp.model || "HCX-GOV-THINK-V2-30B"} (범정부 AI)`;
+                    const parsedGov = parseAiStructuredJson(aiResp.content);
+                    if (Array.isArray(parsedGov)) {
+                        const firstEv = parsedGov[0] || {};
                         aiData = {
                             title: baseName,
-                            overview: cleanLines[0] || "",
-                            highlightSentence: cleanLines[1] || cleanLines[0] || "",
-                            sections: [{ heading: "주요 내용", points: cleanLines.slice(1) }]
+                            dueDate: firstEv.deadline || "",
+                            submitTarget: firstEv.submit_to || "",
+                            summaryLead: firstEv.task || "",
+                            coreContent: firstEv.details || firstEv.task || "",
+                            keyPoints: parsedGov.map((ev) => [ev.task, ev.deadline ? `기한: ${ev.deadline}` : "", ev.submit_to ? `제출처: ${ev.submit_to}` : "", ev.details].filter(Boolean).join(" / ")),
+                            events: parsedGov
                         };
                     } else {
+                        aiData = parsedGov;
+                    }
+                    if (!aiData) {
+                        const cleanLines = aiResp.content
+                            .replace(/<think>[\s\S]*?<\/think>/gi, "")
+                            .replace(/```[\s\S]*?```/g, "")
+                            .split(/\r?\n/)
+                            .map((l) => l.replace(/^[-*•\d.)\s]+/, "").trim())
+                            .filter(Boolean);
                         aiData = {
                             title: baseName,
                             dueDate: "",
@@ -3600,6 +3685,41 @@
                             coreContent: cleanLines[0] || "",
                             keyPoints: cleanLines.slice(1)
                         };
+                    }
+                } else {
+                    if (aiResp.model) {
+                        const normRespId = normalizeMyAiModelId(aiResp.model);
+                        const matched = myAiActiveModels.find((m) => m.id === normRespId);
+                        resolvedModelName = (matched && matched.name) ? matched.name : formatLiveModelDisplayName(normRespId);
+                        if (normRespId !== normalizeMyAiModelId(selectedModelMeta.id) && !autoSwitchedFrom) {
+                            autoSwitchedFrom = selectedModelMeta.name;
+                        }
+                    }
+
+                    if (modeKey === "summary") {
+                        const parsedMd = parsePromptOnlyAiResponse(aiResp.content, baseName);
+                        aiData = {
+                            title: parsedMd.title || baseName,
+                            markdownBody: parsedMd.markdownBody || aiResp.content.trim()
+                        };
+                    } else {
+                        aiData = parseAiStructuredJson(aiResp.content);
+                        if (!aiData) {
+                            const cleanLines = aiResp.content
+                                .replace(/<think>[\s\S]*?<\/think>/gi, "")
+                                .replace(/```[\s\S]*?```/g, "")
+                                .split(/\r?\n/)
+                                .map((l) => l.replace(/^[-*•\d.)\s]+/, "").trim())
+                                .filter(Boolean);
+                            aiData = {
+                                title: baseName,
+                                dueDate: "",
+                                submitTarget: "",
+                                summaryLead: cleanLines[0] || "",
+                                coreContent: cleanLines[0] || "",
+                                keyPoints: cleanLines.slice(1)
+                            };
+                        }
                     }
                 }
             } else {
@@ -3612,16 +3732,22 @@
             : resolvedModelName;
 
         // 2. 원문 대조를 통한 날짜·제출처 할루시네이션 2중 검증
-        let verifiedDueDate = (aiData && aiData.dueDate)
+        let govFirstEvent = (modeKey === "official" && aiData && Array.isArray(aiData.events) && aiData.events.length > 0)
+            ? aiData.events[0]
+            : null;
+        const candidateDueRaw = (aiData && aiData.dueDate) || (govFirstEvent && govFirstEvent.deadline) || "";
+        const candidateSubmitRaw = (aiData && aiData.submitTarget) || (govFirstEvent && govFirstEvent.submit_to) || "";
+
+        let verifiedDueDate = candidateDueRaw
             ? (rawFileText && !hasImages
-                ? verifyDateExistsInSourceText(aiData.dueDate, rawFileText)
-                : cleanHallucinatedPlaceholder(aiData.dueDate))
+                ? verifyDateExistsInSourceText(candidateDueRaw, rawFileText)
+                : cleanHallucinatedPlaceholder(candidateDueRaw))
             : "";
         if (verifiedDueDate && modeKey === "memo") {
             verifiedDueDate = normalizeVerifiedDateWithYear(verifiedDueDate, referenceYear);
         }
-        const verifiedSubmitTarget = (aiData && aiData.submitTarget)
-            ? cleanHallucinatedPlaceholder(aiData.submitTarget)
+        const verifiedSubmitTarget = candidateSubmitRaw
+            ? cleanHallucinatedPlaceholder(candidateSubmitRaw)
             : "";
         const compactDue = extractCompactYmdFromVerifiedDate(verifiedDueDate);
 
@@ -3658,7 +3784,7 @@
             };
         }
 
-        // 5. 자동 폴더링 실행 (공문 분석 / 문서 요약 / 오류 폴백)
+        // 5. 자동 폴더링 실행 (공문 분석 기본 ON / 일반 문서 분석 기본 OFF)
         const safeSubjForFolder = rawSubj
             .replace(/[\\/:*?"<>|]/g, "_")
             .replace(/\s+/g, "_")
@@ -3670,7 +3796,25 @@
         let targetNoteFolderId = null;
 
         if (foldChecked) {
-            if (preExtracted && preExtracted.tucPayload && isDesktopWebViewEnv()) {
+            if (preExtracted && preExtracted.officialPayload && isDesktopWebViewEnv()) {
+                const off = preExtracted.officialPayload;
+                const diskRes = await callDesktopBridgeRequest(
+                    "saveOnnaraOfficialAutoFoldering",
+                    {
+                        folderLabel,
+                        windowTitle: off.windowTitle || "",
+                        documentUrl: off.documentUrl || "",
+                        disclosureStatus: off.disclosureStatus || "",
+                        bodyText: off.bodyText || rawFileText || "",
+                        screenshotBase64: off.screenshotBase64 || ""
+                    },
+                    25000
+                );
+                if (diskRes && diskRes.ok && diskRes.folderPath) {
+                    folderPath = diskRes.folderPath;
+                    docFilePath = diskRes.primaryFilePath || `${diskRes.folderPath}\\공문_본문.txt`;
+                }
+            } else if (preExtracted && preExtracted.tucPayload && isDesktopWebViewEnv()) {
                 const tuc = preExtracted.tucPayload;
                 const attPaths = Array.isArray(tuc.attachments)
                     ? tuc.attachments.map((a) => a && a.fullPath).filter(Boolean)
@@ -3707,60 +3851,32 @@
             ? `<p><br></p><p><strong>원본 및 폴더 바로가기</strong>: <a href="${escapeHtmlStr(docFilePath)}" target="_blank" rel="noopener noreferrer">${linkLabel}</a>  |  <a href="${escapeHtmlStr(folderPath)}" target="_blank" rel="noopener noreferrer">폴더 열기</a></p>`
             : "";
 
-        // 6. [일반 문서 요약 모드] 억지 4칸 표(기한/제출처) 없이 문서 본연의 핵심만 깔끔하게 구성
+        // 6. [일반 문서 분석 / 요약 모드] 마크다운 리치 렌더링 (체크 시 개조식 1장 보고서)
         if (modeKey === "summary") {
             const noteTitle = rawSubj;
+            const summaryBadge = conciseReportMode
+                ? `[MY AI 문서 요약(개조식) · ${displayModelBadge}]`
+                : `[MY AI 문서 분석 · ${displayModelBadge}]`;
             if (!aiData) {
                 const errHtml = [
-                    `<p><strong>[MY AI 문서 분석 · ${escapeHtmlStr(displayModelBadge)}]</strong></p>`,
-                    `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 요약할 수 없습니다.")}</blockquote>`,
+                    `<p><strong>${escapeHtmlStr(summaryBadge)}</strong></p>`,
+                    `<blockquote>${escapeHtmlStr(aiErrorNotice || "문서를 분석할 수 없습니다.")}</blockquote>`,
                     linksHtml
                 ].join("");
                 return { title: noteTitle, html: errHtml, targetFolderId: targetNoteFolderId, aiErrorNotice, modelName: displayModelBadge };
             }
 
-            const overview = cleanHallucinatedPlaceholder(aiData.overview);
-            const highlightSentence = cleanHallucinatedPlaceholder(aiData.highlightSentence);
-            const htmlParts = [
-                `<p><strong>[MY AI 문서 핵심 요약 · ${escapeHtmlStr(displayModelBadge)}]</strong></p>`
-            ];
-
-            if (overview || highlightSentence) {
-                const qParts = [];
-                if (overview) qParts.push(escapeHtmlStr(overview));
-                if (highlightSentence && highlightSentence !== overview) {
-                    qParts.push(`<span style="background-color: rgb(254, 240, 138);">${escapeHtmlStr(highlightSentence)}</span>`);
-                } else if (qParts.length === 1) {
-                    qParts[0] = `<span style="background-color: rgb(254, 240, 138);">${qParts[0]}</span>`;
-                }
-                htmlParts.push(`<blockquote>${qParts.join(" ")}</blockquote>`);
-            }
-
-            const sections = Array.isArray(aiData.sections) ? aiData.sections : [];
-            sections.forEach((sec) => {
-                if (!sec) return;
-                const heading = cleanHallucinatedPlaceholder(sec.heading);
-                const points = Array.isArray(sec.points)
-                    ? sec.points.map((p) => cleanHallucinatedPlaceholder(p)).filter(Boolean)
-                    : [];
-                if (!heading && points.length === 0) return;
-                htmlParts.push(`<p><br></p>`);
-                if (heading) {
-                    htmlParts.push(`<p><strong>${escapeHtmlStr(heading)}</strong></p>`);
-                }
-                if (points.length > 0) {
-                    const liHtml = points
-                        .map((pt) => `<li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>${escapeHtmlStr(pt)}</li>`)
-                        .join("");
-                    htmlParts.push(`<ol>${liHtml}</ol>`);
-                }
-            });
-
-            if (linksHtml) htmlParts.push(linksHtml);
+            const renderedBodyHtml = renderPromptMarkdownToQuillHtml(aiData.markdownBody || "");
+            const fullHtml = [
+                `<p><strong>${escapeHtmlStr(summaryBadge)}</strong></p>`,
+                `<p><br></p>`,
+                renderedBodyHtml,
+                linksHtml
+            ].join("");
 
             return {
                 title: noteTitle,
-                html: htmlParts.join(""),
+                html: fullHtml,
                 targetFolderId: targetNoteFolderId,
                 usedRealAi: true,
                 modelName: displayModelBadge
@@ -3787,10 +3903,21 @@
         const keyPoints = Array.isArray(aiData.keyPoints)
             ? aiData.keyPoints.map((p) => cleanHallucinatedPlaceholder(p)).filter(Boolean)
             : [];
+        if (modeKey === "official" && Array.isArray(aiData.events) && aiData.events.length > 1) {
+            aiData.events.forEach((ev, idx) => {
+                if (!ev) return;
+                const line = [ev.task, ev.deadline ? `마감: ${ev.deadline}` : "", ev.submit_to ? `제출처: ${ev.submit_to}` : "", ev.details]
+                    .filter(Boolean)
+                    .join(" | ");
+                if (line && !keyPoints.includes(line)) {
+                    keyPoints.push(`[세부 일정 ${idx + 1}] ${line}`);
+                }
+            });
+        }
 
         const html = buildOfficialOrMemoNoteHtml({
             headerBadge,
-            docTitleText: rawFileName,
+            docTitleText: rawSubj || rawFileName,
             verifiedDueDate,
             verifiedSubmitTarget,
             summaryLead,
@@ -3968,7 +4095,11 @@
     }
 
     function parsePromptOnlyAiResponse(rawContent, fallbackPrompt) {
-        let text = String(rawContent || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+        let text = String(rawContent || "")
+            .replace(/<think>[\s\S]*?<\/think>/gi, "")
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n")
+            .trim();
         if (!text) {
             return {
                 title: normalizePromptFallbackTitle(fallbackPrompt),
@@ -4175,29 +4306,34 @@
         }
     }
 
-    function handleExternalMemoDragStateEvent(payload) {
+    function handleExternalWindowDragStateEvent(payload) {
         if (!bhIsOpen || bhSwallowing) return;
         const dropZone = document.getElementById("zen-bh-orb-dropzone");
-        const pill = document.getElementById("zen-bh-status-pill");
         const isHover = !!(payload && payload.active && payload.isOver);
+        const kind = (payload && payload.kind === "official") ? "official" : "memo";
 
         if (isHover) {
-            if (bhCurrentMode !== "memo") {
-                setBlackHoleMode("memo");
-            }
+            bhCurrentMode = kind;
             bhTargetHover = 1;
             if (dropZone) dropZone.classList.add("is-drag-hover", "is-external-memo-hover");
-            setBlackHoleStatusPillText("밀양 메신저 쪽지 감지 — 여기에 놓으면 블랙홀이 빨아들입니다!");
+            setBlackHoleStatusPillText(
+                kind === "official"
+                    ? "온나라 공문 창 감지 — 여기에 놓으면 범정부 AI가 안전하게 분석합니다!"
+                    : "밀양 메신저 쪽지 감지 — 여기에 놓으면 블랙홀이 빨아들입니다!"
+            );
         } else {
             bhTargetHover = 0;
             if (dropZone) dropZone.classList.remove("is-drag-hover", "is-external-memo-hover");
-            setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.official).prompt);
+            setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
         }
     }
 
-    function handleMiryangMemoCaptureStartedEvent() {
+    function handleExternalWindowCaptureStartedEvent(payload) {
         const dropZone = document.getElementById("zen-bh-orb-dropzone");
         if (!bhIsOpen) return;
+
+        const kind = (payload && payload.kind === "official") ? "official" : "memo";
+        bhCurrentMode = kind;
 
         closeBlackHoleModelDropdown();
         clearTimeout(bhSwallowTimer1);
@@ -4210,9 +4346,6 @@
 
         bhTargetHover = 0;
         if (dropZone) dropZone.classList.remove("is-drag-hover", "is-external-memo-hover");
-        if (bhCurrentMode !== "memo") {
-            setBlackHoleMode("memo");
-        }
 
         bhExternalCaptureStartTs = performance.now();
         bhSwallowing = true;
@@ -4228,18 +4361,93 @@
             });
         }
 
-        setBlackHoleStatusPillText("쪽지 본문 및 첨부파일을 자동 수집하고 있습니다...");
+        startBlackHoleAlternatingRotation(BH_RUNNING_NOTICE[kind], 3800);
 
         bhExternalCaptureWatchdog = setTimeout(() => {
             if (bhSwallowing) {
+                stopBlackHoleCheerRotation();
                 bhSwallowing = false;
                 setBlackHoleSendingUi(false);
-                setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt);
+                setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
                 if (typeof showToast === "function") {
-                    showToast("쪽지 수집 응답 시간이 초과되었습니다. 다시 시도해 주세요.");
+                    showToast(
+                        kind === "official"
+                            ? "공문 수집 응답 시간이 초과되었습니다. 다시 시도해 주세요."
+                            : "쪽지 수집 응답 시간이 초과되었습니다. 다시 시도해 주세요."
+                    );
                 }
             }
         }, 25000);
+    }
+
+    async function handleCapturedOnnaraOfficialPayload(payload) {
+        clearTimeout(bhExternalCaptureWatchdog);
+        bhExternalCaptureWatchdog = null;
+
+        if (!payload || !payload.ok) {
+            stopBlackHoleCheerRotation();
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+            setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
+            if (typeof showToast === "function") {
+                showToast((payload && payload.errorMessage) || "온나라 공문 창에서 본문을 추출할 수 없습니다.");
+            }
+            return;
+        }
+
+        const bodyTextClean = String(payload.bodyText || "").trim();
+        if (!bodyTextClean) {
+            stopBlackHoleCheerRotation();
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+            setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
+            if (typeof showToast === "function") {
+                showToast("공문 본문이 비어 있어 범정부 AI 분석을 진행할 수 없습니다.");
+            }
+            return;
+        }
+
+        bhCurrentMode = "official";
+        if (!bhCheerIntervalTimer) {
+            startBlackHoleAlternatingRotation(BH_RUNNING_NOTICE.official, 3800);
+        }
+
+        const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
+        const refYear = Number(payload.referenceYear) > 2000 ? Number(payload.referenceYear) : new Date().getFullYear();
+        const extractedTitle = String(payload.extractedTitle || "").trim();
+        const cleanWinTitle = String(payload.windowTitle || "온나라 공문")
+            .replace(/\s*-\s*Microsoft\s*Edge.*$/i, "")
+            .replace(/\s*-\s*문서관리카드.*$/i, "")
+            .trim() || "공문";
+
+        let summaryResult = null;
+        try {
+            const elapsed = performance.now() - (bhExternalCaptureStartTs || 0);
+            const remainWait = Math.max(0, 1600 - elapsed);
+            const analysisPromise = buildBlackHoleSummaryResult([], "official", true, {
+                conciseChecked,
+                preExtracted: {
+                    rawFileText: bodyTextClean.slice(0, 160000),
+                    extractedImages: [],
+                    rawFileName: extractedTitle || cleanWinTitle,
+                    baseName: extractedTitle || cleanWinTitle,
+                    referenceYear: refYear,
+                    officialPayload: payload
+                }
+            });
+            const waitPromise = new Promise((resolve) => setTimeout(resolve, remainWait));
+            [summaryResult] = await Promise.all([analysisPromise, waitPromise]);
+        } finally {
+            stopBlackHoleCheerRotation();
+            bhSwallowing = false;
+            setBlackHoleSendingUi(false);
+        }
+
+        if (bhIsOpen) {
+            closeBlackHolePortal();
+            await new Promise((resolve) => setTimeout(resolve, 220));
+        }
+        await presentAndFinalizeBlackHoleResult(summaryResult, "official");
     }
 
     async function handleCapturedMiryangMemoPayload(payload) {
@@ -4247,9 +4455,10 @@
         bhExternalCaptureWatchdog = null;
 
         if (!payload || !payload.ok) {
+            stopBlackHoleCheerRotation();
             bhSwallowing = false;
             setBlackHoleSendingUi(false);
-            setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt);
+            setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
             if (typeof showToast === "function") {
                 showToast((payload && payload.errorMessage) || "쪽지 창에서 내용을 수집할 수 없습니다.");
             }
@@ -4258,21 +4467,23 @@
 
         const bodyTextClean = String(payload.bodyText || "").trim();
         if (!bodyTextClean) {
+            stopBlackHoleCheerRotation();
             bhSwallowing = false;
             setBlackHoleSendingUi(false);
-            setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt);
+            setBlackHoleStatusPillText(BH_DEFAULT_PROMPT);
             if (typeof showToast === "function") {
                 showToast("쪽지 본문이 비어 있어 AI 분석을 진행할 수 없습니다.");
             }
             return;
         }
 
-        const modelMeta = getSelectedMyAiModelMeta();
-        startBlackHoleCheerRotation(`${modelMeta.name} 모델이 쪽지 본문을 분석하고 있습니다...`, 3500, 4000);
+        bhCurrentMode = "memo";
+        if (!bhCheerIntervalTimer) {
+            startBlackHoleAlternatingRotation(BH_RUNNING_NOTICE.memo, 3800);
+        }
 
-        const foldChecked = !!document.getElementById("zen-bh-folding-toggle")?.checked;
+        const foldChecked = true;
         const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
-        const userPromptText = (document.getElementById("zen-bh-user-prompt")?.value || "").trim();
         const refYear = Number(payload.referenceYear) > 2000 ? Number(payload.referenceYear) : new Date().getFullYear();
         const sentAtText = String(payload.sentAtText || payload.capturedAtText || "").trim();
 
@@ -4299,7 +4510,6 @@
             const remainWait = Math.max(0, 1600 - elapsed);
             const analysisPromise = buildBlackHoleSummaryResult([], "memo", foldChecked, {
                 conciseChecked,
-                userPromptText,
                 preExtracted: {
                     rawFileText: combinedText,
                     extractedImages: collectedImages,
@@ -4335,10 +4545,10 @@
         const list = Array.isArray(items) ? items.filter(Boolean) : [];
         if (list.length === 0) return;
 
-        const activeMode = bhCurrentMode || "official";
-        const meta = BH_MODE_META[activeMode] || BH_MODE_META.official;
-        const foldChecked = !!document.getElementById("zen-bh-folding-toggle")?.checked;
-        const pill = document.getElementById("zen-bh-status-pill");
+        // 일반 파일/문서 드롭은 항상 자동 폴더링 OFF & 문서 분석(summary) 모드 고정
+        const activeMode = "summary";
+        bhCurrentMode = activeMode;
+        const foldChecked = false;
         const modelMeta = getSelectedMyAiModelMeta();
 
         closeBlackHoleModelDropdown();
@@ -4366,23 +4576,21 @@
             });
         }
 
-        setBlackHoleStatusPillText(`${firstName}${extra} 투입 중 (${meta.label} · ${modelMeta.name})`);
+        setBlackHoleStatusPillText(`${firstName}${extra} 투입 중 (${modelMeta.name})`);
 
         const totalSwallowMs = duration + (count - 1) * stagger + 40;
         const minWaitMs = Math.max(2100, totalSwallowMs + 860);
 
         bhSwallowTimer1 = setTimeout(() => {
             if (!bhIsOpen) return;
-            startBlackHoleCheerRotation(`${modelMeta.name} 모델이 문서를 분석·요약하고 있습니다...`, 3500, 4000);
+            startBlackHoleAlternatingRotation(BH_RUNNING_NOTICE.summary, 3800);
         }, totalSwallowMs);
 
         const conciseChecked = !!document.getElementById("zen-bh-concise-toggle")?.checked;
-        const userPromptText = (document.getElementById("zen-bh-user-prompt")?.value || "").trim();
         let summaryResult = null;
         try {
             const analysisPromise = buildBlackHoleSummaryResult(list, activeMode, foldChecked, {
-                conciseChecked,
-                userPromptText
+                conciseChecked
             });
             const minWaitPromise = new Promise((resolve) => {
                 bhSwallowTimer2 = setTimeout(resolve, minWaitMs);
@@ -4397,9 +4605,6 @@
         if (!bhIsOpen) return;
 
         closeBlackHolePortal();
-        if (summaryResult && summaryResult.needsMemoTitleConfirmation) {
-            await new Promise((resolve) => setTimeout(resolve, 220));
-        }
         await presentAndFinalizeBlackHoleResult(summaryResult, activeMode);
     }
 
