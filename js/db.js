@@ -102,9 +102,11 @@ request.onsuccess = async (e) => {
 };
 request.onerror = (e) => {
   console.error("❌ 로컬 DB 열기 실패:", e.target.error);
-  alert(
-    "브라우저 저장소(IndexedDB)에 접근할 수 없습니다.\n시크릿 모드이거나 쿠키 차단 설정이 켜져 있는지 확인해 주세요.",
-  );
+  const msg =
+    "브라우저 저장소(IndexedDB)에 접근할 수 없습니다.\n시크릿 모드이거나 쿠키 차단 설정이 켜져 있는지 확인해 주세요.";
+  if (typeof zenAlert === "function") {
+    zenAlert(msg, { title: "저장소 오류", warning: true });
+  }
 };
 
 // 2. 에디터 본문 DB 덮어쓰기 및 동기화 스파이 호출

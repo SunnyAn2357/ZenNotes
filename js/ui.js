@@ -510,6 +510,7 @@ if ("serviceWorker" in navigator) {
       "fm-name-prompt-modal",
       "link-insert-modal",
       "video-insert-modal",
+      "zen-dialog-modal",
       "settings-modal",
     ];
     for (let i = 0; i < blockingModalIds.length; i++) {
@@ -1629,6 +1630,8 @@ window.addEventListener("blur", () => {
   if (secModal && secModal.style.display === "flex") return;
   const setupModal = document.getElementById("app-lock-setup-modal");
   if (setupModal && setupModal.style.display === "flex") return;
+  const zenDialogModal = document.getElementById("zen-dialog-modal");
+  if (zenDialogModal && zenDialogModal.style.display === "flex") return;
 
   triggerBankAutoLock("blur");
 });
@@ -3275,6 +3278,188 @@ function initLeftSidebarScrollbar() {
   ensureObservers();
   syncTrackAndThumb();
 }
+
+// ============================================================================
+// 🎯 [V1.9.2] 통합 Zen 확인 / 알림 / 입력 다이얼로그 엔진 (OS confirm/alert/prompt 대체)
+// ============================================================================
+const ZEN_DIALOG_ICON_MAP = {
+  info: "fa-solid fa-circle-info",
+  warning: "fa-solid fa-triangle-exclamation",
+  danger: "fa-solid fa-triangle-exclamation",
+  prompt: "fa-solid fa-pen-to-square",
+  confirm: "fa-regular fa-circle-question",
+};
+
+let activeZenDialogState = null;
+
+function finishActiveZenDialog(confirmed, fromPopstate = false) {
+  const modal = document.getElementById("zen-dialog-modal");
+  if (modal) {
+    modal.style.display = "none";
+    modal.classList.remove("is-open");
+  }
+  const state = activeZenDialogState;
+  activeZenDialogState = null;
+
+  if (state) {
+    const { resolve, mode, pushHistory, inputEl } = state;
+    let out = false;
+    if (mode === "confirm") out = Boolean(confirmed);
+    else if (mode === "alert") out = true;
+    else if (mode === "prompt") {
+      out = confirmed === true ? (inputEl ? inputEl.value : "") : null;
+    }
+    try {
+      resolve(out);
+    } catch (e) {}
+
+    if (
+      pushHistory &&
+      !fromPopstate &&
+      window.history &&
+      history.state &&
+      history.state.zenModal === "zenDialog"
+    ) {
+      try {
+        history.back();
+      } catch (e) {}
+    }
+  }
+}
+
+function openZenDialogInternal(options) {
+  const opts = options || {};
+  const mode = opts.mode || "confirm";
+  const modal = document.getElementById("zen-dialog-modal");
+  const card = document.getElementById("zen-dialog-card");
+  const titleEl = document.getElementById("zen-dialog-title");
+  const titleWrap = document.getElementById("zen-dialog-title-wrap");
+  const iconEl = document.getElementById("zen-dialog-icon");
+  const msgEl = document.getElementById("zen-dialog-message");
+  const inputWrap = document.getElementById("zen-dialog-input-wrap");
+  const inputEl = document.getElementById("zen-dialog-input");
+  const cancelBtn = document.getElementById("zen-dialog-cancel-btn");
+  const confirmBtn = document.getElementById("zen-dialog-confirm-btn");
+
+  if (!modal || !titleEl || !msgEl || !cancelBtn || !confirmBtn) {
+    return Promise.resolve(mode === "prompt" ? null : mode === "alert");
+  }
+
+  if (activeZenDialogState) {
+    finishActiveZenDialog(false, true);
+  }
+
+  const isDanger = Boolean(opts.danger);
+  const isWarning = Boolean(opts.warning);
+  const tone = isDanger
+    ? "danger"
+    : isWarning
+      ? "warning"
+      : opts.tone || (mode === "alert" ? "info" : mode === "prompt" ? "prompt" : "confirm");
+
+  if (card) {
+    card.classList.toggle("is-danger", isDanger);
+    card.classList.toggle("is-warning", isWarning);
+  }
+  if (titleWrap) {
+    titleWrap.classList.toggle("is-danger", isDanger);
+    titleWrap.classList.toggle("is-warning", isWarning);
+  }
+  if (iconEl) {
+    iconEl.className = ZEN_DIALOG_ICON_MAP[tone] || ZEN_DIALOG_ICON_MAP.info;
+  }
+
+  titleEl.textContent =
+    opts.title || (mode === "alert" ? "안내" : mode === "prompt" ? "입력" : "확인");
+  msgEl.textContent = String(opts.message || "");
+
+  if (mode === "prompt" && inputWrap && inputEl) {
+    inputWrap.style.display = "block";
+    inputEl.value =
+      opts.defaultValue !== undefined && opts.defaultValue !== null
+        ? String(opts.defaultValue)
+        : "";
+    inputEl.placeholder = opts.placeholder ? String(opts.placeholder) : "";
+  } else if (inputWrap) {
+    inputWrap.style.display = "none";
+    if (inputEl) inputEl.value = "";
+  }
+
+  cancelBtn.style.display = mode === "alert" ? "none" : "flex";
+  cancelBtn.textContent = opts.cancelText || "취소";
+  confirmBtn.textContent = opts.confirmText || "확인";
+  confirmBtn.classList.toggle("is-danger", isDanger);
+
+  cancelBtn.onclick = () => finishActiveZenDialog(false, false);
+  confirmBtn.onclick = () => finishActiveZenDialog(true, false);
+
+  if (inputEl) {
+    inputEl.onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        finishActiveZenDialog(true, false);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        finishActiveZenDialog(false, false);
+      }
+    };
+  }
+
+  return new Promise((resolve) => {
+    let pushHistory = false;
+    if (
+      window.innerWidth <= 768 &&
+      window.history &&
+      typeof history.pushState === "function"
+    ) {
+      try {
+        history.pushState({ zenModal: "zenDialog" }, "", "#dialog");
+        pushHistory = true;
+      } catch (e) {}
+    }
+
+    activeZenDialogState = {
+      resolve,
+      mode,
+      pushHistory,
+      inputEl,
+    };
+
+    modal.style.display = "flex";
+    modal.classList.add("is-open");
+
+    setTimeout(() => {
+      if (mode === "prompt" && inputEl) {
+        inputEl.focus();
+        inputEl.select();
+      } else {
+        confirmBtn.focus();
+      }
+    }, 30);
+  });
+}
+
+window.zenConfirm = function (message, options = {}) {
+  return openZenDialogInternal({ ...options, mode: "confirm", message });
+};
+
+window.zenAlert = function (message, options = {}) {
+  return openZenDialogInternal({ ...options, mode: "alert", message });
+};
+
+window.zenPrompt = function (message, defaultValue = "", options = {}) {
+  return openZenDialogInternal({
+    ...options,
+    mode: "prompt",
+    message,
+    defaultValue,
+  });
+};
+
+window.closeActiveZenDialog = function (fromPopstate = false) {
+  finishActiveZenDialog(false, fromPopstate === true);
+};
 
 // 하위 호환성 글로벌 함수 노출
 window.toggleSidebarSearchBar = toggleSidebarSearchBar;

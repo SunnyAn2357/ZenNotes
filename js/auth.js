@@ -138,7 +138,10 @@ async function handleCloudAuthLegacy() {
   // 1. 로그인 상태 → 명시적 로그아웃 (정책 ①)
   if (fbUser) {
     const userLabel = fbUser.email ? `현재 [${fbUser.email}] 계정으로 연동 중입니다.\n\n` : "";
-    const confirmLogout = confirm(`${userLabel}클라우드 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.`);
+    const confirmLogout = await zenConfirm(
+      `${userLabel}클라우드 연동을 로그아웃하시겠습니까?\n로그아웃하면 자동 연동이 해제되고 다음 로그인 시 계정 선택창이 나타납니다.`,
+      { title: "클라우드 로그아웃", confirmText: "로그아웃" },
+    );
     if (!confirmLogout) return;
 
     localStorage.setItem("zen_explicit_logout", "true");

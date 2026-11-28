@@ -1731,9 +1731,9 @@ body:not(.light-theme) .ql-editor span[style*="#fef08a"] {
 .ql-snow .ql-picker-options {
     background-color: var(--surface) !important;
     border: 1px solid var(--border) !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
-    border-radius: 8px !important;
-    padding: 8px 0 !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38) !important;
+    border-radius: 12px !important;
+    padding: 6px !important;
     z-index: 10000 !important;
 
     /* 🚀 [추가] 하드웨어(GPU) 가속 강제 가동: 모바일 버퍼링/버벅임 해결 */
@@ -1742,10 +1742,17 @@ body:not(.light-theme) .ql-editor span[style*="#fef08a"] {
     backface-visibility: hidden;
 }
 
+body.light-theme .ql-snow .ql-picker-options {
+    background-color: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.1) !important;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14) !important;
+}
+
 .ql-snow .ql-picker-item {
     color: var(--text-main) !important;
-    padding: 6px 12px !important;
-    transition: color 0.2s, background-color 0.2s !important;
+    padding: 7px 12px !important;
+    border-radius: 8px !important;
+    transition: color 0.16s, background-color 0.16s !important;
 }
 
 .ql-snow .ql-picker-item:hover,
@@ -1754,9 +1761,108 @@ body:not(.light-theme) .ql-editor span[style*="#fef08a"] {
     background-color: var(--surface-hover) !important;
 }
 
-/* 제목(H1, H2) 드롭다운 너비 확 줄이기 (공간 확보) */
+/* 제목(H1, H2, H3, 본문) 드롭다운 한글화 및 크기 정돈 */
 .ql-snow .ql-picker.ql-header {
-    width: 76px !important;
+    width: 68px !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-label::before,
+.ql-snow .ql-picker.ql-header .ql-picker-item:not([data-value])::before {
+    content: '본문' !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-label[data-value="1"]::before,
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="1"]::before {
+    content: '제목 1' !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-label[data-value="2"]::before,
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="2"]::before {
+    content: '제목 2' !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-label[data-value="3"]::before,
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="3"]::before {
+    content: '제목 3' !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-options {
+    min-width: 112px !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-item {
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="1"] {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="2"] {
+    font-size: 15.5px !important;
+    font-weight: 700 !important;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="3"] {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+}
+
+/* [V1.9.2] 12색 Zen Editorial 팔레트 (2행 x 6열 스쿼클 그리드) */
+.ql-snow .ql-color-picker .ql-picker-options,
+.ql-snow .ql-background .ql-picker-options {
+    width: 190px !important;
+    padding: 8px !important;
+    display: none;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+}
+
+.ql-snow .ql-color-picker.ql-expanded .ql-picker-options,
+.ql-snow .ql-background.ql-expanded .ql-picker-options {
+    display: grid !important;
+}
+
+.ql-snow .ql-color-picker .ql-picker-item,
+.ql-snow .ql-background .ql-picker-item {
+    width: 24px !important;
+    height: 24px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 7px !important;
+    border: 1px solid rgba(148, 163, 184, 0.28) !important;
+    transition: transform 0.14s ease, box-shadow 0.14s ease !important;
+}
+
+.ql-snow .ql-color-picker .ql-picker-item:hover,
+.ql-snow .ql-background .ql-picker-item:hover {
+    transform: scale(1.12);
+    border-color: var(--accent) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.ql-snow .ql-color-picker .ql-picker-item.ql-selected,
+.ql-snow .ql-background .ql-picker-item.ql-selected {
+    border: 2px solid var(--accent) !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
+}
+
+.ql-snow .ql-color-picker .ql-picker-item:not([data-value]),
+.ql-snow .ql-background .ql-picker-item:not([data-value]) {
+    background-color: var(--surface) !important;
+    background-image: linear-gradient(
+        to top right,
+        transparent calc(50% - 0.9px),
+        #ef4444 50%,
+        transparent calc(50% + 0.9px)
+    ) !important;
+}
+
+body.light-theme .ql-snow .ql-color-picker .ql-picker-item:not([data-value]),
+body.light-theme .ql-snow .ql-background .ql-picker-item:not([data-value]) {
+    background-color: #ffffff !important;
 }
 
 .ql-snow .ql-picker-label {
@@ -2226,21 +2332,28 @@ body.light-theme .ql-editor li[data-list="checked"] {
     display: inline;
 }
 
-/* 🎯 [V3.3.1] 표 전용 세련된 우클릭 컨텍스트 메뉴 */
+/* 🎯 [V3.3.1] 표 전용 세련된 우클릭 컨텍스트 메뉴 (Zen Popover 통일) */
 .table-context-menu {
     position: fixed;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
-    padding: 6px 0;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+    padding: 6px;
     z-index: 10000;
-    min-width: 160px;
+    min-width: 170px;
     backdrop-filter: blur(8px);
 }
 
+body.light-theme .table-context-menu {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.1);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
 .table-menu-item {
-    padding: 8px 14px;
+    padding: 8px 12px;
+    border-radius: 8px;
     font-size: 13px;
     color: var(--text-main);
     display: flex;
@@ -3450,12 +3563,18 @@ body.light-theme .fm-quick-btn.is-active {
     position: absolute;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 4px 0;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
     z-index: 2100;
-    min-width: 140px;
+    min-width: 156px;
     display: none;
+}
+
+body.light-theme .fm-dropdown {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.1);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
 }
 
 .fm-dropdown.is-active {
@@ -3463,14 +3582,15 @@ body.light-theme .fm-quick-btn.is-active {
 }
 
 .fm-dropdown-item {
-    padding: 10px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13.5px;
     color: var(--text-main);
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 10px;
-    transition: background 0.1s;
+    transition: background 0.14s, color 0.14s;
 }
 
 .fm-dropdown-item i {
@@ -3600,16 +3720,14 @@ body.light-theme .fm-modal-footer {
 
 /* 🎯 [V4.1.9] 모달 확인/이동 버튼 테마별 고대비 시인성 보장 */
 #fm-move-confirm-btn,
-#pdf-modal-confirm-btn,
-#markdown-help-modal .fm-modal-footer button {
+#pdf-modal-confirm-btn {
     background: var(--accent) !important;
     color: var(--accent-contrast) !important;
     font-weight: 700 !important;
 }
 
 body.light-theme #fm-move-confirm-btn,
-body.light-theme #pdf-modal-confirm-btn,
-body.light-theme #markdown-help-modal .fm-modal-footer button {
+body.light-theme #pdf-modal-confirm-btn {
     color: #ffffff !important;
 }
 
@@ -3885,6 +4003,15 @@ body.light-theme {
 
 .fm-bottom-bar.is-hidden-by-scroll {
     transform: translateY(120%) !important;
+}
+
+.fm-bottom-bar.is-empty {
+    opacity: 0.78;
+}
+
+.fm-bottom-bar.is-empty .fm-bottom-btn {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .fm-bottom-btn {
@@ -4165,11 +4292,14 @@ body.light-theme {
         justify-content: center;
     }
 
-    /* 🎯 4. 색상 팔레트는 확정하신 340px로 고정! */
+    /* 🎯 4. [V1.9.2] 12색 Zen Editorial 팔레트 모바일 그리드 (2행 x 6열) */
     #zen-mobile-popup.ql-color-picker,
     #zen-mobile-popup.ql-background {
-        width: 340px;
-        justify-content: flex-start;
+        width: 268px;
+        padding: 12px;
+        gap: 8px;
+        border-radius: 14px;
+        justify-content: center;
     }
 
     /* 🎯 5. [여기가 추가되었습니다!] 정렬 & 헤더 팝업: 완벽한 1줄 강제 고정 */
@@ -4189,42 +4319,59 @@ body.light-theme {
         cursor: pointer;
     }
 
-    /* 색상 버튼 둥글게 */
+    /* 색상 버튼 스쿼클 통일 */
     #zen-mobile-popup.ql-color-picker .ql-picker-item,
     #zen-mobile-popup.ql-background .ql-picker-item {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        border: 1px solid var(--border) !important;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        border: 1px solid rgba(148, 163, 184, 0.28) !important;
     }
 
-    /* 🎯 6. [여기가 수정되었습니다!] 정렬 & 헤더(1안) 버튼 큼직하게 + 찌그러짐 방지 */
+    #zen-mobile-popup.ql-color-picker .ql-picker-item:not([data-value]),
+    #zen-mobile-popup.ql-background .ql-picker-item:not([data-value]) {
+        background-color: var(--surface) !important;
+        background-image: linear-gradient(
+            to top right,
+            transparent calc(50% - 1px),
+            #ef4444 50%,
+            transparent calc(50% + 1px)
+        ) !important;
+    }
+
+    body.light-theme #zen-mobile-popup.ql-color-picker .ql-picker-item:not([data-value]),
+    body.light-theme #zen-mobile-popup.ql-background .ql-picker-item:not([data-value]) {
+        background-color: #ffffff !important;
+    }
+
+    /* 🎯 6. [여기가 수정되었습니다!] 정렬 & 헤더 버튼 큼직하게 + 찌그러짐 방지 */
     #zen-mobile-popup.ql-align .ql-picker-item,
     #zen-mobile-popup.ql-header .ql-picker-item {
-        width: 44px;
-        height: 44px;
-        border-radius: 8px;
-        font-size: 16px;
-        font-weight: bold;
+        min-width: 44px;
+        width: auto;
+        height: 40px;
+        padding: 0 11px;
+        border-radius: 9px;
+        font-size: 14px;
+        font-weight: 700;
         flex-shrink: 0 !important;
-        /* 👈 화면 좁아도 버튼 찌그러짐 방지 핵심 */
     }
 
-    /* 헤더 팝업 아이콘 글자(H1, H2) 주입 */
+    /* 헤더 팝업 한글 라벨 */
     #zen-mobile-popup.ql-header .ql-picker-item[data-value="1"]::before {
-        content: 'H1';
+        content: '제목 1';
     }
 
     #zen-mobile-popup.ql-header .ql-picker-item[data-value="2"]::before {
-        content: 'H2';
+        content: '제목 2';
     }
 
     #zen-mobile-popup.ql-header .ql-picker-item[data-value="3"]::before {
-        content: 'H3';
+        content: '제목 3';
     }
 
     #zen-mobile-popup.ql-header .ql-picker-item:not([data-value])::before {
-        content: 'T';
+        content: '본문';
     }
 
     /*------------- 모바일 팝업 설정 끝 -------------------- */
@@ -5068,15 +5215,23 @@ body.is-pdf-exporting .quill-wrapper {
     max-width: 480px;
     width: calc(100% - 28px);
     margin: 14px auto;
-    border: 1px solid var(--border);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
-    border-radius: 16px;
-    background: var(--surface);
 }
 
 .md-help-header {
     padding: 15px 20px 13px;
-    align-items: flex-start;
+    align-items: center;
+}
+
+.md-help-footer {
+    padding: 12px 18px;
+    justify-content: flex-end;
+}
+
+.md-help-footer .zen-settings-done-btn {
+    flex: 0 0 auto !important;
+    height: 34px !important;
+    padding: 0 18px !important;
+    border-radius: 9px !important;
 }
 
 .md-help-title-wrap {
@@ -5102,7 +5257,7 @@ body.is-pdf-exporting .quill-wrapper {
 }
 
 .md-help-body {
-    padding: 10px 18px 14px;
+    padding: 0 18px 14px;
     max-height: 64vh;
     overflow-y: auto;
     scrollbar-width: thin !important;
@@ -5112,6 +5267,12 @@ body.is-pdf-exporting .quill-wrapper {
 .md-help-body::-webkit-scrollbar {
     display: block !important;
     width: 6px;
+}
+
+.md-help-body::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .md-help-body::-webkit-scrollbar-track {
@@ -5177,13 +5338,21 @@ body.is-pdf-exporting .quill-wrapper {
 }
 
 .md-help-table th {
-    padding: 7px 8px;
+    padding: 10px 8px 8px;
     border-bottom: 1px solid var(--border);
     color: var(--text-muted);
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 600;
     text-align: left;
     white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface);
+}
+
+body.light-theme .md-help-table th {
+    background: #ffffff;
 }
 
 .md-help-table td {
@@ -5214,21 +5383,22 @@ body.light-theme .md-help-table tr:hover td {
 }
 
 .md-help-table code.md-key {
-    background: rgba(255, 255, 255, 0.07);
-    color: #60a5fa;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 2px 5px;
-    border-radius: 4px;
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--text-main);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    padding: 2px 7px;
+    border-radius: 6px;
     font-size: 12px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 600;
+    font-family: "Pretendard", "Nanum Gothic", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, sans-serif;
     display: inline-block;
     white-space: nowrap;
 }
 
 body.light-theme .md-help-table code.md-key {
     background: #f1f5f9;
-    color: #1d4ed8;
-    border: 1px solid #cbd5e1;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
 }
 
 .md-help-tip {
@@ -5300,21 +5470,23 @@ body.light-theme .scroll-to-top-btn:hover {
 }
 
 #special-char-modal .fm-modal {
-    border-radius: 14px !important;
+    border-radius: var(--zen-modal-radius) !important;
     overflow: hidden !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.2) !important;
-    border: 1px solid var(--border) !important;
-    background: var(--surface) !important;
+    box-shadow: var(--zen-modal-shadow) !important;
 }
 
 #special-char-modal .fm-modal-header {
-    border-top-left-radius: 14px !important;
-    border-top-right-radius: 14px !important;
+    border-top-left-radius: var(--zen-modal-radius) !important;
+    border-top-right-radius: var(--zen-modal-radius) !important;
 }
 
 #special-char-modal .spec-recent-bar {
-    border-bottom-left-radius: 14px !important;
-    border-bottom-right-radius: 14px !important;
+    border-bottom-left-radius: var(--zen-modal-radius) !important;
+    border-bottom-right-radius: var(--zen-modal-radius) !important;
+}
+
+body.light-theme #special-char-modal .spec-recent-bar {
+    background: #f8fafc !important;
 }
 
 .ql-toolbar.ql-snow button.ql-special-char:hover i {
@@ -7166,31 +7338,31 @@ body.light-theme .tree-guide::before {
     background: rgba(100, 116, 139, 0.14);
 }
 
-/* 사이드바 인라인 컨텍스트 메뉴 */
+/* 사이드바 인라인 컨텍스트 메뉴 (Zen Popover 통일) */
 .sidebar-context-menu {
     position: fixed;
     z-index: 10500;
     min-width: 176px;
     padding: 6px;
-    border-radius: 10px;
+    border-radius: 12px;
     background: rgba(24, 27, 34, 0.96);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
 
 body.light-theme .sidebar-context-menu {
     background: #ffffff;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
 }
 
 .sidebar-context-item {
     width: 100%;
     padding: 7px 10px;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     background: transparent;
     color: var(--text-main);
     font-size: 12.5px;
@@ -9091,4 +9263,97 @@ textarea,
     user-select: text !important;
     -webkit-user-select: text !important;
     caret-color: auto !important;
+}
+
+/* ============================================================================
+   🎯 [V1.9.2] 전역 모달/스크롤바 화살표 제거 및 통합 Zen 다이얼로그 스타일
+   ============================================================================ */
+::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+.zen-dialog-card {
+    max-width: 392px !important;
+    width: calc(100% - 32px) !important;
+}
+
+.zen-dialog-header {
+    padding: 15px 20px;
+}
+
+.zen-dialog-title-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15.5px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.zen-dialog-title-wrap i {
+    color: var(--accent);
+    font-size: 16px;
+}
+
+.zen-dialog-title-wrap.is-warning,
+.zen-dialog-title-wrap.is-warning i {
+    color: #c68a2b;
+}
+
+.zen-dialog-title-wrap.is-danger,
+.zen-dialog-title-wrap.is-danger i {
+    color: #ef4444;
+}
+
+.zen-dialog-body {
+    padding: 18px 20px !important;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.zen-dialog-message {
+    font-size: 14px;
+    line-height: 1.62;
+    color: var(--text-main);
+    white-space: pre-wrap;
+    word-break: keep-all;
+}
+
+.zen-dialog-input-wrap {
+    width: 100%;
+}
+
+.zen-dialog-footer {
+    padding: 12px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.zen-dialog-btn-cancel {
+    background: var(--surface-hover);
+    color: var(--text-main);
+    border: 1px solid var(--border) !important;
+}
+
+.zen-dialog-btn-cancel:hover {
+    filter: brightness(0.96);
+}
+
+.zen-dialog-btn-confirm {
+    background: var(--accent) !important;
+    color: var(--accent-contrast) !important;
+    font-weight: 700 !important;
+}
+
+body.light-theme .zen-dialog-btn-confirm {
+    color: #ffffff !important;
+}
+
+.zen-dialog-btn-confirm.is-danger {
+    background: #ef4444 !important;
+    color: #ffffff !important;
 }

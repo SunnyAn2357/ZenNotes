@@ -860,7 +860,12 @@ function sanitizeExportFileName(name) {
 async function exportMYNS() {
   closeAllPanelsMobile();
   if (typeof isEditingSecureMemo !== "undefined" && isEditingSecureMemo) {
-    if (!confirm("보안 폴더의 노트를 일반 공유 파일(.myns)로 내보냅니다.\n계속하시겠습니까?")) {
+    if (
+      !(await zenConfirm(
+        "보안 폴더의 노트를 일반 공유 파일(.myns)로 내보냅니다.\n계속하시겠습니까?",
+        { title: "보안 노트 내보내기", confirmText: "내보내기", warning: true },
+      ))
+    ) {
       return false;
     }
   }
@@ -1035,7 +1040,12 @@ async function exportMemoByIdAsMYNS(memoId) {
       if (typeof showToast === "function") showToast("보안 폴더 잠금을 먼저 해제해주세요.");
       return false;
     }
-    if (!confirm("보안 폴더의 노트를 일반 공유 파일(.myns)로 내보냅니다.\n계속하시겠습니까?")) {
+    if (
+      !(await zenConfirm(
+        "보안 폴더의 노트를 일반 공유 파일(.myns)로 내보냅니다.\n계속하시겠습니까?",
+        { title: "보안 노트 내보내기", confirmText: "내보내기", warning: true },
+      ))
+    ) {
       return false;
     }
   }
@@ -1932,7 +1942,13 @@ async function resetAllData() {
   if (!modal) {
     // 모달 DOM 누락 시 방어적 폴백
     if (secStats.totalCount > 0) {
-      if (!confirm(`⚠️ [보안 폴더 경고]\n\n보안 폴더에 ${secStats.noteCount}개의 보안 노트가 보관되어 있습니다.\n초기화 시 보안 자료도 모두 영구 삭제됩니다.\n계속하시겠습니까?`)) return;
+      if (
+        !(await zenConfirm(
+          `[보안 폴더 경고]\n\n보안 폴더에 ${secStats.noteCount}개의 보안 노트가 보관되어 있습니다.\n초기화 시 보안 자료도 모두 영구 삭제됩니다.\n계속하시겠습니까?`,
+          { title: "보안 폴더 경고", confirmText: "영구 삭제", danger: true },
+        ))
+      )
+        return;
     }
     proceedResetAllData();
     return;
@@ -1956,9 +1972,9 @@ async function resetAllData() {
   // 2. 클라우드 연동 상태에 따른 안내
   if (cloudDesc) {
     if (isDriveConnected) {
-      cloudDesc.innerHTML = `☁️ <strong>클라우드 연동 상태</strong>: 로컬 데이터뿐만 아니라 클라우드(Firebase)에 동기화된 모든 백업 자료도 함께 영구 삭제됩니다.`;
+      cloudDesc.innerHTML = `<i class="fa-solid fa-cloud" style="margin-right: 6px;"></i><strong>클라우드 연동 상태</strong>: 로컬 데이터뿐만 아니라 클라우드(Firebase)에 동기화된 모든 백업 자료도 함께 영구 삭제됩니다.`;
     } else {
-      cloudDesc.innerHTML = `ℹ️ <strong>로컬 전용 초기화</strong>: 현재 기기의 데이터만 초기화됩니다. (나중에 동일 계정으로 클라우드 로그인 시 백업 자료가 다시 동기화될 수 있습니다.)`;
+      cloudDesc.innerHTML = `<i class="fa-solid fa-circle-info" style="margin-right: 6px;"></i><strong>로컬 전용 초기화</strong>: 현재 기기의 데이터만 초기화됩니다. (나중에 동일 계정으로 클라우드 로그인 시 백업 자료가 다시 동기화될 수 있습니다.)`;
     }
   }
 
@@ -2058,7 +2074,7 @@ window.addEventListener("keydown", (e) => {
 // 🎯 [V3.3.2] PDF 페이지 범위 선택 커스텀 모달 프로미스 리졸버
 // 🎯 [V4.5.0] Zen PDF 썸네일 그리드 선택 모달 (눈으로 직접 보며 선택하는 인터페이스)
 function showPdfPageRangeModal(pdf, totalPages, baseTitle) {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     const modal = document.getElementById("pdf-import-modal");
     const titleText = document.getElementById("pdf-modal-title-text");
     const gridContainer = document.getElementById("pdf-thumb-grid");
@@ -2072,7 +2088,11 @@ function showPdfPageRangeModal(pdf, totalPages, baseTitle) {
     const closeIcon = document.getElementById("pdf-modal-close-icon");
 
     if (!modal) {
-      const res = prompt(`총 ${totalPages}페이지 중 불러올 페이지를 입력하세요 (예: 1, 3-5):`, `1-${Math.min(totalPages, 30)}`);
+      const res = await zenPrompt(
+        `총 ${totalPages}페이지 중 불러올 페이지를 입력하세요 (예: 1, 3-5):`,
+        `1-${Math.min(totalPages, 30)}`,
+        { title: "PDF 페이지 선택", confirmText: "불러오기" },
+      );
       resolve(res ? { action: "pages", pages: [1] } : { action: "cancel" });
       return;
     }
@@ -2405,7 +2425,7 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
     : [];
 
   if (rawItems.length === 0) {
-    alert("복원할 노트 데이터가 없습니다.");
+    zenAlert("복원할 노트 데이터가 없습니다.", { title: "백업 복원" });
     if (typeof onCompleteCallback === "function") onCompleteCallback();
     return;
   }
@@ -2851,8 +2871,9 @@ function restoreZenBackupData(parsed, onCompleteCallback) {
         loadFileManager(currentFmFolderId);
       }
       if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
-      alert(
+      zenAlert(
         `복원이 완료되었습니다.\n(복원 노트: ${restoredCount}개 / 복원 폴더: ${restoredFolderCount}개 / 최신 갱신: ${updatedCount}개 / 중복 제외: ${skippedCount}개)`,
+        { title: "백업 복원 완료" },
       );
       if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
       if (typeof onCompleteCallback === "function") onCompleteCallback();
@@ -3004,7 +3025,10 @@ function handleFileImport(e) {
         showToast(`✅ 30페이지씩 분할하여 ${chunkCount}개의 노트로 저장했습니다.`);
       } catch (err) {
         console.error("PDF 파싱 에러:", err);
-        alert(`PDF 변환 중 오류가 발생했습니다.\n(${err.message || err})`);
+        zenAlert(`PDF 변환 중 오류가 발생했습니다.\n(${err.message || err})`, {
+          title: "PDF 불러오기 오류",
+          warning: true,
+        });
       } finally {
         e.target.value = "";
       }
@@ -3031,7 +3055,10 @@ function handleFileImport(e) {
         const parsed = JSON.parse(fileContent);
         if (parsed.type === "ZenBackup") {
           const backupDateStr = extractBackupDate(parsed, file);
-          const isConfirmed = confirm(`${backupDateStr}에 백업한 파일을 복원하시겠습니까?`);
+          const isConfirmed = await zenConfirm(
+            `${backupDateStr}에 백업한 파일을 복원하시겠습니까?`,
+            { title: "백업 복원", confirmText: "복원" },
+          );
           if (!isConfirmed) {
             showToast("백업 복원이 취소되었습니다.");
             e.target.value = "";
@@ -3048,10 +3075,10 @@ function handleFileImport(e) {
           quill.root.innerHTML = parsed.content || "";
           executeSave();
         } else {
-          alert("지원하지 않는 JSON 형식입니다.");
+          zenAlert("지원하지 않는 JSON 형식입니다.", { title: "불러오기 오류", warning: true });
         }
       } catch (err) {
-        alert("파일 읽기 오류가 발생했습니다.");
+        zenAlert("파일 읽기 오류가 발생했습니다.", { title: "불러오기 오류", warning: true });
       }
     }
     // 📌 B. HTML 파일: 디자인 파괴 방어막(DOMParser)을 거쳐 본문만 쏙 빼내기
@@ -3112,7 +3139,7 @@ function handleFileImport(e) {
   if (["myns", "json", "txt", "html", "md"].includes(fileExt)) {
     reader.readAsText(file);
   } else if (!isImage && !isPdf) {
-    alert("지원하지 않는 파일 형식입니다.");
+    zenAlert("지원하지 않는 파일 형식입니다.", { title: "파일 형식 안내", warning: true });
     e.target.value = "";
   }
 }
@@ -3303,7 +3330,10 @@ async function processDroppedFiles(files) {
   if (backupItems.length === 1 && noteItems.length === 0) {
     const backupItem = backupItems[0];
     const backupDateStr = extractBackupDate(backupItem.parsed, backupItem.file);
-    const isConfirmed = confirm(`${backupDateStr}에 백업한 파일을 복원하시겠습니까?`);
+    const isConfirmed = await zenConfirm(
+      `${backupDateStr}에 백업한 파일을 복원하시겠습니까?`,
+      { title: "백업 복원", confirmText: "복원" },
+    );
     if (isConfirmed) {
       restoreZenBackupData(backupItem.parsed);
     } else {

@@ -603,7 +603,7 @@ function emptyTempFolder() {
   if (!db || globalDesktopFolderId === null || globalDesktopFolderId === undefined) return;
 
   const txRead = db.transaction(["memos"], "readonly");
-  txRead.objectStore("memos").getAll().onsuccess = (e) => {
+  txRead.objectStore("memos").getAll().onsuccess = async (e) => {
     const allData = e.target.result || [];
     const targets = allData.filter(
       (m) =>
@@ -616,7 +616,12 @@ function emptyTempFolder() {
       if (typeof showToast === "function") showToast("임시 폴더가 이미 비어있습니다.");
       return;
     }
-    if (!confirm(`임시 폴더의 모든 항목(${targets.length}개)을 휴지통으로 보내시겠습니까?`)) {
+    if (
+      !(await zenConfirm(
+        `임시 폴더의 모든 항목(${targets.length}개)을 휴지통으로 보내시겠습니까?`,
+        { title: "임시 폴더 비우기", confirmText: "비우기", danger: true },
+      ))
+    ) {
       return;
     }
 
@@ -728,7 +733,9 @@ function ensureFmTextInputModal() {
           <i class="fa-solid fa-folder-plus" style="color: var(--accent);"></i>
           <span>새 폴더</span>
         </span>
-        <i id="fm-name-prompt-x" class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);"></i>
+        <button type="button" id="fm-name-prompt-x" class="zen-modal-icon-close" aria-label="닫기" title="닫기 (Esc)">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
       <div class="fm-modal-body" style="padding: 16px 20px;" onclick="event.stopPropagation()">
         <div id="fm-name-prompt-desc" style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.45;"></div>
@@ -1117,9 +1124,16 @@ function fmRestore(id) {
 }
 
 // 6. 영구 삭제 (폴더인 경우 하위 자손도 함께 영구 삭제 처리)
-function fmHardDelete(id) {
+async function fmHardDelete(id) {
   guardSecurityCrudAutoLock(1000);
-  if (!confirm("이 항목을 영구 삭제하시겠습니까?")) return;
+  if (
+    !(await zenConfirm("이 항목을 영구 삭제하시겠습니까?", {
+      title: "영구 삭제",
+      confirmText: "영구 삭제",
+      danger: true,
+    }))
+  )
+    return;
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
   store.get(id).onsuccess = (e) => {
@@ -1540,15 +1554,22 @@ function handleSecurityMenuChange() {
 }
 
 // 🎯 [킬 스위치] 지인들의 뼈아픈 경험을 위한 비상 삭제 시스템
-function emergencyDeleteSecurity() {
+async function emergencyDeleteSecurity() {
   document.getElementById("fm-global-menu").classList.remove("is-active");
   if (!localStorage.getItem("zen_sec_hash")) {
     showToast("설정된 비밀번호가 없어 삭제할 내용이 없습니다.");
     return;
   }
 
-  const confirmText = prompt(
-    '🚨  [모든 내용 삭제] + [비번 초기화]  🚨\n       "동의"라고 입력하세요.',
+  const confirmText = await zenPrompt(
+    '[모든 내용 삭제] + [비밀번호 초기화]\n진행하려면 아래에 "동의"를 입력하세요.',
+    "",
+    {
+      title: "보안 폴더 비상 삭제",
+      confirmText: "비상 삭제",
+      danger: true,
+      placeholder: "동의",
+    },
   );
   if (confirmText !== "동의") {
     showToast("비상 삭제가 취소되었습니다.");
@@ -1648,6 +1669,7 @@ function updateFmBottomBar() {
 
   if (isFmMultiSelectMode) {
     bar.classList.add("is-visible");
+    bar.classList.toggle("is-empty", fmSelectedItems.size === 0);
     if (fmBody) fmBody.classList.add("has-bottom-bar");
 
     if (countLabel) countLabel.innerText = `${fmSelectedItems.size}개 선택됨`;
@@ -1668,13 +1690,14 @@ function updateFmBottomBar() {
     }
   } else {
     bar.classList.remove("is-visible");
+    bar.classList.remove("is-empty");
     bar.classList.remove("is-hidden-by-scroll");
     if (fmBody) fmBody.classList.remove("has-bottom-bar");
   }
 }
 
 // 🎯 [완벽 교정] 다중 선택 영구 삭제 / 휴지통 이동 처리
-function fmBatchHardDelete() {
+async function fmBatchHardDelete() {
   if (fmSelectedItems.size === 0) {
     showToast("삭제할 항목을 선택해주세요.");
     return;
@@ -1685,7 +1708,14 @@ function fmBatchHardDelete() {
     ? `선택한 ${fmSelectedItems.size}개 항목을 영구 삭제(복구 불가) 하시겠습니까?`
     : `선택한 ${fmSelectedItems.size}개 항목을 휴지통으로 보낼까요?`;
 
-  if (!confirm(confirmMsg)) return;
+  if (
+    !(await zenConfirm(confirmMsg, {
+      title: isInsideTrash ? "영구 삭제" : "휴지통 이동",
+      confirmText: isInsideTrash ? "영구 삭제" : "이동",
+      danger: true,
+    }))
+  )
+    return;
 
   const targetIds = Array.from(fmSelectedItems);
   const tx = db.transaction(["memos"], "readwrite");
@@ -1799,7 +1829,7 @@ function openFmBatchMoveModal() {
 }
 
 // 🎯 [완벽 교정] 위치 및 선택 항목 소속에 따른 다중 선택 삭제/영구삭제 분기 로직
-function fmBatchDelete() {
+async function fmBatchDelete() {
   guardSecurityCrudAutoLock(1000);
   if (fmSelectedItems.size === 0) {
     showToast("삭제할 항목을 선택해주세요.");
@@ -1808,11 +1838,18 @@ function fmBatchDelete() {
 
   const isInsideTrash = areAllSelectedFmItemsInTrash();
   if (isInsideTrash) {
-    fmBatchHardDelete();
+    await fmBatchHardDelete();
     return;
   }
   const confirmMsg = `선택한 ${fmSelectedItems.size}개 항목을 휴지통으로 보낼까요?`;
-  if (!confirm(confirmMsg)) return;
+  if (
+    !(await zenConfirm(confirmMsg, {
+      title: "휴지통 이동",
+      confirmText: "이동",
+      danger: true,
+    }))
+  )
+    return;
 
   const targetIds = Array.from(fmSelectedItems);
   const tx = db.transaction(["memos"], "readwrite");
@@ -2165,7 +2202,7 @@ window.createFolderInMoveModal = createFolderInMoveModal;
 async function moveItemsToFolder(itemIds, targetFolderId) {
   if (!itemIds || itemIds.length === 0) return;
   if (targetFolderId === undefined) {
-    alert("이동할 위치를 선택해주세요.");
+    zenAlert("이동할 위치를 선택해주세요.", { title: "항목 이동" });
     return;
   }
 
@@ -2255,8 +2292,9 @@ async function moveItemsToFolder(itemIds, targetFolderId) {
   }
 
   if (needsCrypto && !currentSecKey) {
-    alert(
+    zenAlert(
       "보안 구역으로 넣거나 빼려면, 먼저 보안 폴더를 한 번 열어서(잠금 해제) 열쇠를 활성화해야 합니다.",
+      { title: "보안 폴더 잠금", warning: true },
     );
     return;
   }
@@ -2381,7 +2419,7 @@ async function moveItemsToFolder(itemIds, targetFolderId) {
 // 🎯 [완벽 교정] 스마트 이동 엔진 (모달 확인 버튼)
 document.getElementById("fm-move-confirm-btn").onclick = async () => {
   if (selectedDestId === undefined) {
-    alert("이동할 위치를 선택해주세요.");
+    zenAlert("이동할 위치를 선택해주세요.", { title: "항목 이동" });
     return;
   }
 
@@ -3251,7 +3289,7 @@ async function deleteItemsToTrashWithUndo(itemIds) {
   if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
 }
 
-function deleteSidebarFolderWithConfirm(folderId) {
+async function deleteSidebarFolderWithConfirm(folderId) {
   guardSecurityCrudAutoLock(1000);
   closeSidebarContextMenu();
   const cache = window.__zenFmTreeDataCache || window.__zenTreeDataCache;
@@ -3261,7 +3299,14 @@ function deleteSidebarFolderWithConfirm(folderId) {
   const msg = childCount > 0
     ? `'${folderTitle}' 폴더와 내부 항목 ${childCount}개를 휴지통으로 보내시겠습니까?`
     : `'${folderTitle}' 폴더를 휴지통으로 보내시겠습니까?`;
-  if (!confirm(msg)) return;
+  if (
+    !(await zenConfirm(msg, {
+      title: "폴더 삭제",
+      confirmText: "삭제",
+      danger: true,
+    }))
+  )
+    return;
   if (sidebarSelectedFolderId === folderId) sidebarSelectedFolderId = null;
   if (currentFmFolderId === folderId) {
     currentFmFolderId = null;
@@ -3270,7 +3315,7 @@ function deleteSidebarFolderWithConfirm(folderId) {
   fmDelete(folderId);
 }
 
-function deleteSidebarNoteWithConfirm(noteId) {
+async function deleteSidebarNoteWithConfirm(noteId) {
   guardSecurityCrudAutoLock(1000);
   closeSidebarContextMenu();
   const targets =
@@ -3280,7 +3325,14 @@ function deleteSidebarNoteWithConfirm(noteId) {
   const msg = targets.length > 1
     ? `선택한 ${targets.length}개의 노트를 휴지통으로 보냅니다.`
     : "이 노트를 휴지통으로 보내시겠습니까?";
-  if (!confirm(msg)) return;
+  if (
+    !(await zenConfirm(msg, {
+      title: "노트 삭제",
+      confirmText: "삭제",
+      danger: true,
+    }))
+  )
+    return;
 
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
@@ -5192,7 +5244,7 @@ async function loadMemo(id) {
   closeAllPanelsMobile();
 }
 
-function deleteMemo(id, e) {
+async function deleteMemo(id, e) {
   e.stopPropagation();
   guardSecurityCrudAutoLock(1000);
   const targets =
@@ -5201,11 +5253,12 @@ function deleteMemo(id, e) {
       : [id];
 
   if (
-    !confirm(
+    !(await zenConfirm(
       targets.length > 1
         ? `선택한 ${targets.length}개의 노트를 휴지통으로 보냅니다.`
         : "휴지통으로 보내시겠습니까?",
-    )
+      { title: "노트 삭제", confirmText: "삭제", danger: true },
+    ))
   )
     return;
 
@@ -5302,7 +5355,7 @@ function restoreMemo(id, e) {
   };
 }
 
-function hardDeleteMemo(id, e) {
+async function hardDeleteMemo(id, e) {
   e.stopPropagation();
   guardSecurityCrudAutoLock(1000);
   const targets =
@@ -5310,11 +5363,12 @@ function hardDeleteMemo(id, e) {
       ? Array.from(selectedTrashMemos)
       : [id];
   if (
-    !confirm(
+    !(await zenConfirm(
       targets.length > 1
-        ? `선택한 ${targets.length}개의 노트를 삭제하시겠습니까?`
-        : "이 노트를 삭제하시겠습니까?",
-    )
+        ? `선택한 ${targets.length}개의 노트를 영구 삭제하시겠습니까?`
+        : "이 노트를 영구 삭제하시겠습니까?",
+      { title: "영구 삭제", confirmText: "영구 삭제", danger: true },
+    ))
   )
     return;
 
@@ -5354,7 +5408,7 @@ function emptyTrash() {
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
 
-  store.getAll().onsuccess = (e) => {
+  store.getAll().onsuccess = async (e) => {
     const allData = e.target.result;
     const trashItems = allData.filter(
       (m) => m.isDeleted && !m.isPermanentlyDeleted,
@@ -5365,7 +5419,14 @@ function emptyTrash() {
       return;
     }
 
-    if (!confirm("휴지통의 모든 메모를 삭제합니다. 계속하시겠습니까?")) return;
+    if (
+      !(await zenConfirm("휴지통의 모든 메모를 삭제합니다. 계속하시겠습니까?", {
+        title: "휴지통 비우기",
+        confirmText: "모두 삭제",
+        danger: true,
+      }))
+    )
+      return;
 
     trashItems.forEach((memo) => {
       memo.isPermanentlyDeleted = true;
@@ -5442,8 +5503,14 @@ function fmBatchRestore() {
 }
 
 // 🎯 [신규] 현재 폴더 복원 (부모 폴더로 바운스)
-function restoreCurrentFolder() {
-  if (!confirm("이 폴더를 복원하시겠습니까?")) return;
+async function restoreCurrentFolder() {
+  if (
+    !(await zenConfirm("이 폴더를 복원하시겠습니까?", {
+      title: "폴더 복원",
+      confirmText: "복원",
+    }))
+  )
+    return;
 
   const tx = db.transaction(["memos"], "readwrite");
   const store = tx.objectStore("memos");
@@ -5469,12 +5536,13 @@ function restoreCurrentFolder() {
 }
 
 // 🎯 [신규] 현재 폴더 비우기 (영구 삭제 및 부모 폴더로 바운스)
-function emptyCurrentFolder() {
+async function emptyCurrentFolder() {
   guardSecurityCrudAutoLock(1000);
   if (
-    !confirm(
+    !(await zenConfirm(
       "이 폴더를 비우시겠습니까? 폴더와 내부의 모든 항목이 영구 삭제됩니다.",
-    )
+      { title: "폴더 비우기", confirmText: "영구 삭제", danger: true },
+    ))
   )
     return;
 

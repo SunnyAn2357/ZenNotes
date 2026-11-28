@@ -578,7 +578,10 @@ const quill = new Quill('#editor', {
                 // --- 1행 ---
                 ['undo', 'redo'],
                 [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike', 'strike-line', 'highlight', { 'color': [] }, { 'background': [] }],
+                ['bold', 'italic', 'underline', 'strike', 'strike-line', 'highlight',
+                    { 'color': ['#111827', '#475569', '#dc2626', '#c2410c', '#b45309', '#15803d', '#0f766e', '#1d4ed8', '#4338ca', '#7e22ce', '#be185d', false] },
+                    { 'background': ['#fef08a', '#fed7aa', '#fecdd3', '#fbcfe8', '#e9d5ff', '#c7d2fe', '#bfdbfe', '#a7f3d0', '#bbf7d0', '#e2e8f0', '#fef9c3', false] }
+                ],
                 [{ 'list': 'check' }, { 'list': 'ordered' }, { 'list': 'bullet' }],
                 [{ 'align': [] }],
                 ['table'],
@@ -3049,7 +3052,13 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
-        const fmNamePromptModal = document.getElementById("fm-name-prompt-modal");
+        const zenDialogModal = document.getElementById("zen-dialog-modal");
+        if (zenDialogModal && zenDialogModal.style.display === "flex") {
+            if (typeof closeActiveZenDialog === "function") closeActiveZenDialog(false);
+            return;
+        }
+
+    const fmNamePromptModal = document.getElementById("fm-name-prompt-modal");
         if (fmNamePromptModal && fmNamePromptModal.style.display === "flex") {
             if (typeof closeFmTextInputModal === "function") closeFmTextInputModal(null, false);
             return;
@@ -3273,6 +3282,12 @@ window.addEventListener("popstate", (e) => {
     const videoInsertModal = document.getElementById("video-insert-modal");
     if (videoInsertModal && videoInsertModal.style.display === "flex") {
         closeVideoInsertModal(true);
+        return;
+    }
+
+    const zenDialogModal = document.getElementById("zen-dialog-modal");
+    if (zenDialogModal && zenDialogModal.style.display === "flex") {
+        if (typeof closeActiveZenDialog === "function") closeActiveZenDialog(true);
         return;
     }
 
@@ -4064,7 +4079,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // 컨텍스트 메뉴 항목 클릭 동작
     tableContextMenu.querySelectorAll(".table-menu-item").forEach((item) => {
-        item.addEventListener("click", () => {
+        item.addEventListener("click", async () => {
             const action = item.dataset.action;
             tableContextMenu.style.display = "none";
             const tableModule = quill.getModule("table");
@@ -4100,7 +4115,7 @@ window.addEventListener("DOMContentLoaded", () => {
                     tableDeleteColumnSafe();
                     break;
                 case "delete-table":
-                    if (confirm("현재 표를 전체 삭제하시겠습니까?")) {
+                    if (await zenConfirm("현재 표를 전체 삭제하시겠습니까?", { title: "표 삭제", confirmText: "삭제", danger: true })) {
                         tableModule.deleteTable();
                     }
                     break;

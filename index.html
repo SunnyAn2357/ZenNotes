@@ -14,15 +14,15 @@
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
     <!-- ADS 파비콘 및 iOS 홈 화면 아이콘 풀세트 (GitHub Pages ./ 상대경로) -->
-    <link rel="icon" href="./favicon.ico?v=1.9.1" sizes="48x48">
-    <link rel="icon" href="./favicon.svg?v=1.9.1" type="image/svg+xml">
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.9.1">
-    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.9.1">
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.9.1">
+    <link rel="icon" href="./favicon.ico?v=1.9.2" sizes="48x48">
+    <link rel="icon" href="./favicon.svg?v=1.9.2" type="image/svg+xml">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.9.2">
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.9.2">
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.9.2">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="ZenNotes">
-    <link rel="manifest" href="./manifest.json?v=1.9.1">
+    <link rel="manifest" href="./manifest.json?v=1.9.2">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -35,7 +35,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.9.1">
+    <link rel="stylesheet" href="css/main.css?v=1.9.2">
 
 </head>
 
@@ -299,7 +299,9 @@
                         <button type="button" id="fm-move-new-folder-btn" class="fm-move-new-folder-btn" onclick="createFolderInMoveModal()" title="선택한 위치에 새 폴더 만들기">
                             <i class="fa-solid fa-folder-plus"></i> 새 폴더
                         </button>
-                        <i class="fa-solid fa-xmark" style="cursor:pointer;" onclick="closeMoveModal()"></i>
+                        <button type="button" class="zen-modal-icon-close" onclick="closeMoveModal()" aria-label="닫기" title="닫기 (Esc)">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
                 </div>
                 <div id="fm-dest-list" class="fm-modal-body" onclick="event.stopPropagation()">
@@ -345,7 +347,9 @@
                         <button type="button" id="tabSpecialChar2" class="spec-tab-btn" onclick="switchSpecTab(2)">특수키2</button>
                         <button type="button" id="tabSpecialChar3" class="spec-tab-btn" onclick="switchSpecTab(3)">이모티콘</button>
                     </div>
-                    <i class="fa-solid fa-xmark" style="cursor:pointer; color: var(--text-muted); padding: 4px;" onclick="closeSpecialCharModal()"></i>
+                    <button type="button" class="zen-modal-icon-close" onclick="closeSpecialCharModal()" aria-label="닫기" title="닫기 (Esc)">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
                 <div id="specialCharGrid" class="spec-grid" style="padding: 10px 12px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; max-height: 220px; overflow-y: auto;">
                     <!-- 35개 문자 렌더링 -->
@@ -512,7 +516,9 @@
                     <i class="fa-solid fa-file-pdf" style="color: #ef4444; font-size: 18px;"></i>
                     <span id="pdf-modal-title-text">불러올 PDF 페이지 선택</span>
                 </span>
-                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 19px; color: var(--text-muted); transition: color 0.2s;" id="pdf-modal-close-icon" title="닫기"></i>
+                <button type="button" class="zen-modal-icon-close" id="pdf-modal-close-icon" title="닫기" aria-label="닫기">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
 
             <!-- 컨트롤 툴바 (전체선택 & 범위지정) -->
@@ -566,10 +572,12 @@
                         <i class="fa-brands fa-markdown" style="color: var(--accent); font-size: 19px;"></i> 마크다운 단축키 안내
                     </span>
                     <div class="md-help-subtitle">
-                        <i class="fa-solid fa-lightbulb" style="color: #f59e0b; margin-right: 4px;"></i>입력 후 <b>Space</b>를 누르면 서식이 즉시 적용됩니다.
+                        입력 후 <b>Space</b>를 누르면 서식이 즉시 적용됩니다.
                     </div>
                 </div>
-                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeMarkdownHelpModal()"></i>
+                <button type="button" class="zen-modal-icon-close" onclick="closeMarkdownHelpModal()" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
             <div class="fm-modal-body md-help-body">
                 <table class="md-help-table">
@@ -690,9 +698,9 @@
                     </tbody>
                 </table>
             </div>
-            <div class="fm-modal-footer" style="padding: 12px 18px; justify-content: flex-end; display: flex;">
-                <button type="button" style="max-width: 80px; height: 38px; background: var(--accent); color: var(--accent-contrast); font-weight: 700; font-size: 13.5px; border-radius: 8px; cursor: pointer;" onclick="closeMarkdownHelpModal()">
-                    확인
+            <div class="fm-modal-footer md-help-footer">
+                <button type="button" class="zen-settings-done-btn" onclick="closeMarkdownHelpModal()">
+                    닫기
                 </button>
             </div>
         </div>
@@ -705,7 +713,9 @@
                 <span style="font-size: 15.5px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
                     <i class="fa-solid fa-link" style="color: var(--accent);"></i> <span id="link-modal-title-text">하이퍼링크 연결</span>
                 </span>
-                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeLinkInsertModal()"></i>
+                <button type="button" class="zen-modal-icon-close" onclick="closeLinkInsertModal()" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
             <div class="fm-modal-body link-modal-body" onclick="event.stopPropagation()">
                 <div id="link-modal-selected-badge" class="link-selected-badge" style="display: none;">
@@ -781,20 +791,22 @@
 
     <!-- 🎯 [V4.5.6] 모든 데이터 초기화 전 보안 폴더 검사 & Zen 경고 모달 -->
     <div id="reset-confirm-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeResetConfirmModal()">
-        <div class="fm-modal" style="max-width: 440px; width: 92vw; border-radius: 16px;">
+        <div class="fm-modal" style="max-width: 440px; width: 92vw;">
             <div class="fm-modal-header" style="padding: 16px 20px;">
                 <span id="reset-modal-title" style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: #ef4444;">
                     <i class="fa-solid fa-triangle-exclamation"></i> 데이터 초기화 경고
                 </span>
-                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 18px; color: var(--text-muted);" onclick="closeResetConfirmModal()"></i>
+                <button type="button" class="zen-modal-icon-close" onclick="closeResetConfirmModal()" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
             <div class="fm-modal-body" style="padding: 20px 22px; max-height: 70vh;">
                 <!-- 보안 폴더에 자료가 있을 때만 강조 표시되는 경고 배너 -->
-                <div id="reset-security-warning-box" style="display: none; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+                <div id="reset-security-warning-box" style="display: none; background: rgba(198, 138, 43, 0.12); border: 1px solid rgba(198, 138, 43, 0.35); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
                     <div style="display: flex; align-items: flex-start; gap: 12px;">
-                        <i class="fa-solid fa-lock" style="font-size: 22px; color: #f59e0b; margin-top: 2px;"></i>
+                        <i class="fa-solid fa-lock" style="font-size: 20px; color: #c68a2b; margin-top: 2px;"></i>
                         <div style="flex: 1;">
-                            <div style="font-weight: 700; color: #f59e0b; margin-bottom: 4px; font-size: 14.5px;">
+                            <div style="font-weight: 700; color: #c68a2b; margin-bottom: 4px; font-size: 14.5px;">
                                 보안 폴더에 중요 자료가 보관되어 있습니다!
                             </div>
                             <div id="reset-security-count-desc" style="font-size: 13px; color: var(--text-main); line-height: 1.5;">
@@ -802,7 +814,7 @@
                             </div>
                         </div>
                     </div>
-                    <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted); line-height: 1.45; border-top: 1px dashed rgba(245, 158, 11, 0.3); padding-top: 8px;">
+                    <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted); line-height: 1.45; border-top: 1px dashed rgba(198, 138, 43, 0.3); padding-top: 8px;">
                         주의: 초기화를 진행하면 암호화된 <strong>보안 폴더의 모든 비밀 자료도 함께 영구 삭제</strong>되며 절대 복구할 수 없습니다.
                     </div>
                 </div>
@@ -994,7 +1006,7 @@
             <div class="zen-settings-footer">
                 <div class="zen-settings-app-badge">
                     <i class="fa-solid fa-note-sticky"></i>
-                    <span>ZenNotes V1.9.1</span>
+                    <span>ZenNotes V1.9.2</span>
                 </div>
                 <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
                     닫기
@@ -1290,20 +1302,45 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.9.1"></script>
-    <script src="js/db.js?v=1.9.1"></script>
-    <script src="js/ui.js?v=1.9.1"></script>
-    <script src="js/editor.js?v=1.9.1"></script>
-    <script src="js/file_manager.js?v=1.9.1"></script>
-    <script src="js/io.js?v=1.9.1"></script>
-    <script src="js/auth.js?v=1.9.1"></script>
-    <script src="js/zen_bridge.js?v=1.9.1"></script>
+    <!-- 🎯 [V1.9.2] 통합 Zen 확인 / 알림 / 입력 다이얼로그 (OS confirm/alert/prompt 전면 대체) -->
+    <div id="zen-dialog-modal" class="fm-modal-overlay zen-dialog-overlay" style="display: none; z-index: 1000020;" onclick="if(event.target===this) closeActiveZenDialog(false);">
+        <div id="zen-dialog-card" class="fm-modal zen-dialog-card" role="dialog" aria-modal="true" aria-labelledby="zen-dialog-title" onclick="event.stopPropagation()">
+            <div class="fm-modal-header zen-dialog-header">
+                <span id="zen-dialog-title-wrap" class="zen-dialog-title-wrap">
+                    <i id="zen-dialog-icon" class="fa-solid fa-circle-info"></i>
+                    <span id="zen-dialog-title">확인</span>
+                </span>
+                <button type="button" id="zen-dialog-close-btn" class="zen-modal-icon-close" onclick="closeActiveZenDialog(false)" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="fm-modal-body zen-dialog-body" onclick="event.stopPropagation()">
+                <div id="zen-dialog-message" class="zen-dialog-message"></div>
+                <div id="zen-dialog-input-wrap" class="zen-dialog-input-wrap" style="display: none;">
+                    <input type="text" id="zen-dialog-input" class="link-field-input" autocomplete="off">
+                </div>
+            </div>
+            <div class="fm-modal-footer zen-dialog-footer" onclick="event.stopPropagation()">
+                <button type="button" id="zen-dialog-cancel-btn" class="zen-dialog-btn zen-dialog-btn-cancel">취소</button>
+                <button type="button" id="zen-dialog-confirm-btn" class="zen-dialog-btn zen-dialog-btn-confirm">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/globals.js?v=1.9.2"></script>
+    <script src="js/db.js?v=1.9.2"></script>
+    <script src="js/ui.js?v=1.9.2"></script>
+    <script src="js/editor.js?v=1.9.2"></script>
+    <script src="js/file_manager.js?v=1.9.2"></script>
+    <script src="js/io.js?v=1.9.2"></script>
+    <script src="js/auth.js?v=1.9.2"></script>
+    <script src="js/zen_bridge.js?v=1.9.2"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.9.1");
+            console.log("[ZenNotes] 현재 버전: V1.9.2");
             console.log("=========================================");
         });
     </script>
