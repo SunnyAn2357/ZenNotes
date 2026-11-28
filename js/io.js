@@ -901,7 +901,34 @@ function parseSharedNoteJson(rawContent, fileName = "") {
   try {
     const cleaned = rawContent.replace(/^\uFEFF/, "");
     const parsed = JSON.parse(cleaned);
-    if (!parsed || (parsed.type !== "MYNoteShare" && parsed.type !== "ZenMemo")) {
+    if (!parsed) return null;
+
+    if (
+      parsed.type === "MYNoteShareBundle" &&
+      Array.isArray(parsed.notes) &&
+      parsed.notes.length > 0
+    ) {
+      const notes = parsed.notes
+        .filter((item) => item && typeof item === "object")
+        .map((item, idx) => {
+          const itemTitle =
+            (item.title && String(item.title).trim()) ||
+            `공유 받은 노트 ${idx + 1}`;
+          return {
+            type: "MYNoteShare",
+            title: itemTitle,
+            content: typeof item.content === "string" ? item.content : "",
+            plainText: typeof item.plainText === "string" ? item.plainText : "",
+          };
+        });
+      if (notes.length === 0) return null;
+      return {
+        type: "MYNoteShareBundle",
+        notes,
+      };
+    }
+
+    if (parsed.type !== "MYNoteShare" && parsed.type !== "ZenMemo") {
       return null;
     }
     const baseName = fileName ? fileName.replace(/\.(myns|json)$/i, "") : "";
@@ -1086,6 +1113,132 @@ async function exportMemoByIdAsMYNS(memoId) {
   return await saveExportBlob(blob, `${safeTitle}.myns`, "application/json", "MY 노트 공유 문서 (*.myns)", ".myns");
 }
 
+async function exportMemosByIdsAsMYNS(memoIds) {
+  const uniqueIds = Array.isArray(memoIds)
+    ? Array.from(new Set(memoIds.filter((id) => id !== null && id !== undefined)))
+    : [];
+  if (uniqueIds.length === 0) return false;
+  if (uniqueIds.length === 1) {
+    const ok = await exportMemoByIdAsMYNS(uniqueIds[0]);
+    if (ok && typeof clearSidebarMultiSelect === "function") {
+      clearSidebarMultiSelect();
+      if (typeof loadMemoList === "function") loadMemoList(false);
+    }
+    return ok;
+  }
+
+  closeAllPanelsMobile();
+  if (typeof forceSaveImmediate === "function") forceSaveImmediate();
+  if (!db) return false;
+
+  const targetRecords = await new Promise((resolve) => {
+    const tx = db.transaction(["memos"], "readonly");
+    const store = tx.objectStore("memos");
+    const results = new Array(uniqueIds.length).fill(null);
+    uniqueIds.forEach((id, idx) => {
+      store.get(id).onsuccess = (e) => {
+        const rec = e.target.result;
+        if (rec && rec.type !== "folder" && !rec.isPermanentlyDeleted) {
+          results[idx] = rec;
+        }
+      };
+    });
+    tx.oncomplete = () => resolve(results.filter(Boolean));
+    tx.onerror = () => resolve([]);
+  });
+
+  if (targetRecords.length === 0) return false;
+
+  const encryptedFlags = [];
+  for (const m of targetRecords) {
+    const isUnderSecurity =
+      m.parentId !== null && typeof checkIsUnderSecurity === "function"
+        ? await checkIsUnderSecurity(m.parentId)
+        : false;
+    const isEnc =
+      isUnderSecurity ||
+      String(m.content || "").startsWith("ZENENC::") ||
+      String(m.plainText || "").startsWith("ZENENC::");
+    encryptedFlags.push(isEnc);
+  }
+
+  if (encryptedFlags.some(Boolean)) {
+    if (typeof currentSecKey === "undefined" || !currentSecKey) {
+      if (typeof showToast === "function") showToast("보안 폴더 잠금을 먼저 해제해주세요.");
+      return false;
+    }
+    if (
+      !(await zenConfirm(
+        "선택한 노트 중 보안 폴더 노트가 포함되어 있습니다.\n일반 공유 파일(.myns)로 내보내시겠습니까?",
+        { title: "보안 노트 내보내기", confirmText: "내보내기", warning: true },
+      ))
+    ) {
+      return false;
+    }
+  }
+
+  const notes = [];
+  const hasCur = typeof currentMemoId !== "undefined" && currentMemoId !== null;
+  for (let i = 0; i < targetRecords.length; i++) {
+    const m = targetRecords[i];
+    const isCurActive = hasCur && Number(m.id) === Number(currentMemoId);
+    let contentHtml = isCurActive && typeof getHtmlWithSelectState === "function"
+      ? getHtmlWithSelectState()
+      : (m.content || "");
+    let plainText = isCurActive && typeof quill !== "undefined" && quill
+      ? quill.getText()
+      : (m.plainText || "");
+
+    if (String(contentHtml).startsWith("ZENENC::")) {
+      contentHtml = await decryptData(contentHtml, currentSecKey);
+    }
+    if (String(plainText).startsWith("ZENENC::")) {
+      plainText = await decryptData(plainText, currentSecKey);
+    }
+    if (!plainText && contentHtml) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = contentHtml;
+      plainText = tmp.textContent || tmp.innerText || "";
+    }
+
+    const titleStr = (m.title && String(m.title).trim()) || "제목 없는 노트";
+    const tags = typeof extractHashTags === "function" ? extractHashTags(plainText) : [];
+    notes.push({
+      schemaVersion: 1,
+      type: "MYNoteShare",
+      app: "MY 노트",
+      title: titleStr,
+      tags,
+      createdAt: m.createdAt || m.updatedAt || Date.now(),
+      updatedAt: m.updatedAt || Date.now(),
+      content: contentHtml,
+      plainText,
+    });
+  }
+
+  const shareBundle = {
+    schemaVersion: 2,
+    type: "MYNoteShareBundle",
+    app: "MY 노트",
+    count: notes.length,
+    exportedAt: Date.now(),
+    notes,
+  };
+
+  const jsonString = JSON.stringify(shareBundle, null, 2);
+  const firstSafeTitle = sanitizeExportFileName(notes[0].title);
+  const fileName = `${firstSafeTitle} 외 ${notes.length - 1}건.myns`;
+
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+  const saved = await saveExportBlob(blob, fileName, "application/json", "MY 노트 공유 문서 (*.myns)", ".myns");
+  if (saved && typeof clearSidebarMultiSelect === "function") {
+    clearSidebarMultiSelect();
+    if (typeof loadMemoList === "function") loadMemoList(false);
+  }
+  return saved;
+}
+
 window.__zenPendingSharedFiles = window.__zenPendingSharedFiles || [];
 window.__zenAppDbReady = window.__zenAppDbReady || false;
 let __zenFlushingSharedFiles = false;
@@ -1111,6 +1264,51 @@ async function importSharedNotePayload(rawContent, fileName = "") {
   }
 
   try {
+    if (parsed.type === "MYNoteShareBundle" && Array.isArray(parsed.notes)) {
+      let firstOpenId = null;
+      let createdCount = 0;
+      let dupCount = 0;
+      const baseTime = Date.now();
+
+      for (let i = 0; i < parsed.notes.length; i++) {
+        const item = parsed.notes[i];
+        const duplicateMemo = await findDuplicateSharedNote(item);
+        if (duplicateMemo) {
+          dupCount++;
+          if (!firstOpenId) firstOpenId = duplicateMemo.id;
+        } else {
+          const newId = await saveSharedNoteToDesktop(
+            item.title,
+            item.content,
+            item.plainText,
+            baseTime + i,
+          );
+          createdCount++;
+          if (!firstOpenId && newId) firstOpenId = newId;
+        }
+      }
+
+      if (typeof loadMemoList === "function") loadMemoList(true);
+      if (typeof updateUnsyncedCount === "function") updateUnsyncedCount();
+      if (firstOpenId && typeof loadMemo === "function") {
+        loadMemo(firstOpenId);
+      }
+      if (firstOpenId && typeof revealMemoInSidebarTree === "function") {
+        revealMemoInSidebarTree(firstOpenId);
+      }
+      if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+      if (typeof showToast === "function") {
+        if (createdCount > 0 && dupCount > 0) {
+          showToast(`공유 노트 ${createdCount}건을 임시 폴더에 열었습니다. (동일 노트 ${dupCount}건 제외)`);
+        } else if (createdCount > 0) {
+          showToast(`공유 노트 ${createdCount}건을 임시 폴더에 열었습니다.`);
+        } else {
+          showToast(`모두 기존 노트와 동일해 첫 번째 노트를 열었습니다. (${dupCount}건)`);
+        }
+      }
+      return firstOpenId;
+    }
+
     const duplicateMemo = await findDuplicateSharedNote(parsed);
     if (duplicateMemo) {
       if (typeof loadMemoList === "function") loadMemoList(true);
@@ -1193,6 +1391,7 @@ async function flushPendingSharedFiles() {
 
 window.exportMYNS = exportMYNS;
 window.exportMemoByIdAsMYNS = exportMemoByIdAsMYNS;
+window.exportMemosByIdsAsMYNS = exportMemosByIdsAsMYNS;
 window.sanitizeExportFileName = sanitizeExportFileName;
 window.normalizeNoteContentForCompare = normalizeNoteContentForCompare;
 window.findDuplicateSharedNote = findDuplicateSharedNote;
@@ -3670,7 +3869,9 @@ async function insertFileIntoCurrentMemo(file) {
       if (typeof showToast === "function") showToast("올바른 MY 노트 공유 파일(.myns)이 아닙니다.");
       return;
     }
-    const textToInsert = parsedShare.plainText || parsedShare.title || "";
+    const textToInsert = parsedShare.type === "MYNoteShareBundle" && Array.isArray(parsedShare.notes)
+      ? parsedShare.notes.map((n) => `[${n.title || "노트"}]\n${n.plainText || ""}`).join("\n\n---\n\n")
+      : (parsedShare.plainText || parsedShare.title || "");
     const range = (typeof quill !== "undefined" && quill.getSelection()) || {
       index: typeof quill !== "undefined" ? Math.max(0, quill.getLength() - 1) : 0
     };

@@ -14,15 +14,15 @@
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)'; window.ZEN_DESKTOP_ONLY = false;</script>
 
     <!-- ADS 파비콘 및 iOS 홈 화면 아이콘 풀세트 (GitHub Pages ./ 상대경로) -->
-    <link rel="icon" href="./favicon.ico?v=1.9.3" sizes="48x48">
-    <link rel="icon" href="./favicon.svg?v=1.9.3" type="image/svg+xml">
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.9.3">
-    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.9.3">
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.9.3">
+    <link rel="icon" href="./favicon.ico?v=1.9.4" sizes="48x48">
+    <link rel="icon" href="./favicon.svg?v=1.9.4" type="image/svg+xml">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.9.4">
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.9.4">
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.9.4">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="ZenNotes">
-    <link rel="manifest" href="./manifest.json?v=1.9.3">
+    <link rel="manifest" href="./manifest.json?v=1.9.4">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -35,8 +35,8 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.9.3">
-    <link rel="stylesheet" href="css/mobile.css?v=1.9.3">
+    <link rel="stylesheet" href="css/main.css?v=1.9.4">
+    <link rel="stylesheet" href="css/mobile.css?v=1.9.4">
 
 </head>
 
@@ -128,18 +128,6 @@
                     <div id="recent-notes-submenu" class="recent-notes-submenu" style="display: flex;"></div>
 
                     <div class="left-menu-divider"></div>
-
-                    <!-- 📂 [V4.5.2] 폴더 관리 일원화 그룹 -->
-                    <div class="left-menu-item left-menu-folder-item" id="left-menu-folder-btn" onclick="openCurrentNoteMoveModal()" title="현재 열린 노트의 소속 폴더 확인 및 다른 폴더로 이동">
-                        <div class="left-menu-item-main">
-                            <i class="fa-solid fa-folder-tree"></i>
-                            <div class="left-menu-folder-texts">
-                                <span class="left-menu-folder-title">현재 폴더 및 이동</span>
-                                <span id="left-menu-current-path" class="left-menu-folder-path">위치: ZenNotes(Z:) &gt; 임시 폴더</span>
-                            </div>
-                        </div>
-                        <i class="fa-solid fa-arrow-right-arrow-left left-menu-action-icon"></i>
-                    </div>
 
                     <button type="button" class="left-menu-item" onclick="closeLeftNoteMenu(); openFileManager();" title="전체 폴더/파일 탐색 및 관리 열기">
                         <div class="left-menu-item-main">
@@ -371,7 +359,7 @@
             <button class="toggle-btn auth-toggle-btn miryang-bi-btn" id="btn-auth" title="로그인(추후 지원)">
                 <img src="./miryang_bi.png" alt="밀양시 BI" class="miryang-bi-icon">
             </button>
-            <button type="button" class="zen-mobile-auth-btn" id="btn-auth-mobile" title="클라우드 로그인" aria-label="클라우드 로그인">
+            <button type="button" class="zen-mobile-auth-btn" id="btn-auth-mobile" title="Google 로그인" aria-label="Google 로그인">
                 <span class="zen-mobile-auth-gicon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="14" height="14">
                         <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.55-.2-2.27H12v4.3h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.26-2.08 3.56-5.15 3.56-8.65z"/>
@@ -380,9 +368,41 @@
                         <path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.28 6.61l4 3.1C6.23 6.86 8.88 4.75 12 4.75z"/>
                     </svg>
                 </span>
-                <span class="zen-mobile-auth-dot" aria-hidden="true"></span>
                 <span id="btn-auth-mobile-label">로그인</span>
+                <span class="zen-mobile-auth-dot" aria-hidden="true"></span>
             </button>
+        </div>
+
+        <div class="util-section util-note-section">
+            <div class="util-title">노트 관리</div>
+            <button type="button" class="util-btn util-note-move-card" id="right-note-move-btn" onclick="openCurrentNoteMoveModal()" title="현재 노트의 소속 폴더 확인 및 이동">
+                <span class="util-btn-left util-note-move-left">
+                    <i class="fa-solid fa-folder-tree"></i>
+                    <span class="util-note-move-texts">
+                        <span class="btn-text">폴더 이동</span>
+                        <span id="right-note-current-path" class="util-note-path">위치: 임시 폴더</span>
+                    </span>
+                </span>
+                <i class="fa-solid fa-arrow-right-arrow-left util-note-move-arrow" aria-hidden="true"></i>
+            </button>
+            <div class="util-note-grid">
+                <button type="button" class="util-btn util-note-card" id="right-note-pin-btn" onclick="toggleCurrentNotePinFromRightPane()">
+                    <i class="fa-solid fa-thumbtack"></i>
+                    <span class="btn-text" id="right-note-pin-label">상단 고정</span>
+                </button>
+                <button type="button" class="util-btn util-note-card" id="right-note-copy-btn" onclick="copyCurrentNoteContentFromRightPane()">
+                    <i class="fa-regular fa-copy"></i>
+                    <span class="btn-text">본문 복사</span>
+                </button>
+                <button type="button" class="util-btn util-note-card" id="right-note-dup-btn" onclick="duplicateCurrentNoteFromRightPane()">
+                    <i class="fa-regular fa-clone"></i>
+                    <span class="btn-text">복제</span>
+                </button>
+                <button type="button" class="util-btn util-note-card util-btn-danger-soft" id="right-note-del-btn" onclick="deleteCurrentNoteFromRightPane()">
+                    <i class="fa-regular fa-trash-can"></i>
+                    <span class="btn-text">삭제</span>
+                </button>
+            </div>
         </div>
 
         <div class="util-section">
@@ -1021,7 +1041,7 @@
             <div class="zen-settings-footer">
                 <div class="zen-settings-app-badge">
                     <i class="fa-solid fa-note-sticky"></i>
-                    <span>ZenNotes V1.9.3</span>
+                    <span>ZenNotes V1.9.4</span>
                 </div>
                 <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
                     닫기
@@ -1342,20 +1362,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.9.3"></script>
-    <script src="js/db.js?v=1.9.3"></script>
-    <script src="js/ui.js?v=1.9.3"></script>
-    <script src="js/editor.js?v=1.9.3"></script>
-    <script src="js/file_manager.js?v=1.9.3"></script>
-    <script src="js/io.js?v=1.9.3"></script>
-    <script src="js/auth.js?v=1.9.3"></script>
-    <script src="js/zen_bridge.js?v=1.9.3"></script>
+    <script src="js/globals.js?v=1.9.4"></script>
+    <script src="js/db.js?v=1.9.4"></script>
+    <script src="js/ui.js?v=1.9.4"></script>
+    <script src="js/editor.js?v=1.9.4"></script>
+    <script src="js/file_manager.js?v=1.9.4"></script>
+    <script src="js/io.js?v=1.9.4"></script>
+    <script src="js/auth.js?v=1.9.4"></script>
+    <script src="js/zen_bridge.js?v=1.9.4"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.9.3");
+            console.log("[ZenNotes] 현재 버전: V1.9.4");
             console.log("=========================================");
         });
     </script>

@@ -1252,10 +1252,10 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     width: 285px;
     min-width: 285px;
     background: var(--surface);
-    padding: 20px 16px calc(22px + env(safe-area-inset-bottom)) 16px;
+    padding: 18px 16px calc(20px + env(safe-area-inset-bottom)) 16px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
     overflow-y: auto;
     transition: transform 0.25s ease-in-out;
 }
@@ -1268,7 +1268,12 @@ body.light-theme .col-right {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 4px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+body.light-theme .right-pane-header {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07);
 }
 
 .miryang-bi-btn {
@@ -1406,11 +1411,126 @@ body.light-theme .util-btn-share .util-ext-badge {
     color: var(--accent);
 }
 
+.util-note-section {
+    gap: 8px;
+}
+
+.util-note-move-card {
+    padding: 10px 12px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.util-note-move-card:hover {
+    background: var(--surface-hover);
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+body.light-theme .util-note-move-card {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+body.light-theme .util-note-move-card:hover {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.14);
+}
+
+.util-note-move-left {
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.util-note-move-texts {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    text-align: left;
+}
+
+.util-note-path {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    max-width: 175px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.util-note-move-arrow {
+    font-size: 12px !important;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.util-note-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.util-note-card {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    text-align: center;
+}
+
+.util-note-card i {
+    font-size: 13.5px;
+}
+
+.util-note-card:hover {
+    background: var(--surface-hover);
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+body.light-theme .util-note-card {
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+body.light-theme .util-note-card:hover {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.14);
+}
+
+.util-note-card.is-pinned {
+    background: rgba(120, 169, 255, 0.12);
+    border-color: rgba(120, 169, 255, 0.28);
+    color: var(--accent);
+}
+
+.util-note-card.is-pinned i {
+    color: var(--accent);
+}
+
+body.light-theme .util-note-card.is-pinned {
+    background: rgba(37, 99, 235, 0.08);
+    border-color: rgba(37, 99, 235, 0.22);
+}
+
+.util-note-card.is-disabled {
+    opacity: 0.48;
+}
+
 .util-export-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 4px;
+    gap: 3px;
+    padding: 5px;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.025);
     border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1422,7 +1542,7 @@ body.light-theme .util-export-list {
 }
 
 .util-btn-export {
-    padding: 8px 10px;
+    padding: 8.5px 10px;
     border-radius: 8px;
 }
 
@@ -1446,7 +1566,7 @@ body.light-theme .util-mgmt-section {
     justify-content: center;
     align-items: center;
     gap: 6px;
-    padding: 12px 8px;
+    padding: 13px 8px;
     border-radius: 11px;
     font-size: 12.5px;
     font-weight: 600;
@@ -6625,6 +6745,28 @@ body.light-theme .sidebar-context-menu {
 
 .sidebar-ctx-toggle.is-on::after {
     transform: translateX(12px);
+}
+
+.sidebar-context-header {
+    padding: 6px 10px 5px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+    user-select: none;
+}
+
+.sidebar-context-item.is-disabled,
+.sidebar-context-item:disabled {
+    opacity: 0.42;
+    cursor: default;
+}
+
+.sidebar-context-item.is-disabled:hover,
+.sidebar-context-item:disabled:hover {
+    background: transparent;
 }
 
 .sidebar-context-divider {

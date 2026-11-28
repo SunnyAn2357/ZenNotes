@@ -35,6 +35,9 @@ function toggleRightPane() {
   if (rp.classList.contains("is-closed")) {
     rp.classList.remove("is-closed");
     gb.style.display = "none";
+    if (typeof updateLeftMenuCurrentFolderPath === "function") {
+      updateLeftMenuCurrentFolderPath();
+    }
     // [수정된 부분] 모바일에서 우측 패널 열 때 투명 방어막(오버레이) 켜기
     if (!window.ZEN_DESKTOP_ONLY && window.innerWidth <= 768) {
       const ov = document.getElementById("mobile-overlay");
@@ -90,7 +93,13 @@ document.addEventListener(
     if (
       (inMainMulti || inTrashMulti) &&
       !e.target.closest(".memo-item") &&
-      !e.target.closest(".memo-actions-wrap")
+      !e.target.closest(".memo-actions-wrap") &&
+      !e.target.closest(".tree-row-note") &&
+      !e.target.closest(".tree-row-actions") &&
+      !e.target.closest(".tree-pin-toggle-btn") &&
+      !e.target.closest("#sidebar-context-menu") &&
+      !e.target.closest("#fm-move-modal") &&
+      !e.target.closest("#zen-dialog-modal")
     ) {
       e.preventDefault(); // 원래 하려던 동작(텍스트박스 포커스 등) 취소
       e.stopPropagation(); // 클릭 이벤트가 버튼(새 노트 작성 등)으로 전달되는 것을 완벽히 차단
@@ -714,14 +723,16 @@ function handleLaunchParams() {
   }
 }
 
-// --- [추가] 모바일 롱프레스 다중선택 함수 ---
+// --- [추가] 롱프레스 다중선택 함수 (데스크톱 & 모바일 공용) ---
 function startPress(e, memoId, isTrash) {
-  if (e.target.closest(".memo-actions-wrap")) return; // 메뉴 터치는 무시
+  if (e.target.closest(".memo-actions-wrap, .tree-row-actions, .tree-pin-toggle-btn")) return; // 메뉴/핀 터치는 무시
   if (e.type === "touchstart" && e.touches.length > 1) return; // 멀티터치 무시
 
+  cancelPress();
   isPressTriggered = false;
   pressTimer = setTimeout(() => {
     isPressTriggered = true;
+    window.__zenLastPressAt = Date.now();
     if (navigator.vibrate) navigator.vibrate(50); // 모바일 진동 피드백
 
     if (isTrash) {
@@ -752,6 +763,11 @@ function cancelPress() {
   if (pressTimer) {
     clearTimeout(pressTimer);
     pressTimer = null;
+  }
+  if (isPressTriggered) {
+    setTimeout(() => {
+      isPressTriggered = false;
+    }, 160);
   }
 }
 
@@ -2101,8 +2117,11 @@ function toggleRecentNotesSubmenu(e) {
 }
 
 function updateLeftMenuCurrentFolderPath() {
-  const pathEl = document.getElementById("left-menu-current-path");
-  if (!pathEl || !db) return;
+  const legacyPathEl = document.getElementById("left-menu-current-path");
+  const rightPathEl = document.getElementById("right-note-current-path");
+  const pinBtn = document.getElementById("right-note-pin-btn");
+  const pinLabel = document.getElementById("right-note-pin-label");
+  if ((!legacyPathEl && !rightPathEl && !pinBtn) || !db) return;
 
   const driveLabel = typeof getRootDriveLabel === "function" ? getRootDriveLabel() : "MY 노트(M:)";
   const tx = db.transaction(["memos"], "readonly");
@@ -2113,35 +2132,145 @@ function updateLeftMenuCurrentFolderPath() {
       if (m.type === "folder") folderMap.set(m.id, m);
     });
 
-    function buildPathStr(folderId) {
-      if (folderId === null || folderId === undefined) return driveLabel;
+    function buildPathInfo(folderId) {
+      if (folderId === null || folderId === undefined) {
+        return { full: driveLabel, short: "임시 폴더", isUnderSecurity: false };
+      }
       const parts = [];
       let curr = folderId;
+      let isUnderSecurity = false;
       const visited = new Set();
       while (curr) {
         if (visited.has(curr)) break;
         visited.add(curr);
         const f = folderMap.get(curr);
         if (!f) break;
+        if (f.isSystem === "security" || curr === globalSecurityFolderId) {
+          isUnderSecurity = true;
+        }
         const fTitle = f.isSystem === "desktop" ? "임시 폴더" : f.title;
         parts.unshift(fTitle);
         curr = f.parentId;
       }
-      return parts.length > 0 ? `${driveLabel} > ${parts.join(" > ")}` : `${driveLabel} > 임시 폴더`;
+      const joined = parts.length > 0 ? parts.join(" > ") : "임시 폴더";
+      return {
+        full: `${driveLabel} > ${joined}`,
+        short: joined,
+        isUnderSecurity,
+      };
     }
 
-    if (currentMemoId) {
-      const curMemo = allData.find((m) => m.id === Number(currentMemoId));
-      if (curMemo) {
-        pathEl.innerText = `위치: ${buildPathStr(curMemo.parentId)}`;
-        return;
+    const curMemo = currentMemoId
+      ? allData.find((m) => m.id === Number(currentMemoId))
+      : null;
+
+    if (curMemo) {
+      const info = buildPathInfo(curMemo.parentId);
+      if (legacyPathEl) legacyPathEl.innerText = `위치: ${info.full}`;
+      if (rightPathEl) rightPathEl.innerText = `위치: ${info.short}`;
+      if (pinBtn && pinLabel) {
+        const isPinned = !!curMemo.pinnedAt;
+        pinBtn.classList.toggle("is-pinned", isPinned);
+        pinBtn.classList.toggle("is-disabled", info.isUnderSecurity);
+        pinBtn.dataset.underSecurity = info.isUnderSecurity ? "true" : "false";
+        pinLabel.textContent = isPinned ? "고정 해제" : "상단 고정";
       }
+      return;
     }
 
     const fallbackFolderId =
       targetNewMemoFolderId !== null ? targetNewMemoFolderId : globalDesktopFolderId;
-    pathEl.innerText = `위치: ${buildPathStr(fallbackFolderId)}`;
+    const fallbackInfo = buildPathInfo(fallbackFolderId);
+    if (legacyPathEl) legacyPathEl.innerText = `위치: ${fallbackInfo.full}`;
+    if (rightPathEl) rightPathEl.innerText = `위치: ${fallbackInfo.short}`;
+    if (pinBtn && pinLabel) {
+      pinBtn.classList.remove("is-pinned");
+      pinBtn.classList.toggle("is-disabled", fallbackInfo.isUnderSecurity);
+      pinBtn.dataset.underSecurity = fallbackInfo.isUnderSecurity ? "true" : "false";
+      pinLabel.textContent = "상단 고정";
+    }
   };
+}
+
+function toggleCurrentNotePinFromRightPane() {
+  if (typeof forceSaveImmediate === "function") forceSaveImmediate();
+  setTimeout(() => {
+    if (!currentMemoId) {
+      showToast("먼저 노트를 작성해 주세요.");
+      return;
+    }
+    const pinBtn = document.getElementById("right-note-pin-btn");
+    if (pinBtn && pinBtn.dataset.underSecurity === "true") {
+      showToast("보안 폴더 노트는 상단 고정할 수 없습니다.");
+      return;
+    }
+    if (typeof toggleNotePinFromSidebar === "function") {
+      toggleNotePinFromSidebar(currentMemoId);
+    }
+    setTimeout(updateLeftMenuCurrentFolderPath, 80);
+  }, 30);
+}
+
+async function copyCurrentNoteContentFromRightPane() {
+  const rawText = (typeof quill !== "undefined" && quill)
+    ? quill.getText().replace(/\n+$/, "")
+    : "";
+  if (!rawText || !rawText.trim()) {
+    showToast("복사할 본문 내용이 없습니다.");
+    return;
+  }
+  let copied = false;
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    try {
+      await navigator.clipboard.writeText(rawText);
+      copied = true;
+    } catch { }
+  }
+  if (!copied) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = rawText;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      copied = document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch { }
+  }
+  if (copied) {
+    showToast("노트 본문을 복사했습니다.");
+    closeAllPanelsMobile();
+  } else {
+    showToast("클립보드 복사에 실패했습니다.");
+  }
+}
+
+function duplicateCurrentNoteFromRightPane() {
+  if (typeof forceSaveImmediate === "function") forceSaveImmediate();
+  setTimeout(() => {
+    if (!currentMemoId) {
+      showToast("먼저 노트를 작성해 주세요.");
+      return;
+    }
+    closeAllPanelsMobile();
+    if (typeof duplicateNoteFromSidebar === "function") {
+      duplicateNoteFromSidebar(currentMemoId);
+    }
+    showToast("현재 노트를 복제했습니다.");
+  }, 30);
+}
+
+function deleteCurrentNoteFromRightPane() {
+  if (!currentMemoId) {
+    showToast("삭제할 노트가 없습니다.");
+    return;
+  }
+  closeAllPanelsMobile();
+  if (typeof deleteSidebarNoteWithConfirm === "function") {
+    deleteSidebarNoteWithConfirm(currentMemoId);
+  }
 }
 
 function openCurrentNoteMoveModal() {
@@ -2238,6 +2367,10 @@ window.recordRecentNote = recordRecentNote;
 window.updateRecentNoteTitleIfExist = updateRecentNoteTitleIfExist;
 window.removeRecentNote = removeRecentNote;
 window.updateLeftMenuCurrentFolderPath = updateLeftMenuCurrentFolderPath;
+window.toggleCurrentNotePinFromRightPane = toggleCurrentNotePinFromRightPane;
+window.copyCurrentNoteContentFromRightPane = copyCurrentNoteContentFromRightPane;
+window.duplicateCurrentNoteFromRightPane = duplicateCurrentNoteFromRightPane;
+window.deleteCurrentNoteFromRightPane = deleteCurrentNoteFromRightPane;
 
 // ============================================================================
 // 🎯 [V4.6.0] Zen 환경설정 모달 제어 엔진

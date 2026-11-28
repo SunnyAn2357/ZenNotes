@@ -72,16 +72,16 @@ function updateMobileAuthBtnUI(isOnline) {
   const mobileLabel = document.getElementById("btn-auth-mobile-label");
   if (!mobileBtn) return;
 
+  if (mobileLabel) mobileLabel.textContent = "로그인";
+
   if (fbUser) {
     mobileBtn.classList.add("is-logged-in");
-    if (mobileLabel) mobileLabel.textContent = "연동됨";
-    const emailPart = fbUser.email ? `${fbUser.email} 연동 중` : "클라우드 연동 중";
+    const emailPart = fbUser.email ? `${fbUser.email} 로그인됨` : "Google 계정 로그인됨";
     mobileBtn.setAttribute("title", `${emailPart} (탭하여 로그아웃)`);
     mobileBtn.setAttribute("aria-label", `${emailPart} (탭하여 로그아웃)`);
   } else {
     mobileBtn.classList.remove("is-logged-in");
-    if (mobileLabel) mobileLabel.textContent = "로그인";
-    const tip = isOnline === false ? "클라우드 로그인" : "클라우드 로그인 (Google)";
+    const tip = isOnline === false ? "Google 로그인 (오프라인)" : "Google 로그인";
     mobileBtn.setAttribute("title", tip);
     mobileBtn.setAttribute("aria-label", tip);
   }

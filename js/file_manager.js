@@ -2452,6 +2452,11 @@ document.getElementById("fm-move-confirm-btn").onclick = async () => {
     updateFmBottomBar();
     stepsToPop++;
   }
+  if (isMultiSelectMode) {
+    isMultiSelectMode = false;
+    selectedMemos.clear();
+    if (currentMemoId) selectedMemos.add(currentMemoId);
+  }
 
   // 3. 브라우저 히스토리 롤백 (이중 뒤로가기를 한 번에 처리)
   if (stepsToPop > 0) {
@@ -2482,10 +2487,12 @@ function openFileManager() {
   lastFmSelectedId = null;
   loadMemoList(false);
 
-  document.getElementById("col-left").style.display = "none";
-  document.getElementById("col-right").style.display = "none";
-  document.getElementById("mobile-left-menu-btn").style.display = "none";
-  document.getElementById("global-menu-btn").style.display = "none";
+  document.getElementById("col-left")?.style && (document.getElementById("col-left").style.display = "none");
+  document.getElementById("col-right")?.style && (document.getElementById("col-right").style.display = "none");
+  const mobileMenuBtn = document.getElementById("mobile-left-menu-btn");
+  if (mobileMenuBtn) mobileMenuBtn.style.display = "none";
+  const globalMenuBtn = document.getElementById("global-menu-btn");
+  if (globalMenuBtn) globalMenuBtn.style.display = "none";
 
   document.getElementById("file-manager-pane").style.display = "flex";
   const fmSearchInp = document.getElementById("fm-search-input");
@@ -2517,10 +2524,14 @@ function closeFileManager(fromPopstate = false) {
   if (fmPane) fmPane.style.display = "none";
   if (typeof closeSidebarContextMenu === "function") closeSidebarContextMenu();
 
-  document.getElementById("col-left").style.display = "";
-  document.getElementById("col-right").style.display = "";
-  document.getElementById("mobile-left-menu-btn").style.display = "";
-  document.getElementById("global-menu-btn").style.display = "flex";
+  const colLeft = document.getElementById("col-left");
+  if (colLeft) colLeft.style.display = "";
+  const colRight = document.getElementById("col-right");
+  if (colRight) colRight.style.display = "";
+  const mobileMenuBtn = document.getElementById("mobile-left-menu-btn");
+  if (mobileMenuBtn) mobileMenuBtn.style.display = "";
+  const globalMenuBtn = document.getElementById("global-menu-btn");
+  if (globalMenuBtn) globalMenuBtn.style.display = "flex";
 
   isFmMultiSelectMode = false;
   fmSelectedItems.clear();
@@ -3362,8 +3373,160 @@ function toggleNotePinFromSidebar(noteId) {
     const fmPane = document.getElementById("file-manager-pane");
     if (fmPane && fmPane.style.display === "flex") loadFileManager(currentFmFolderId);
     updateUnsyncedCount();
+    if (typeof updateLeftMenuCurrentFolderPath === "function") updateLeftMenuCurrentFolderPath();
     if (typeof showToast === "function") {
       showToast(isNowPinned ? "상단에 고정되었습니다." : "고정이 해제되었습니다.");
+    }
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+  };
+}
+
+function clearSidebarMultiSelect() {
+  isMultiSelectMode = false;
+  selectedMemos.clear();
+  if (currentMemoId) selectedMemos.add(currentMemoId);
+}
+
+function batchToggleNotePinFromSidebar(noteIds, shouldPin) {
+  closeSidebarContextMenu();
+  if (!db || !Array.isArray(noteIds) || noteIds.length === 0) return;
+  let updatedCount = 0;
+  const now = Date.now();
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  noteIds.forEach((tid, idx) => {
+    store.get(tid).onsuccess = (ev) => {
+      const m = ev.target.result;
+      if (!m || m.type === "folder") return;
+      if (shouldPin) {
+        if (!m.pinnedAt) {
+          m.pinnedAt = now + idx;
+          updatedCount++;
+          store.put(m);
+        }
+      } else {
+        if (m.pinnedAt) {
+          delete m.pinnedAt;
+          updatedCount++;
+          store.put(m);
+        }
+      }
+    };
+  });
+  tx.oncomplete = () => {
+    clearSidebarMultiSelect();
+    loadMemoList(true);
+    const fmPane = document.getElementById("file-manager-pane");
+    if (fmPane && fmPane.style.display === "flex") loadFileManager(currentFmFolderId);
+    updateUnsyncedCount();
+    if (typeof updateLeftMenuCurrentFolderPath === "function") updateLeftMenuCurrentFolderPath();
+    if (typeof showToast === "function") {
+      const n = updatedCount || noteIds.length;
+      showToast(shouldPin ? `${n}개 노트를 상단에 고정했습니다.` : `${n}개 노트의 고정을 해제했습니다.`);
+    }
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+  };
+}
+
+function batchDuplicateNotesFromSidebar(noteIds) {
+  closeSidebarContextMenu();
+  if (!db || !Array.isArray(noteIds) || noteIds.length === 0) return;
+  let createdCount = 0;
+  const now = Date.now();
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  noteIds.forEach((tid, idx) => {
+    store.get(tid).onsuccess = (ev) => {
+      const m = ev.target.result;
+      if (!m || m.type === "folder") return;
+      const clone = {
+        ...m,
+        syncId: typeof generateSyncId === "function" ? generateSyncId() : `${Date.now().toString(36)}_${idx}`,
+        title: `(사본) ${m.title || "제목 없는 노트"}`,
+        updatedAt: now + idx,
+      };
+      delete clone.pinnedAt;
+      delete clone.id;
+      store.add(clone).onsuccess = () => {
+        createdCount++;
+      };
+    };
+  });
+  tx.oncomplete = () => {
+    clearSidebarMultiSelect();
+    loadMemoList(true);
+    const fmPane = document.getElementById("file-manager-pane");
+    if (fmPane && fmPane.style.display === "flex") loadFileManager(currentFmFolderId);
+    updateUnsyncedCount();
+    if (typeof showToast === "function") {
+      showToast(`${createdCount || noteIds.length}개 노트의 복사본을 만들었습니다.`);
+    }
+    if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
+  };
+}
+
+function openMoveModalForIds(ids) {
+  closeSidebarContextMenu();
+  const targetIds = Array.isArray(ids) ? ids.filter((v) => v !== null && v !== undefined) : [];
+  if (targetIds.length === 0) return;
+  movingItemIds = targetIds;
+  selectedDestId = undefined;
+
+  const itemMenu = document.getElementById("fm-item-menu");
+  const globalMenu = document.getElementById("fm-global-menu");
+  if (itemMenu) itemMenu.classList.remove("is-active");
+  if (globalMenu) globalMenu.classList.remove("is-active");
+
+  history.pushState({ mode: "modal" }, "");
+  document.getElementById("fm-move-modal").style.display = "flex";
+  renderDestFolders();
+}
+
+async function batchDeleteSidebarNotesWithConfirm(noteIds) {
+  guardSecurityCrudAutoLock(1000);
+  closeSidebarContextMenu();
+  const targets = Array.isArray(noteIds) ? noteIds.filter((v) => v !== null && v !== undefined) : [];
+  if (targets.length === 0) return;
+  const msg = targets.length > 1
+    ? `선택한 ${targets.length}개의 노트를 휴지통으로 보내시겠습니까?`
+    : "이 노트를 휴지통으로 보내시겠습니까?";
+  if (
+    !(await zenConfirm(msg, {
+      title: "노트 삭제",
+      confirmText: "삭제",
+      danger: true,
+    }))
+  ) {
+    return;
+  }
+
+  const tx = db.transaction(["memos"], "readwrite");
+  const store = tx.objectStore("memos");
+  const undoPayload = [];
+  targets.forEach((tid) => {
+    store.get(tid).onsuccess = (ev) => {
+      const m = ev.target.result;
+      if (m && !m.isSystem) {
+        m.isDeleted = true;
+        m.deletedAt = Date.now();
+        m.updatedAt = Date.now();
+        store.put(m);
+        undoPayload.push({ id: m.id, action: "restore" });
+      }
+    };
+  });
+  tx.oncomplete = () => {
+    clearSidebarMultiSelect();
+    ensureActiveMemoNotDeleted();
+    loadMemoList(true);
+    const fmPane = document.getElementById("file-manager-pane");
+    if (fmPane && fmPane.style.display === "flex") loadFileManager(currentFmFolderId);
+    const trashPane = document.getElementById("trash-pane");
+    if (trashPane && trashPane.classList.contains("is-open")) loadTrashList();
+    updateUnsyncedCount();
+    if (typeof updateLeftMenuCurrentFolderPath === "function") updateLeftMenuCurrentFolderPath();
+    if (undoPayload.length > 0 && typeof showToast === "function") {
+      showToast(`${undoPayload.length}개 노트가 휴지통으로 이동되었습니다.`, undoPayload);
     }
     if (typeof triggerBackgroundSync === "function") triggerBackgroundSync();
   };
@@ -3585,23 +3748,88 @@ function openSidebarContextMenu(e, meta) {
       items.push({ label: "휴지통으로", icon: "fa-solid fa-trash-can", danger: true, fn: () => deleteSidebarFolderWithConfirm(meta.id) });
     }
   } else if (meta.kind === "note") {
-    if (!meta.isUnderSecurity) {
-      items.push({
-        label: meta.isPinned ? "고정 해제" : "상단 고정",
-        icon: "fa-solid fa-thumbtack",
-        fn: () => toggleNotePinFromSidebar(meta.id),
+    const activeBatchIds =
+      surface === "sidebar" &&
+      (isMultiSelectMode || selectedMemos.size > 1) &&
+      selectedMemos.size > 1
+        ? Array.from(selectedMemos)
+        : null;
+
+    if (activeBatchIds) {
+      const cache = st.getCache();
+      const noteMap = new Map();
+      if (cache && Array.isArray(cache.activeAll)) {
+        cache.activeAll.forEach((entry) => {
+          if (entry && entry.type !== "folder") noteMap.set(entry.id, entry);
+        });
+      }
+      const pinnableIds = activeBatchIds.filter((id) => {
+        const rec = noteMap.get(id);
+        if (!rec) return false;
+        if (cache && typeof cache.isUnderSecuritySync === "function" && cache.isUnderSecuritySync(rec.parentId)) {
+          return false;
+        }
+        return true;
       });
+      items.push({ header: true, label: `${activeBatchIds.length}개 노트 선택됨` });
+      if (pinnableIds.length > 0) {
+        const shouldPin = pinnableIds.some((id) => !(noteMap.get(id) && noteMap.get(id).pinnedAt));
+        items.push({
+          label: shouldPin ? "상단 고정" : "고정 해제",
+          icon: "fa-solid fa-thumbtack",
+          fn: () => batchToggleNotePinFromSidebar(pinnableIds, shouldPin),
+        });
+      } else {
+        items.push({ label: "상단 고정", icon: "fa-solid fa-thumbtack", disabled: true });
+      }
+      items.push({ label: "이름 바꾸기", icon: "fa-solid fa-pen", disabled: true });
+      items.push({
+        label: "복사본 만들기",
+        icon: "fa-solid fa-copy",
+        fn: () => batchDuplicateNotesFromSidebar(activeBatchIds),
+      });
+      items.push({
+        label: "이동하기",
+        icon: "fa-solid fa-arrows-up-down-left-right",
+        fn: () => openMoveModalForIds(activeBatchIds),
+      });
+      if (window.ZEN_DESKTOP_ONLY || window.innerWidth > 768) {
+        items.push({
+          label: "공유하기 (.myns)",
+          icon: "fa-solid fa-share-nodes",
+          fn: () => {
+            if (typeof exportMemosByIdsAsMYNS === "function") {
+              exportMemosByIdsAsMYNS(activeBatchIds);
+            }
+          },
+        });
+      }
+      items.push({ divider: true });
+      items.push({
+        label: "휴지통으로",
+        icon: "fa-solid fa-trash-can",
+        danger: true,
+        fn: () => batchDeleteSidebarNotesWithConfirm(activeBatchIds),
+      });
+    } else {
+      if (!meta.isUnderSecurity) {
+        items.push({
+          label: meta.isPinned ? "고정 해제" : "상단 고정",
+          icon: "fa-solid fa-thumbtack",
+          fn: () => toggleNotePinFromSidebar(meta.id),
+        });
+      }
+      items.push({ label: "이름 바꾸기", icon: "fa-solid fa-pen", fn: () => fmRename(meta.id) });
+      items.push({ label: "복사본 만들기", icon: "fa-solid fa-copy", fn: () => duplicateNoteFromSidebar(meta.id) });
+      items.push({ label: "이동하기", icon: "fa-solid fa-arrows-up-down-left-right", fn: () => openMoveModal(meta.id) });
+      if (window.ZEN_DESKTOP_ONLY || window.innerWidth > 768) {
+        items.push({ label: "공유하기 (.myns)", icon: "fa-solid fa-share-nodes", fn: () => {
+          if (typeof exportMemoByIdAsMYNS === "function") exportMemoByIdAsMYNS(meta.id);
+        }});
+      }
+      items.push({ divider: true });
+      items.push({ label: "휴지통으로", icon: "fa-solid fa-trash-can", danger: true, fn: () => deleteSidebarNoteWithConfirm(meta.id) });
     }
-    items.push({ label: "이름 바꾸기", icon: "fa-solid fa-pen", fn: () => fmRename(meta.id) });
-    items.push({ label: "복사본 만들기", icon: "fa-solid fa-copy", fn: () => duplicateNoteFromSidebar(meta.id) });
-    items.push({ label: "이동하기", icon: "fa-solid fa-arrows-up-down-left-right", fn: () => openMoveModal(meta.id) });
-    if (window.ZEN_DESKTOP_ONLY || window.innerWidth > 768) {
-      items.push({ label: "공유하기 (.myns)", icon: "fa-solid fa-share-nodes", fn: () => {
-        if (typeof exportMemoByIdAsMYNS === "function") exportMemoByIdAsMYNS(meta.id);
-      }});
-    }
-    items.push({ divider: true });
-    items.push({ label: "휴지통으로", icon: "fa-solid fa-trash-can", danger: true, fn: () => deleteSidebarNoteWithConfirm(meta.id) });
   } else {
     items.push({ label: "새 폴더 만들기", icon: "fa-solid fa-folder-plus", fn: () => createFolderAction(null) });
     if (surface !== "fm") {
@@ -3621,6 +3849,13 @@ function openSidebarContextMenu(e, meta) {
 
   menu.innerHTML = "";
   items.forEach((it) => {
+    if (it.header) {
+      const hdr = document.createElement("div");
+      hdr.className = "sidebar-context-header";
+      hdr.textContent = it.label;
+      menu.appendChild(hdr);
+      return;
+    }
     if (it.divider) {
       const div = document.createElement("div");
       div.className = "sidebar-context-divider";
@@ -3629,16 +3864,21 @@ function openSidebarContextMenu(e, meta) {
     }
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `sidebar-context-item${it.danger ? " is-danger" : ""}${it.checked ? " is-checked" : ""}`;
+    btn.className = `sidebar-context-item${it.danger ? " is-danger" : ""}${it.checked ? " is-checked" : ""}${it.disabled ? " is-disabled" : ""}`;
     const toggleHtml = typeof it.toggle === "boolean"
       ? `<span class="sidebar-ctx-toggle${it.toggle ? " is-on" : ""}" aria-hidden="true"></span>`
       : "";
     btn.innerHTML = `<i class="${it.icon}"></i><span>${escapeTreeHtml(it.label)}</span>${toggleHtml}`;
-    btn.onclick = (ev) => {
-      ev.stopPropagation();
-      closeSidebarContextMenu();
-      it.fn();
-    };
+    if (it.disabled) {
+      btn.disabled = true;
+      btn.setAttribute("aria-disabled", "true");
+    } else {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        closeSidebarContextMenu();
+        it.fn();
+      };
+    }
     menu.appendChild(btn);
   });
 
@@ -3829,7 +4069,9 @@ function handleSidebarNoteRowClick(e, memoId, parentId) {
   closeSidebarContextMenu();
   if (isPressTriggered) {
     isPressTriggered = false;
-    return;
+    if (window.__zenLastPressAt && Date.now() - window.__zenLastPressAt < 750) {
+      return;
+    }
   }
 
   const isCtrl = e.ctrlKey || e.metaKey;
@@ -3860,11 +4102,13 @@ function handleSidebarNoteRowClick(e, memoId, parentId) {
         selectedMemos.add(displayedMemos[i].id);
       }
     }
+    isMultiSelectMode = selectedMemos.size > 1;
     loadMemoList(false);
   } else if (isCtrl) {
     if (selectedMemos.has(memoId)) selectedMemos.delete(memoId);
     else selectedMemos.add(memoId);
     lastSelectedId = memoId;
+    isMultiSelectMode = selectedMemos.size > 1;
     loadMemoList(false);
   } else {
     if (window.getSelection) {
@@ -4199,9 +4443,8 @@ function createTreeNoteElement(m, depth, cache, options) {
     ? `<button type="button" class="tree-pin-toggle-btn" title="고정 해제" aria-label="고정 해제" onclick="event.stopPropagation(); toggleNotePinFromSidebar(${m.id});"><i class="fa-solid fa-thumbtack"></i></button>`
     : '<i class="fa-regular fa-file-lines tree-note-icon" aria-hidden="true"></i>';
 
-  const pinBadge = (!opts.inPinnedSection && !isUnderTrash && m.pinnedAt)
-    ? '<i class="fa-solid fa-thumbtack tree-inline-pin" title="고정된 노트"></i>'
-    : "";
+  // [V1.9.4] 일반 노트 행에서는 핀 아이콘이 옮겨다니며 오클릭되지 않도록 제거 (상단 고정 영역 핀 및 ... 메뉴 사용)
+  const pinBadge = "";
   const pathBadge = opts.searchPath
     ? `<span class="tree-search-path">${escapeTreeHtml(opts.searchPath)}</span>`
     : "";
@@ -4219,9 +4462,6 @@ function createTreeNoteElement(m, depth, cache, options) {
     }
     actionsHtml += '<button type="button" class="tree-act-btn tree-act-more" title="더보기 메뉴"><i class="fa-solid fa-ellipsis"></i></button>';
   } else {
-    const quickPinHtml = (opts.inPinnedSection || opts.isUnderSecurity)
-      ? ""
-      : `<button type="button" class="tree-act-btn ${m.pinnedAt ? "is-pinned" : ""}" title="${m.pinnedAt ? "고정 해제" : "상단 고정"}" onclick="event.stopPropagation(); toggleNotePinFromSidebar(${m.id});"><i class="fa-solid fa-thumbtack"></i></button>`;
     const fmExtraActions = isFm
       ? `
         <button type="button" class="tree-act-btn tree-act-rename" title="이름 바꾸기"><i class="fa-solid fa-pen"></i></button>
@@ -4230,7 +4470,6 @@ function createTreeNoteElement(m, depth, cache, options) {
       `
       : "";
     actionsHtml = `
-      ${quickPinHtml}
       ${fmExtraActions}
       <button type="button" class="tree-act-btn tree-act-more" title="더보기 메뉴"><i class="fa-solid fa-ellipsis"></i></button>
     `;
@@ -4318,6 +4557,14 @@ function createTreeNoteElement(m, depth, cache, options) {
   };
 
   li.oncontextmenu = (e) => {
+    const isTouchContext =
+      (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) ||
+      isPressTriggered ||
+      (window.__zenLastPressAt && Date.now() - window.__zenLastPressAt < 750);
+    if (isTouchContext) {
+      e.preventDefault();
+      return;
+    }
     openSidebarContextMenu(e, isUnderTrash
       ? { kind: "trashNote", id: m.id, surface }
       : {
@@ -4930,6 +5177,11 @@ window.toggleNotePinFromSidebar = toggleNotePinFromSidebar;
 window.duplicateNoteFromSidebar = duplicateNoteFromSidebar;
 window.deleteSidebarNoteWithConfirm = deleteSidebarNoteWithConfirm;
 window.deleteSidebarFolderWithConfirm = deleteSidebarFolderWithConfirm;
+window.clearSidebarMultiSelect = clearSidebarMultiSelect;
+window.batchToggleNotePinFromSidebar = batchToggleNotePinFromSidebar;
+window.batchDuplicateNotesFromSidebar = batchDuplicateNotesFromSidebar;
+window.openMoveModalForIds = openMoveModalForIds;
+window.batchDeleteSidebarNotesWithConfirm = batchDeleteSidebarNotesWithConfirm;
 window.getSidebarExpandedIds = () => Array.from(sidebarExpandedSet);
 
 function loadTrashList() {

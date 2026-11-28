@@ -2224,23 +2224,62 @@
 
         const merged = [];
         const usedIds = new Set();
-        const providerLabel = { upstage: "Solar API", anthropic: "Claude API", openai: "OpenAI API", google: "Gemini API" };
+        const providerLabel = {
+            google: "Gemini API",
+            openai: "OpenAI API",
+            anthropic: "Claude API",
+            upstage: "Solar API"
+        };
+        const providerGroupName = {
+            google: "Google Gemini",
+            openai: "OpenAI GPT",
+            anthropic: "Anthropic Claude",
+            upstage: "Upstage Solar"
+        };
+        const providerRank = {
+            google: 0,
+            openai: 1,
+            anthropic: 2,
+            upstage: 3
+        };
 
-        // 실시간 응답 목록 순서(가장 위)를 최우선 배치하고, 알려진 모델 메타 보강
-        const knownMap = new Map(MYAI_DEFAULT_MODELS.map((m) => [m.id, m]));
+        const knownOrderMap = new Map();
+        const knownMap = new Map();
+        MYAI_DEFAULT_MODELS.forEach((m, idx) => {
+            knownMap.set(m.id, m);
+            knownOrderMap.set(m.id, idx);
+        });
+
         liveMap.forEach((entry, id) => {
             if (usedIds.has(id)) return;
             usedIds.add(id);
             const known = knownMap.get(id);
-            merged.push(
-                known || {
+            const resolvedProvider = (known && known.provider) || entry.provider || resolveMyAiProvider(id);
+            const groupTitle = providerGroupName[resolvedProvider] || "기타 AI 모델";
+            if (known) {
+                merged.push({ ...known, provider: resolvedProvider, group: groupTitle });
+            } else {
+                merged.push({
                     id,
                     name: entry.displayName && entry.displayName !== id ? entry.displayName : formatLiveModelDisplayName(id),
-                    provider: entry.provider,
-                    group: "실시간 API 지원 모델",
-                    desc: `${providerLabel[entry.provider] || "Direct API"} · 사용 가능`
-                }
-            );
+                    provider: resolvedProvider,
+                    group: groupTitle,
+                    desc: `${providerLabel[resolvedProvider] || "Direct API"} · 사용 가능`
+                });
+            }
+        });
+
+        // 양 앱(MY 노트 / ZenNotes) 동일 결정적 정렬: Google Gemini -> OpenAI GPT -> Anthropic Claude -> Upstage Solar
+        merged.sort((a, b) => {
+            const ra = Object.prototype.hasOwnProperty.call(providerRank, a.provider) ? providerRank[a.provider] : 9;
+            const rb = Object.prototype.hasOwnProperty.call(providerRank, b.provider) ? providerRank[b.provider] : 9;
+            if (ra !== rb) return ra - rb;
+
+            const ka = knownOrderMap.has(a.id) ? knownOrderMap.get(a.id) : 9999;
+            const kb = knownOrderMap.has(b.id) ? knownOrderMap.get(b.id) : 9999;
+            if (ka !== kb) return ka - kb;
+
+            return String(b.id).localeCompare(String(a.id), undefined, { numeric: true, sensitivity: "base" });
         });
 
         if (merged.length > 0) {
@@ -2265,7 +2304,9 @@
                 const d = await r.json().catch(() => null);
                 (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "openai" }));
             }),
-            fetch(`https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models?key=${encodeURIComponent(key)}`).then(async (r) => {
+            fetch(`https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models?key=${encodeURIComponent(key)}`, {
+                headers: { "Authorization": `Bearer ${key}` }
+            }).then(async (r) => {
                 if (!r.ok) return;
                 const d = await r.json().catch(() => null);
                 (d?.models || []).forEach((m) => {
@@ -3385,6 +3426,7 @@
                         };
                     } else if (provider === "google") {
                         url = `https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
+                        headers["Authorization"] = `Bearer ${trimmedKey}`;
                         const parts = hasImages
                             ? [
                                 ...imageList.map((img) => ({

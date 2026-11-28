@@ -3449,7 +3449,8 @@ window.addEventListener("popstate", (e) => {
     if (trashPane.classList.contains("is-open")) {
         trashPane.classList.remove("is-open");
         if (rightPane.classList.contains("is-closed")) {
-            document.getElementById("mobile-overlay").classList.remove("is-active");
+            const mobOv = document.getElementById("mobile-overlay");
+            if (mobOv) mobOv.classList.remove("is-active");
         }
         return;
     }

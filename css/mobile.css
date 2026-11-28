@@ -116,7 +116,7 @@
     }
 
     .quill-wrapper {
-        padding-top: calc(72px + env(safe-area-inset-top)) !important;
+        padding-top: calc(64px + env(safe-area-inset-top)) !important;
     }
 
     .editor-header {
@@ -199,59 +199,59 @@
         scrollbar-width: none;
         /* 파이어폭스 스크롤바 숨김 */
 
-        /* 🎯 [V1.9.3] 모바일 툴바 아이콘(+25%) 및 버튼 간격(+10%+) 확대 */
-        padding: 8px 12px !important;
-        min-height: 52px !important;
+        /* 🎯 [V1.9.4] 모바일 툴바 재조정 (V1.9.2 대비 아이콘 +10%, 간격 +5%) */
+        padding: 6px 10px !important;
+        min-height: 42px !important;
         align-items: center;
-        gap: 10px !important;
+        gap: 7px !important;
         /* 그룹과 그룹 사이 틈 */
     }
 
     /* ===================================================
        🎯 [툴바 아이콘 여백/간격 최종 다이어트 & 정렬]
     =================================================== */
-    /* 🎯 1. 같은 그룹 내부 버튼끼리 4px, 그룹 간 10px */
+    /* 🎯 1. 같은 그룹 내부 버튼끼리 2px, 그룹 간 7px */
     .ql-toolbar.ql-snow .ql-formats {
         display: flex;
         align-items: center;
         margin: 0 !important;
-        gap: 4px !important;
+        gap: 2px !important;
         flex-wrap: nowrap !important;
         flex-shrink: 0;
     }
 
     .ql-toolbar.ql-snow .ql-formats::after {
-        right: -5px !important;
+        right: -4px !important;
     }
 
     .ql-toolbar.ql-snow button {
-        width: 36px !important;
-        height: 36px !important;
-        padding: 6px !important;
-        font-size: 19px !important;
+        width: 27px !important;
+        height: 27px !important;
+        padding: 4px !important;
+        font-size: 16px !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
     }
 
     .ql-toolbar.ql-snow button svg {
-        width: 20px !important;
-        height: 20px !important;
+        width: 17.5px !important;
+        height: 17.5px !important;
         flex-shrink: 0 !important;
     }
 
     .ql-toolbar.ql-snow button i {
-        font-size: 18px !important;
+        font-size: 15px !important;
     }
 
     .ql-toolbar.ql-snow .ql-color-picker {
-        width: 36px !important;
-        height: 36px !important;
+        width: 28px !important;
+        height: 28px !important;
     }
 
     .ql-toolbar.ql-snow .ql-color-picker .ql-picker-label {
-        width: 36px !important;
-        height: 36px !important;
+        width: 28px !important;
+        height: 28px !important;
         padding: 0 !important;
         display: inline-flex !important;
         align-items: center !important;
@@ -259,19 +259,19 @@
     }
 
     .ql-toolbar.ql-snow .ql-color-picker .ql-picker-label svg {
-        width: 21px !important;
-        height: 21px !important;
+        width: 18.5px !important;
+        height: 18.5px !important;
         flex-shrink: 0 !important;
     }
 
     .ql-toolbar.ql-snow .ql-picker.ql-align {
-        width: 36px !important;
-        height: 36px !important;
+        width: 27px !important;
+        height: 27px !important;
     }
 
     .ql-toolbar.ql-snow .ql-picker.ql-align .ql-picker-label {
-        width: 36px !important;
-        height: 36px !important;
+        width: 27px !important;
+        height: 27px !important;
         padding: 0 !important;
         display: inline-flex !important;
         align-items: center !important;
@@ -279,22 +279,22 @@
     }
 
     .ql-toolbar.ql-snow .ql-picker.ql-align .ql-picker-label svg {
-        width: 20px !important;
-        height: 20px !important;
+        width: 17.5px !important;
+        height: 17.5px !important;
         flex-shrink: 0 !important;
     }
 
     .ql-toolbar.ql-snow .ql-picker.ql-header {
-        width: 78px !important;
-        height: 36px !important;
-        font-size: 14.5px !important;
+        width: 68px !important;
+        height: 27px !important;
+        font-size: 13px !important;
     }
 
     .ql-toolbar.ql-snow .ql-picker.ql-header .ql-picker-label {
-        height: 36px !important;
+        height: 27px !important;
         display: inline-flex !important;
         align-items: center !important;
-        padding-left: 6px !important;
+        padding-left: 5px !important;
     }
 
     /* 크롬/사파리에서 지저분한 가로 스크롤바 안 보이게 숨김 */
@@ -539,21 +539,35 @@
         background: var(--surface-hover);
     }
 
+    #btn-auth-mobile.is-logged-in {
+        border-color: rgba(34, 197, 94, 0.45);
+    }
+
+    body.light-theme #btn-auth-mobile.is-logged-in {
+        border-color: rgba(34, 197, 94, 0.5);
+    }
+
+    #btn-auth-mobile .zen-mobile-auth-gicon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
     #btn-auth-mobile .zen-mobile-auth-dot {
         width: 7px;
         height: 7px;
         border-radius: 50%;
-        background: #22c55e;
-        display: none;
+        background: #ef4444;
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.16);
+        display: inline-block;
         flex-shrink: 0;
+        margin-left: 2px;
     }
 
     #btn-auth-mobile.is-logged-in .zen-mobile-auth-dot {
-        display: inline-block;
-    }
-
-    #btn-auth-mobile.is-logged-in .zen-mobile-auth-gicon {
-        display: none;
+        background: #22c55e;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
     }
 
     .tree-folder-count,
@@ -762,19 +776,19 @@
     }
 
     /* =========================================
-       2. 우측 메뉴창 간격 압축 (기존 설정 유지)
+       2. 우측 메뉴창 간격 재정돈 (3단 균형)
     ========================================= */
     .col-right {
-        gap: 40px !important;
-        padding-top: calc(24px + env(safe-area-inset-top)) !important;
+        gap: 14px !important;
+        padding-top: calc(20px + env(safe-area-inset-top)) !important;
     }
 
     .util-section {
         gap: 8px !important;
     }
 
-    .util-btn {
-        padding: 8px 10px !important;
+    .util-btn.util-btn-export {
+        padding: 8.5px 10px !important;
     }
 
     /* =========================================
