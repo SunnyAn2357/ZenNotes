@@ -170,8 +170,6 @@ button:hover {
 ============================================================================ */
 
 
-
-
 /* =========================== 마지막 줄===================================== */
 
 /* ============================================================================
@@ -179,8 +177,6 @@ button:hover {
    - 왼쪽 메뉴, 검색창, 파일 목록, 새 노트 작성 버튼 디자인
    - 주로 쓰이는 이름표: .col-left, .search-bar, .memo-item, .memo-actions 등
 ============================================================================ */
-
-
 
 
 /* =========================== 마지막 줄===================================== */
@@ -192,8 +188,6 @@ button:hover {
 ============================================================================ */
 
 
-
-
 /* =========================== 마지막 줄===================================== */
 
 /* ============================================================================
@@ -201,9 +195,6 @@ button:hover {
    - 제목 치는 곳, 굵게/기울임/색상 등 에디터 상단 조종석(툴바) 디자인
    - 주로 쓰이는 이름표: #memo-title-input, .ql-toolbar, .ql-picker 등
 ============================================================================ */
-
-
-
 
 
 /* =========================== 마지막 줄===================================== */
@@ -215,8 +206,6 @@ button:hover {
 ============================================================================ */
 
 
-
-
 /* =========================== 마지막 줄===================================== */
 
 /* ============================================================================
@@ -224,8 +213,6 @@ button:hover {
    - 전체 화면을 덮으며 나오는 팝업형 파일 브라우저 디자인
    - 주로 쓰이는 이름표: .file-manager-pane, .fm-header, .fm-bottom-bar 등
 ============================================================================ */
-
-
 
 
 /* =========================== 마지막 줄===================================== */
@@ -237,8 +224,6 @@ button:hover {
 ============================================================================ */
 
 
-
-
 /* =========================== 마지막 줄===================================== */
 
 /* ============================================================================
@@ -248,11 +233,7 @@ button:hover {
 ============================================================================ */
 
 
-
 /* =========================== 마지막 줄===================================== */
-
-
-
 
 
 /* ============================================================================
@@ -409,20 +390,6 @@ body.light-theme .update-toast-btn {
     color: #ffffff !important;
 }
 
-@media (max-width: 600px) {
-    .update-toast {
-        bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-        padding: 6px 12px;
-        gap: 8px;
-    }
-    .update-toast-text {
-        font-size: 12px;
-    }
-    .update-toast-btn {
-        padding: 5px 10px;
-        font-size: 11.5px;
-    }
-}
 
 /* ============================================================================
    🎯 [V4.9.4] 화면 확대·축소 초기화 토스트 팝업 (Zoom Reset Toast)
@@ -489,13 +456,6 @@ body.light-theme .update-toast-btn {
     transform: rotate(-180deg);
 }
 
-@media (max-width: 768px) {
-    #zen-zoom-reset-toast {
-        top: calc(24px + env(safe-area-inset-top)) !important;
-        font-size: 12px !important;
-        padding: 6px 14px !important;
-    }
-}
 
 @media print {
     #zen-zoom-reset-toast {
@@ -2954,7 +2914,6 @@ body.light-theme .ql-editor .hljs-variable {
 }
 
 
-
 /* ============================================================================
    🎯 [V4.0.3] 화이트 테마: 선 없는 미니멀리즘 + 원본 툴바 복원 + 선택 피드백 극대화
 ============================================================================ */
@@ -3382,12 +3341,6 @@ body.light-theme .fm-quick-btn.is-active {
     opacity: 1;
 }
 
-@media screen and (max-width: 520px) {
-    .fm-quick-btn {
-        padding: 5px 8px;
-        font-size: 12px;
-    }
-}
 
 .fm-crumb {
     cursor: pointer;
@@ -4034,670 +3987,7 @@ body.light-theme {
 }
 
 /* 🎯 모바일 전용 미디어쿼리 통합 (max-width: 768px) */
-@media screen and (max-width: 768px) {
-    /* 🎯 [추가] 모바일에서는 좁은 화면을 위해 검색창 여백 정돈 */
-    .fm-search-bar {
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-    }
 
-    /* 🎯 1. 모바일에서 파일관리창이 에디터와 함께 통째로 끌려 올라가는 현상 완벽 고정 (헤더 고정 효과) */
-    .file-manager-pane {
-        position: fixed !important;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        height: 100vh;
-        height: 100svh;
-        z-index: 2000;
-    }
-
-    .mobile-only {
-        display: flex !important;
-    }
-
-    .mobile-overlay {
-        display: block;
-    }
-
-    .mobile-overlay.is-active {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    /* [수정] 모바일 화면 전체 스크롤 및 상단 텍스트 가림막(방어막) */
-    /* 수정, 삭제, 교체 주의 - 모바일 상단 메뉴와 툴바 겹침 디버깅용 */
-    .col-center::before {
-        content: '';
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        /* 🎯 노치 디자인 안전 영역 추가 */
-        /* 🎯 62px 대신 64px로 설정하여 툴바와 2px 겹침 유도 */
-        height: calc(64px + env(safe-area-inset-top));
-        background-color: var(--bg);
-        /* 🎯 툴바(900)보다 높게 설정하여 뚫고 올라오는 현상 완벽 차단 */
-        z-index: 998;
-    }
-
-    #mobile-left-menu-btn {
-        top: calc(24px + env(safe-area-inset-top)) !important;
-        left: 10px !important;
-        z-index: 1002 !important;
-    }
-
-    #global-menu-btn {
-        top: calc(24px + env(safe-area-inset-top)) !important;
-        right: 10px !important;
-        z-index: 1002 !important;
-    }
-
-    .col-center {
-        width: 100%;
-        min-width: 100%;
-        overflow-y: auto !important;
-        display: block !important;
-        overscroll-behavior-y: none !important;
-        /* 당겨서 새로고침 차단 */
-
-        /* 🎯 [상단 방어막] 위로 스크롤할 때 상단 메뉴에 제목이 끼이는 것 방지 */
-        scroll-padding-top: calc(110px + env(safe-area-inset-top)) !important;
-
-        /* 🚀 [하단 방어막 추가!] 브라우저가 자동 스크롤할 때, 하단 툴바(약 45px) 뒤로 커서가 숨지 않도록 60px 여백 강제 확보! */
-        scroll-padding-bottom: 60px !important;
-    }
-
-    .quill-wrapper,
-    .ql-container.ql-snow {
-        display: block !important;
-        overflow-y: visible !important;
-        /* 에디터 내부의 좁은 스크롤은 끕니다 */
-        height: auto !important;
-    }
-
-    .quill-wrapper {
-        padding-top: calc(64px + env(safe-area-inset-top)) !important;
-    }
-
-    .editor-header {
-        position: fixed !important;
-        top: calc(24px + env(safe-area-inset-top)) !important;
-        left: 50px !important;
-        right: 125px !important;
-        width: auto !important;
-        max-width: calc(100vw - 175px) !important;
-        height: 36px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        overflow: hidden !important;
-        z-index: 999 !important;
-        background: transparent !important;
-    }
-
-    #memo-title-input {
-        width: 100% !important;
-        max-width: 100% !important;
-        height: 36px !important;
-        font-size: 17px !important;
-        font-weight: 600 !important;
-        padding: 0 4px !important;
-        background: transparent !important;
-        border: none !important;
-        outline: none !important;
-        white-space: nowrap !important;
-        overflow-x: hidden !important;
-        overflow-y: hidden !important;
-        text-overflow: ellipsis;
-        touch-action: pan-y;
-        scrollbar-width: none !important;
-    }
-
-    #memo-title-input:focus {
-        overflow-x: auto !important;
-        text-overflow: clip !important;
-        touch-action: pan-x;
-    }
-
-    #memo-title-input::-webkit-scrollbar {
-        display: none !important;
-    }
-
-    /* 수정, 삭제, 교체 주의 - 모바일 상단 메뉴와 툴바 겹침 디버깅용 */
-    .status-container {
-        position: fixed !important;
-        top: calc(24px + env(safe-area-inset-top)) !important;
-        height: 36px !important;
-        right: 48px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        z-index: 1001 !important;
-        pointer-events: auto !important;
-    }
-
-    /* [수정] 천장에 달라붙는(Sticky) & 1줄 가로 스크롤 편집 툴바 */
-    /* 수정, 삭제, 교체 주의 - 모바일 상단 메뉴와 툴바 겹침 디버깅용 */
-    .ql-toolbar.ql-snow {
-        position: sticky !important;
-        /* 🎯 방어막 높이에 맞춰 툴바 안착 위치 조정 */
-        top: calc(64px + env(safe-area-inset-top)) !important;
-        z-index: 900 !important;
-        /* 방어막(998) 아래에서 부드럽게 미끄러짐 */
-        background-color: var(--bg) !important;
-        border-bottom: 1px solid var(--border) !important;
-
-        /* 핵심: 무조건 1줄 강제하고, 넘치면 가로로 밀어서 볼 수 있게 만듦 */
-        display: flex !important;
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior-x: contain !important;
-        /* 🎯 핵심 추가: 브라우저 뒤로가기 스와이프 완벽 차단! */
-        scrollbar-width: none;
-        /* 파이어폭스 스크롤바 숨김 */
-
-        /* 🎯 상용앱 스타일: 위아래 여백을 조금 주고, 그룹 간 간격을 띄움 */
-        padding: 6px 10px !important;
-        align-items: center;
-        gap: 6px;
-        /* 그룹과 그룹 사이 틈 */
-    }
-
-    /* ===================================================
-       🎯 [툴바 아이콘 여백/간격 최종 다이어트 & 정렬]
-    =================================================== */
-    /* 🎯 1. 같은 그룹 내부 버튼끼리는 틈 없이 밀착 0px, 그룹 간격은 0px */
-    .ql-toolbar.ql-snow .ql-formats {
-        display: flex;
-        align-items: center;
-        margin: 0 !important;
-        gap: 0px !important;
-        /* 버튼 사이 틈 완벽 제거 */
-        flex-wrap: nowrap !important;
-        /* 화면이 좁아져도 한 그룹이 두 줄로 쪼개지지 않게 방어 */
-        flex-shrink: 0;
-        /* 버튼이 찌그러지지 않게 방어 */
-    }
-
-    /* 🎯 [새로 추가] 모바일 환경에 맞춰 구분선을 6px 간격의 정중앙으로 당겨옴 */
-    .ql-toolbar.ql-snow .ql-formats::after {
-        right: -1px !important;
-    }
-
-    /* 크롬/사파리에서 지저분한 가로 스크롤바 안 보이게 숨김 */
-    .ql-toolbar.ql-snow::-webkit-scrollbar {
-        display: none;
-    }
-
-    .ql-snow .ql-tooltip {
-        position: fixed !important;
-        top: 38% !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        margin: 0 !important;
-        z-index: 100000 !important;
-        width: calc(100% - 40px) !important;
-        max-width: 360px !important;
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8) !important;
-        box-sizing: border-box !important;
-    }
-
-    /* -------------------------------------------------------
-              모바일 팝업 설정
-    ------------------------------------------------------- */
-    /* 🎯 1. 툴바 감옥에 있는 원본 팝업은 폰 화면에서 영원히 투명인간 처리 */
-    .ql-toolbar.ql-snow .ql-picker.ql-expanded .ql-picker-options {
-        display: none !important;
-    }
-
-    /* 버튼에 생기던 보기 싫은 사각형 테두리 제거 */
-    .ql-toolbar.ql-snow .ql-picker.ql-expanded .ql-picker-label {
-        border: none !important;
-    }
-
-    /* 🎯 2. Body 최상단에 띄운 자유로운 독립 모달 (키보드, 툴바 다 씹어먹음) */
-    #zen-mobile-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 999999;
-    }
-
-    /* 🎯 3. 기획자님 요구사항: 팝업 밑선이 정확히 화면 정중앙(50vh)에 오도록! */
-    #zen-mobile-popup {
-        position: absolute;
-        bottom: 50vh;
-        /* 👈 밑선 중앙 배치 핵심 */
-        left: 50%;
-        transform: translateX(-50%);
-        /* 가로 중앙 정렬 */
-
-        background: var(--surface);
-        border-radius: 12px;
-        padding: 16px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        display: flex;
-        flex-wrap: wrap;
-        /* 기본은 여러 줄 허용 (색상표용) */
-        gap: 8px;
-        justify-content: center;
-    }
-
-    /* 🎯 4. [V1.9.2] 12색 Zen Editorial 팔레트 모바일 그리드 (2행 x 6열) */
-    #zen-mobile-popup.ql-color-picker,
-    #zen-mobile-popup.ql-background {
-        width: 268px;
-        padding: 12px;
-        gap: 8px;
-        border-radius: 14px;
-        justify-content: center;
-    }
-
-    /* 🎯 5. [여기가 추가되었습니다!] 정렬 & 헤더 팝업: 완벽한 1줄 강제 고정 */
-    #zen-mobile-popup.ql-align,
-    #zen-mobile-popup.ql-header {
-        flex-wrap: nowrap !important;
-        width: max-content !important;
-    }
-
-    /* 팝업 내부 버튼 공통 스타일 초기화 */
-    #zen-mobile-popup .ql-picker-item {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: none !important;
-        margin: 0 !important;
-        cursor: pointer;
-    }
-
-    /* 색상 버튼 스쿼클 통일 */
-    #zen-mobile-popup.ql-color-picker .ql-picker-item,
-    #zen-mobile-popup.ql-background .ql-picker-item {
-        width: 34px;
-        height: 34px;
-        border-radius: 9px;
-        border: 1px solid rgba(148, 163, 184, 0.28) !important;
-    }
-
-    #zen-mobile-popup.ql-color-picker .ql-picker-item:not([data-value]),
-    #zen-mobile-popup.ql-background .ql-picker-item:not([data-value]) {
-        background-color: var(--surface) !important;
-        background-image: linear-gradient(
-            to top right,
-            transparent calc(50% - 1px),
-            #ef4444 50%,
-            transparent calc(50% + 1px)
-        ) !important;
-    }
-
-    body.light-theme #zen-mobile-popup.ql-color-picker .ql-picker-item:not([data-value]),
-    body.light-theme #zen-mobile-popup.ql-background .ql-picker-item:not([data-value]) {
-        background-color: #ffffff !important;
-    }
-
-    /* 🎯 6. [여기가 수정되었습니다!] 정렬 & 헤더 버튼 큼직하게 + 찌그러짐 방지 */
-    #zen-mobile-popup.ql-align .ql-picker-item,
-    #zen-mobile-popup.ql-header .ql-picker-item {
-        min-width: 44px;
-        width: auto;
-        height: 40px;
-        padding: 0 11px;
-        border-radius: 9px;
-        font-size: 14px;
-        font-weight: 700;
-        flex-shrink: 0 !important;
-    }
-
-    /* 헤더 팝업 한글 라벨 */
-    #zen-mobile-popup.ql-header .ql-picker-item[data-value="1"]::before {
-        content: '제목 1';
-    }
-
-    #zen-mobile-popup.ql-header .ql-picker-item[data-value="2"]::before {
-        content: '제목 2';
-    }
-
-    #zen-mobile-popup.ql-header .ql-picker-item[data-value="3"]::before {
-        content: '제목 3';
-    }
-
-    #zen-mobile-popup.ql-header .ql-picker-item:not([data-value])::before {
-        content: '본문';
-    }
-
-    /*------------- 모바일 팝업 설정 끝 -------------------- */
-
-
-
-
-
-
-
-    /* 🎯 [투명 방석] 맨 밑바닥에 화면 절반(50vh) 크기의 공간을 강제로 만들어, 
-       어중간한 길이의 글도 무조건 키보드 위로 시원하게 끌어올릴 수 있게 만듭니다. */
-    .ql-editor {
-        padding: 8px 16px 50vh !important;
-        font-size: 16px;
-        min-height: 70vh;
-    }
-
-    .ql-editor.ql-blank::before {
-        left: 16px !important;
-        top: 8px !important;
-    }
-
-    .col-left {
-        position: fixed !important;
-        top: 0;
-        left: 0;
-        height: 100vh;
-        height: 100svh;
-        width: 285px !important;
-        min-width: 285px !important;
-        z-index: 1002;
-        transform: translateX(-100%);
-        transition: transform 0.25s ease-in-out;
-        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.5);
-    }
-
-    .sidebar-resizer {
-        display: none !important;
-    }
-
-    .tree-row {
-        height: 36px !important;
-        min-height: 36px !important;
-        font-size: 13.5px !important;
-    }
-
-    .tree-row-actions {
-        display: flex !important;
-    }
-
-    .tree-folder-count,
-    .tree-inline-pin,
-    .fm-row-meta {
-        display: none !important;
-    }
-
-    .col-left.is-mobile-open {
-        transform: translateX(0) !important;
-    }
-
-    
-
-    .col-right,
-    .trash-pane {
-        height: 100vh;
-        height: 100svh;
-        width: 285px !important;
-        min-width: 285px !important;
-        z-index: 1002;
-        box-shadow: -2px 0 12px rgba(0, 0, 0, 0.5);
-    }
-
-    #global-menu-btn {
-        z-index: 1000 !important;
-    }
-
-    /* [수정/추가] 모바일 터치 영역 최적화 (투명 방어막) */
-    /* 1. 상단 고정 버튼 (좌측 삼선: 사방 확장, 우측 삼점 & 일정관리: 인접 경계 겹침 없이 동일 수준 확장) */
-    #mobile-left-menu-btn::after {
-        content: '';
-        position: absolute;
-        top: -15px;
-        left: -15px;
-        right: -15px;
-        bottom: -12px;
-    }
-
-    #global-menu-btn::after {
-        content: '';
-        position: absolute;
-        top: -15px;
-        left: -2px;
-        right: -15px;
-        bottom: -12px;
-    }
-
-    .zen-send-schedule-btn {
-        position: relative;
-    }
-
-    .zen-send-schedule-btn::after {
-        content: '';
-        position: absolute;
-        top: -15px;
-        left: -8px;
-        right: -2px;
-        bottom: -12px;
-    }
-
-    /* 2. 우측 창 내부 (삼선, 로그인): 사방으로 15px 확장 (기준점 추가) */
-    #col-right .toggle-btn {
-        position: relative;
-    }
-
-    #col-right .toggle-btn::after {
-        content: '';
-        position: absolute;
-        top: -15px;
-        left: -15px;
-        right: -15px;
-        bottom: -12px;
-    }
-
-    /* 3. 좌측 창 '새 노트 작성': 상하로만 5px 확장 (기준점 추가) */
-    .col-left .new-note-btn {
-        position: relative;
-    }
-
-    .col-left .new-note-btn::after {
-        content: '';
-        position: absolute;
-        top: -8px;
-        bottom: -8px;
-        left: 0;
-        right: 0;
-    }
-
-    .trash-pane .nav-header .trash-hamburger {
-        display: none;
-    }
-
-    /* 1. 모바일 액션 메뉴 기준점 */
-    .memo-actions-wrap {
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        min-height: 30px;
-    }
-
-    /* 2. 삼점(더보기) 버튼: 기본 애니메이션 원천 차단 */
-    .btn-more {
-        position: absolute;
-        right: 0;
-        padding: 8px 10px;
-        color: var(--text-muted);
-        font-size: 14px;
-        transition: none;
-        /* 빛의 속도로 반응하기 위해 transition 제거 */
-    }
-
-    .btn-more:hover {
-        color: var(--accent) !important;
-    }
-
-    /* 3. 메뉴 그룹(핀/휴지통): 스르륵 애니메이션 기본 설정 */
-    .memo-actions {
-        display: flex !important;
-        gap: 4px !important;
-        align-items: center;
-        /* padding-right: 0px; */
-        margin-right: -2px !important;
-        opacity: 0;
-        visibility: hidden;
-        transform: translateX(10px);
-        transition: opacity 0.25s ease-out, transform 0.25s ease-out, visibility 0.25s ease-out;
-    }
-
-    /* 휴지통 패널 전용: 메뉴 위치 왼쪽으로 조정 */
-    #trash-list .memo-actions {
-        margin-right: -2px !important;
-    }
-
-    /* =========================================
-       [일반 노트] 메뉴 닫힘 상태
-       - 메뉴가 스르륵 사라지고 난 뒤(0.25초 후)에 삼점이 짠! 나타남
-    ========================================= */
-    .memo-actions-wrap:not(.is-pinned-state):not(.is-menu-open) .btn-more {
-        visibility: visible;
-        transition: visibility 0s linear 0.25s;
-        /* 메뉴 퇴장 완료까지 대기 */
-    }
-
-    .memo-actions-wrap:not(.is-pinned-state):not(.is-menu-open) .memo-actions {
-        pointer-events: none;
-    }
-
-    /* =========================================
-       [일반 노트] 메뉴 열림 상태
-       - 삼점은 빛의 속도로(0초) 즉시 투명화 (방해 금지)
-       - 삼점 사라진 빈자리에 메뉴가 스르륵 등장
-    ========================================= */
-    .memo-actions-wrap:not(.is-pinned-state).is-menu-open .btn-more {
-        visibility: hidden;
-        transition: none;
-        /* 딜레이 없이 즉각 소멸 */
-    }
-
-    .memo-actions-wrap:not(.is-pinned-state).is-menu-open .memo-actions {
-        opacity: 1;
-        visibility: visible;
-        transform: translateX(0);
-        pointer-events: auto;
-    }
-
-    /* =========================================
-       [고정된 노트] 공통 (클릭 경쟁 완전 차단)
-       - 삼점은 물리적으로 완전 삭제 (display: none)
-       - 스르륵 애니메이션 일절 금지 (transition: none)
-    ========================================= */
-    .memo-actions-wrap.is-pinned-state .btn-more {
-        display: none !important;
-    }
-
-    .memo-actions-wrap.is-pinned-state .memo-actions {
-        opacity: 1;
-        visibility: visible;
-        transform: translateX(0);
-        transition: none !important;
-        /* 압정은 움직이지 않음 */
-        pointer-events: auto;
-    }
-
-    /* 고정 닫힘: 휴지통 숨김, 핀만 보임 */
-    .memo-actions-wrap.is-pinned-state:not(.is-menu-open) .btn-delete {
-        display: none !important;
-    }
-
-    /* 고정 열림: 핀 옆에 휴지통이 퍽! 나타남 */
-    .memo-actions-wrap.is-pinned-state.is-menu-open .btn-delete {
-        display: block !important;
-    }
-
-    /* 4. 공통: 모바일 터치 영역 확보 */
-    .btn-delete,
-    .btn-pin,
-    .btn-restore,
-    .btn-hard-delete {
-        opacity: 0.9 !important;
-        padding: 8px !important;
-        /* 👈 터치 영역 - 기본 8px */
-        font-size: 14px !important;
-        /* 👈 아이콘 크기 - 기본 14px*/
-    }
-
-    /* =========================================
-       2. 우측 메뉴창 간격 압축 (기존 설정 유지)
-    ========================================= */
-    .col-right {
-        gap: 40px !important;
-        padding-top: calc(24px + env(safe-area-inset-top)) !important;
-    }
-
-    .util-section {
-        gap: 8px !important;
-    }
-
-    .util-btn {
-        padding: 8px 10px !important;
-    }
-
-    /* =========================================
-       3. 좌측/휴지통 노트 목록 간격 압축 (24px 기준선 완벽 일치)
-    ========================================= */
-    .nav-header {
-        padding: calc(24px + env(safe-area-inset-top)) 20px 12px !important;
-        gap: 16px !important;
-    }
-
-    .memo-item {
-        padding: 10px 12px !important;
-        margin-bottom: 2px !important;
-    }
-
-    .fm-item-date {
-        display: none;
-    }
-
-    /* 모바일에서는 화면이 좁으므로 날짜 숨김 */
-
-    .fm-header {
-        padding: calc(24px + env(safe-area-inset-top)) 16px 16px !important;
-        gap: 8px !important;
-    }
-
-    /* 모바일에서는 검색창이 남은 공간을 차지하되 상태점 영역을 침범하지 않음 */
-    .fm-search-bar {
-        max-width: none !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-        min-width: 0 !important;
-        flex: 1 1 auto !important;
-        padding: 8px 12px !important;
-    }
-
-    .fm-header-actions {
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        flex-shrink: 0 !important;
-        margin-left: 0 !important;
-    }
-
-    .fm-header .status-container {
-        position: static !important;
-        top: auto !important;
-        right: auto !important;
-        height: auto !important;
-        margin: 0 !important;
-        z-index: auto !important;
-        display: flex !important;
-        align-items: center !important;
-        flex-shrink: 0 !important;
-    }
-}
 
 /* 기본 화면에서는 인쇄 전용 메타/푸터 숨김 */
 .print-meta-sub,
@@ -5100,18 +4390,6 @@ body.is-pdf-exporting .quill-wrapper {
     }
 }
 
-@media (max-width: 768px) {
-    .scroll-to-top-btn {
-        right: 20px;
-        bottom: calc(24px + env(safe-area-inset-bottom));
-        width: 40px;
-        height: 40px;
-    }
-
-    .scroll-to-top-btn i {
-        font-size: 15px;
-    }
-}
 
 /* ============================================================================
    🎯 [V3.3.2] PDF 분할 가져오기 모달 스타일 (PDF Split Import Modal)
@@ -5178,31 +4456,7 @@ body.is-pdf-exporting .quill-wrapper {
 }
 
 /* 🎯 모바일 화면에서 팝업이 넘치거나 잘리지 않도록 안전 레이아웃 */
-@media (max-width: 440px) {
-    #pdf-import-modal .fm-modal {
-        width: calc(100% - 20px);
-        margin: 10px auto;
-    }
-    #pdf-import-modal .fm-modal-footer {
-        flex-direction: column-reverse;
-        gap: 8px;
-        padding: 12px 14px;
-    }
-    #pdf-split-all-btn {
-        width: 100% !important;
-        justify-content: center;
-        text-align: center;
-    }
-    .pdf-modal-action-btns {
-        width: 100%;
-        display: flex;
-        gap: 8px;
-    }
-    .pdf-modal-action-btns button {
-        flex: 1 !important;
-        max-width: none !important;
-    }
-}
+
 
 /* ============================================================================
    🎯 [V3.3.3] & [V4.3.7] 마크다운 문법 안내 모달 스타일 (Markdown Cheat Sheet Modal)
@@ -5215,6 +4469,7 @@ body.is-pdf-exporting .quill-wrapper {
     max-width: 480px;
     width: calc(100% - 28px);
     margin: 14px auto;
+    max-height: 92vh;
 }
 
 .md-help-header {
@@ -5258,7 +4513,7 @@ body.is-pdf-exporting .quill-wrapper {
 
 .md-help-body {
     padding: 0 18px 14px;
-    max-height: 64vh;
+    max-height: calc(92vh - 130px);
     overflow-y: auto;
     scrollbar-width: thin !important;
     scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
@@ -5309,27 +4564,6 @@ body.is-pdf-exporting .quill-wrapper {
     white-space: nowrap;
 }
 
-@media screen and (max-width: 480px) {
-    #markdown-help-modal .md-help-body {
-        padding: 8px 12px 12px;
-    }
-    .md-help-table th,
-    .md-help-table td {
-        padding: 6px 4px;
-        font-size: 12px;
-    }
-    .md-help-table code.md-key {
-        font-size: 11px;
-        padding: 1px 4px;
-    }
-    .md-key-row {
-        gap: 4px;
-    }
-    .md-key-pair {
-        font-size: 11px;
-        gap: 1px;
-    }
-}
 
 .md-help-table {
     width: 100%;
@@ -5356,7 +4590,7 @@ body.light-theme .md-help-table th {
 }
 
 .md-help-table td {
-    padding: 6px 8px;
+    padding: 5.5px 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     color: var(--text-main);
     vertical-align: middle;
@@ -6348,20 +5582,6 @@ body:not(.light-theme) .zen-img-tb-btn.danger:hover {
     flex-shrink: 0;
 }
 
-@media (max-width: 600px) {
-    .zen-img-toolbar {
-        padding: 3px 4px;
-        gap: 1.5px;
-    }
-    .zen-img-tb-btn {
-        padding: 4px 5px;
-        font-size: 11px;
-        gap: 2.5px;
-    }
-    .zen-img-tb-divider {
-        margin: 0 1.5px;
-    }
-}
 
 /* 5. Zen 전체화면 돋보기 뷰어 (Lightbox Modal) */
 #zen-image-lightbox {
@@ -6590,26 +5810,7 @@ body:not(.light-theme) .zen-settings-sub-btn:hover {
 }
 
 /* 환경설정 모바일 최적화 */
-@media (max-width: 480px) {
-    .zen-settings-card {
-        width: 94vw;
-        max-height: 90vh;
-    }
 
-    .zen-settings-body {
-        padding: 12px 14px;
-    }
-
-    .zen-settings-item {
-        gap: 10px;
-        padding: 8px 6px;
-    }
-
-    .zen-settings-lock-details {
-        margin-left: 6px;
-        padding: 8px;
-    }
-}
 
 /* 전체 화면 잠금 오버레이 (비밀번호 입력) */
 .app-lock-overlay {
@@ -6930,7 +6131,7 @@ body.light-theme .zen-codeblock-tooltip {
     box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
 }
 
-@media (hover: none), print {
+@media print {
     .zen-codeblock-tooltip {
         display: none !important;
     }
@@ -7530,11 +6731,6 @@ body.light-theme .fm-list.fm-tree .tree-row {
     color: var(--accent);
 }
 
-@media (max-width: 768px) {
-    .fm-quick-label {
-        display: none;
-    }
-}
 
 /* ============================================================================
    [V1.6.0] MY AI 블랙홀 버튼, 일정관리 보내기, 자동 전체 백업 & API 키 설정 UI
@@ -8033,13 +7229,6 @@ body.light-theme .zen-sts-chip input:checked + span {
     background: var(--surface-hover);
 }
 
-@media (max-width: 600px) {
-    .zen-sts-row-top,
-    .zen-sts-row-dates,
-    .zen-sts-row-meta {
-        grid-template-columns: 1fr;
-    }
-}
 
 /* ============================================================================
    [V1.6.0 / V1.6.1] NASA 골드 블랙홀 포털 오버레이 (버튼 원점 출현 -> 꿀꺽 -> 원점 복귀)
@@ -8061,7 +7250,7 @@ body.light-theme .zen-sts-chip input:checked + span {
 .zen-bh-portal-shell {
     width: 100%;
     max-width: 452px;
-    min-height: 458px;
+    min-height: 496px;
     border-radius: 22px;
     padding: 18px 20px 18px;
     background: rgba(17, 20, 29, 0.97);
@@ -8131,7 +7320,7 @@ body.light-theme .zen-sts-chip input:checked + span {
 .zen-bh-head-right {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 14px;
     min-width: 0;
     flex: 0 1 auto;
 }
@@ -8359,7 +7548,7 @@ body.light-theme .zen-sts-chip input:checked + span {
 .zen-bh-orb-dropzone {
     position: relative;
     width: 100%;
-    height: 312px;
+    height: 350px;
     border-radius: 16px;
     overflow: hidden;
     background: radial-gradient(ellipse at 50% 42%, #171e30 0%, #0d111c 56%, #070a12 100%);
@@ -8546,19 +7735,19 @@ body.light-theme .zen-sts-chip input:checked + span {
     position: absolute;
     left: 14px;
     right: 14px;
-    bottom: 13px;
+    bottom: 12px;
     pointer-events: none;
-    min-height: 36px;
-    padding: 7px 14px;
-    border-radius: 999px;
-    background: rgba(10, 14, 24, 0.64);
+    min-height: 54px;
+    padding: 9px 14px;
+    border-radius: 12px;
+    background: rgba(10, 14, 24, 0.72);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(254, 243, 199, 0.14);
     color: #f3f0e8;
     font-size: 11.8px;
     font-weight: 500;
-    line-height: 1.4;
+    line-height: 1.48;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -9240,11 +8429,6 @@ body.zen-scrollbar-dragging * {
     -webkit-user-select: none !important;
 }
 
-@media (pointer: coarse) {
-    .zen-center-scrollbar:not(.is-active):not(.is-dragging) {
-        pointer-events: none;
-    }
-}
 
 @media print {
     .zen-center-scrollbar {
@@ -9356,4 +8540,9 @@ body.light-theme .zen-dialog-btn-confirm {
 .zen-dialog-btn-confirm.is-danger {
     background: #ef4444 !important;
     color: #ffffff !important;
+}
+
+/* [V1.9.3] 데스크톱에서는 모바일 전용 로그인 버튼 숨김 */
+.zen-mobile-auth-btn {
+    display: none;
 }

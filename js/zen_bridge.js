@@ -451,9 +451,72 @@
     // 3. 환경설정 - MY AI (TimelyGPT) 개인 API 키 입력/저장
     // ========================================================================
     const MYAI_KEY_STORAGE_KEY = "zen_myai_api_key";
+    const MYAI_PREFS_TS_KEY = "zen_myai_prefs_updated_at";
 
     function getSavedMyAiApiKey() {
         return (localStorage.getItem(MYAI_KEY_STORAGE_KEY) || "").trim();
+    }
+
+    function persistMyAiPrefs(partial = {}) {
+        const keyVal = partial.myAiApiKey !== undefined
+            ? String(partial.myAiApiKey || "").trim()
+            : getSavedMyAiApiKey();
+        const modelVal = partial.myAiSelectedModel !== undefined
+            ? String(partial.myAiSelectedModel || "").trim()
+            : String(localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || "").trim();
+        try {
+            localStorage.setItem(MYAI_PREFS_TS_KEY, String(Date.now()));
+        } catch { }
+
+        if (isDesktopWebViewEnv()) {
+            callDesktopBridgeRequest("saveUserPrefs", {
+                myAiApiKey: keyVal,
+                myAiSelectedModel: modelVal
+            }, 5000).catch(() => { });
+        } else if (typeof window.saveZenCloudPreferences === "function") {
+            window.saveZenCloudPreferences({
+                myAiApiKey: keyVal,
+                myAiSelectedModel: modelVal
+            });
+        }
+    }
+
+    async function initMyAiPrefsPersistence() {
+        if (!isDesktopWebViewEnv()) return;
+        try {
+            const res = await callDesktopBridgeRequest("loadUserPrefs", {}, 5000);
+            if (!res || !res.ok) return;
+            const diskKey = String(res.myAiApiKey || "").trim();
+            const diskModel = String(res.myAiSelectedModel || "").trim();
+            const diskUpdated = Number(res.updatedAt || 0);
+            const localKey = getSavedMyAiApiKey();
+            const localModel = String(localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || "").trim();
+            const localUpdated = parseInt(localStorage.getItem(MYAI_PREFS_TS_KEY) || "0", 10);
+
+            let updated = false;
+            if (diskKey && (!localKey || diskUpdated > localUpdated)) {
+                localStorage.setItem(MYAI_KEY_STORAGE_KEY, diskKey);
+                updated = true;
+            }
+            if (diskModel && (!localModel || diskUpdated > localUpdated)) {
+                localStorage.setItem(MYAI_MODEL_STORAGE_KEY, diskModel);
+                updated = true;
+            }
+            if (updated) {
+                if (diskUpdated) localStorage.setItem(MYAI_PREFS_TS_KEY, String(diskUpdated));
+                refreshMyAiPrefsFromExternal();
+            } else if ((localKey && !diskKey) || (localModel && !diskModel)) {
+                persistMyAiPrefs({ myAiApiKey: localKey || diskKey, myAiSelectedModel: localModel || diskModel });
+            }
+        } catch { }
+    }
+
+    function refreshMyAiPrefsFromExternal() {
+        syncMyAiApiKeySettingsUI();
+        syncBlackHoleModelPickerUI();
+        if (!isBlackHoleDisabledViewport() && getSavedMyAiApiKey()) {
+            syncTimelyAiLiveModels(false);
+        }
     }
 
     function syncMyAiApiKeySettingsUI() {
@@ -493,12 +556,17 @@
         const cleaned = (input.value || "").trim();
         if (!cleaned) {
             localStorage.removeItem(MYAI_KEY_STORAGE_KEY);
+            persistMyAiPrefs({ myAiApiKey: "" });
             syncMyAiApiKeySettingsUI();
             if (typeof showToast === "function") showToast("MY AI 개인 API 키가 비워졌습니다.");
             return;
         }
         localStorage.setItem(MYAI_KEY_STORAGE_KEY, cleaned);
+        persistMyAiPrefs({ myAiApiKey: cleaned });
         syncMyAiApiKeySettingsUI();
+        if (!isBlackHoleDisabledViewport()) {
+            syncTimelyAiLiveModels(true);
+        }
         if (typeof showToast === "function") showToast("MY AI 개인 API 키가 저장되었습니다.");
     }
 
@@ -1549,7 +1617,7 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         const cx = cw / 2;
-        const cy = ch * 0.43;
+        const cy = ch * 0.39;
         const maxR = Math.min(cw, ch) * 0.40;
         const coreR = maxR * 0.265;
         const diskRx = Math.max(maxR * 1.72, Math.min(cw * 0.44, maxR * 2.02));
@@ -1877,7 +1945,12 @@
         } catch { }
     }
 
+    function isBlackHoleDisabledViewport() {
+        return !window.ZEN_DESKTOP_ONLY && window.innerWidth <= 768;
+    }
+
     function openBlackHolePortal() {
+        if (isBlackHoleDisabledViewport()) return;
         const layer = document.getElementById("zen-blackhole-portal-layer");
         const shell = document.getElementById("zen-blackhole-portal-shell");
         const btn = document.getElementById("zen-blackhole-btn");
@@ -1976,6 +2049,7 @@
     }
 
     function toggleBlackHolePortal() {
+        if (isBlackHoleDisabledViewport()) return;
         if (bhIsOpen) closeBlackHolePortal();
         else openBlackHolePortal();
     }
@@ -1985,10 +2059,10 @@
     }
 
     // ========================================================================
-    // 5-2. 블랙홀 AI 모델 선택 드롭다운 (디폴트: Gemini 3.8 Flash)
+    // 5-2. 블랙홀 AI 모델 선택 드롭다운 (실시간 최상단 자동 기본 선택 + 사용자 선택 영구 기억)
     // ========================================================================
     const MYAI_MODEL_STORAGE_KEY = "zen_myai_selected_model";
-    const MYAI_DEFAULT_MODEL_ID = "gemini-3.8-flash";
+    const MYAI_DEFAULT_MODEL_ID = "";
 
     const MYAI_PROVIDER_ICONS = {
         upstage: `<svg viewBox="0 0 24 24" fill="none"><defs><linearGradient id="zen-solar-g" x1="5" y1="5" x2="19" y2="19" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="50%" stop-color="#6366F1"/><stop offset="100%" stop-color="#A855F7"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="#0B0F19"/><path d="M12 4.2L14.1 9.9L19.8 12L14.1 14.1L12 19.8L9.9 14.1L4.2 12L9.9 9.9L12 4.2Z" fill="url(#zen-solar-g)"/></svg>`,
@@ -2085,9 +2159,13 @@
     let myAiModelsLastSyncAt = 0;
     let myAiModelsSyncPromise = null;
 
+    function getEffectiveDefaultModelId() {
+        return (myAiActiveModels[0] && myAiActiveModels[0].id) || MYAI_DEFAULT_MODELS[0].id;
+    }
+
     function normalizeMyAiModelId(rawId) {
         let s = String(rawId || "").trim();
-        if (!s) return MYAI_DEFAULT_MODEL_ID;
+        if (!s) return "";
         s = s.replace(/^(upstage|anthropic|openai|google)\//i, "");
         if (s === "claude-sonnet-4.6") return "claude-sonnet-4-6";
         if (s === "claude-haiku-4.5") return "claude-haiku-4-5";
@@ -2146,29 +2224,29 @@
 
         const merged = [];
         const usedIds = new Set();
-        MYAI_DEFAULT_MODELS.forEach((def) => {
-            if (liveMap.has(def.id)) {
-                merged.push(def);
-                usedIds.add(def.id);
-            }
-        });
-
         const providerLabel = { upstage: "Solar API", anthropic: "Claude API", openai: "OpenAI API", google: "Gemini API" };
+
+        // 실시간 응답 목록 순서(가장 위)를 최우선 배치하고, 알려진 모델 메타 보강
+        const knownMap = new Map(MYAI_DEFAULT_MODELS.map((m) => [m.id, m]));
         liveMap.forEach((entry, id) => {
             if (usedIds.has(id)) return;
-            merged.push({
-                id,
-                name: entry.displayName && entry.displayName !== id ? entry.displayName : formatLiveModelDisplayName(id),
-                provider: entry.provider,
-                group: "실시간 API 지원 모델",
-                desc: `${providerLabel[entry.provider] || "Direct API"} · 사용 가능`
-            });
+            usedIds.add(id);
+            const known = knownMap.get(id);
+            merged.push(
+                known || {
+                    id,
+                    name: entry.displayName && entry.displayName !== id ? entry.displayName : formatLiveModelDisplayName(id),
+                    provider: entry.provider,
+                    group: "실시간 API 지원 모델",
+                    desc: `${providerLabel[entry.provider] || "Direct API"} · 사용 가능`
+                }
+            );
         });
 
         if (merged.length > 0) {
             myAiActiveModels = merged;
-            const curSaved = normalizeMyAiModelId(localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || MYAI_DEFAULT_MODEL_ID);
-            if (!myAiActiveModels.some((m) => m.id === curSaved)) {
+            const curSaved = normalizeMyAiModelId(localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || "");
+            if (!curSaved || !myAiActiveModels.some((m) => m.id === curSaved)) {
                 localStorage.setItem(MYAI_MODEL_STORAGE_KEY, myAiActiveModels[0].id);
             }
             syncBlackHoleModelPickerUI();
@@ -2180,20 +2258,6 @@
         if (!key) return [];
         const collected = [];
         const tasks = [
-            fetch("https://hello.timelyai.io/api/v2/chat/direct/upstage/v1/models", {
-                headers: { "Authorization": `Bearer ${key}` }
-            }).then(async (r) => {
-                if (!r.ok) return;
-                const d = await r.json().catch(() => null);
-                (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "upstage" }));
-            }),
-            fetch("https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/models", {
-                headers: { "x-api-key": key, "anthropic-version": "2023-06-01" }
-            }).then(async (r) => {
-                if (!r.ok) return;
-                const d = await r.json().catch(() => null);
-                (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "anthropic", name: m.display_name || "" }));
-            }),
             fetch("https://hello.timelyai.io/api/v2/chat/direct/openai/v1/models", {
                 headers: { "Authorization": `Bearer ${key}` }
             }).then(async (r) => {
@@ -2201,15 +2265,27 @@
                 const d = await r.json().catch(() => null);
                 (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "openai" }));
             }),
-            fetch("https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models", {
-                headers: { "x-goog-api-key": key }
-            }).then(async (r) => {
+            fetch(`https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models?key=${encodeURIComponent(key)}`).then(async (r) => {
                 if (!r.ok) return;
                 const d = await r.json().catch(() => null);
                 (d?.models || []).forEach((m) => {
                     const id = String(m?.name || "").replace(/^models\//, "");
                     if (id) collected.push({ id, provider: "google", name: m.displayName || "" });
                 });
+            }),
+            fetch("https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/models", {
+                headers: { "Authorization": `Bearer ${key}` }
+            }).then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json().catch(() => null);
+                (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "anthropic", name: m.display_name || "" }));
+            }),
+            fetch("https://hello.timelyai.io/api/v2/chat/direct/upstage/v1/models", {
+                headers: { "Authorization": `Bearer ${key}` }
+            }).then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json().catch(() => null);
+                (d?.data || []).forEach((m) => m?.id && collected.push({ id: m.id, provider: "upstage" }));
             })
         ];
         await Promise.allSettled(tasks);
@@ -2217,6 +2293,7 @@
     }
 
     async function syncTimelyAiLiveModels(force = false) {
+        if (isBlackHoleDisabledViewport()) return;
         const apiKey = getSavedMyAiApiKey();
         if (!apiKey) return;
         const now = Date.now();
@@ -2251,10 +2328,10 @@
     function getSelectedMyAiModelMeta() {
         const rawSaved = (localStorage.getItem(MYAI_MODEL_STORAGE_KEY) || "").trim();
         const savedId = normalizeMyAiModelId(rawSaved);
-        if (rawSaved && savedId !== rawSaved) {
+        if (rawSaved && savedId && savedId !== rawSaved) {
             localStorage.setItem(MYAI_MODEL_STORAGE_KEY, savedId);
         }
-        const found = myAiActiveModels.find((m) => m.id === savedId);
+        const found = savedId ? myAiActiveModels.find((m) => m.id === savedId) : null;
         return found || myAiActiveModels[0] || MYAI_DEFAULT_MODELS[0];
     }
 
@@ -2267,7 +2344,7 @@
             iconEl.innerHTML = getMyAiProviderIconSvg(meta.provider);
         }
         if (labelEl) {
-            labelEl.textContent = meta.name || "Gemini 3.8 Flash";
+            labelEl.textContent = meta.name || getEffectiveDefaultModelId();
         }
         if (btn) {
             btn.title = `현재 선택된 AI 모델: ${meta.name} (${meta.desc})`;
@@ -2299,7 +2376,7 @@
         dropdown.querySelectorAll(".zen-bh-model-option").forEach((optBtn) => {
             optBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                const id = optBtn.getAttribute("data-model-id") || MYAI_DEFAULT_MODEL_ID;
+                const id = optBtn.getAttribute("data-model-id") || getEffectiveDefaultModelId();
                 selectBlackHoleAiModel(id);
             });
         });
@@ -2307,8 +2384,9 @@
 
     function selectBlackHoleAiModel(modelId) {
         const normId = normalizeMyAiModelId(modelId);
-        const found = myAiActiveModels.find((m) => m.id === normId) || myAiActiveModels[0] || MYAI_DEFAULT_MODELS[0];
+        const found = (normId && myAiActiveModels.find((m) => m.id === normId)) || myAiActiveModels[0] || MYAI_DEFAULT_MODELS[0];
         localStorage.setItem(MYAI_MODEL_STORAGE_KEY, found.id);
+        persistMyAiPrefs({ myAiSelectedModel: found.id });
         syncBlackHoleModelPickerUI();
         closeBlackHoleModelDropdown();
         if (typeof showToast === "function") {
@@ -2447,6 +2525,552 @@
         }
     }
 
+    // ========================================================================
+    // 5-3b. [V1.9.3] 브라우저(온라인 ZenNotes) 순수 JS 문서 본문 추출기 (.hwp/.hwpx/.docx/.xlsx/.pptx/.zip)
+    // ========================================================================
+    async function inflateRawBytesInBrowser(u8) {
+        if (!(u8 instanceof Uint8Array) || u8.length === 0) return new Uint8Array(0);
+        if (typeof DecompressionStream !== "function") return new Uint8Array(0);
+        const ds = new DecompressionStream("deflate-raw");
+        const stream = new Blob([u8]).stream().pipeThrough(ds);
+        const ab = await new Response(stream).arrayBuffer();
+        return new Uint8Array(ab);
+    }
+
+    function parseZipEntriesFromBytes(u8) {
+        if (!(u8 instanceof Uint8Array) || u8.length < 22) return [];
+        const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+        const minEocd = Math.max(0, u8.length - 65560);
+        let eocdOff = -1;
+        for (let i = u8.length - 22; i >= minEocd; i--) {
+            if (u8[i] === 0x50 && u8[i + 1] === 0x4B && u8[i + 2] === 0x05 && u8[i + 3] === 0x06) {
+                eocdOff = i;
+                break;
+            }
+        }
+        if (eocdOff < 0) return [];
+
+        const totalEntries = dv.getUint16(eocdOff + 10, true);
+        const cdOffset = dv.getUint32(eocdOff + 16, true);
+        const utf8Dec = new TextDecoder("utf-8", { fatal: false });
+        const entries = [];
+        let p = cdOffset;
+        for (let idx = 0; idx < totalEntries && p + 46 <= u8.length; idx++) {
+            if (dv.getUint32(p, true) !== 0x02014b50) break;
+            const method = dv.getUint16(p + 10, true);
+            const compSize = dv.getUint32(p + 20, true);
+            const uncompSize = dv.getUint32(p + 24, true);
+            const nameLen = dv.getUint16(p + 28, true);
+            const extraLen = dv.getUint16(p + 30, true);
+            const commentLen = dv.getUint16(p + 32, true);
+            const localOff = dv.getUint32(p + 42, true);
+            const name = utf8Dec.decode(u8.subarray(p + 46, Math.min(u8.length, p + 46 + nameLen)));
+            p += 46 + nameLen + extraLen + commentLen;
+            entries.push({
+                name,
+                method,
+                compSize,
+                uncompSize,
+                localOff,
+                readBytes: async () => {
+                    if (localOff + 30 > u8.length || dv.getUint32(localOff, true) !== 0x04034b50) {
+                        return new Uint8Array(0);
+                    }
+                    const lNameLen = dv.getUint16(localOff + 26, true);
+                    const lExtraLen = dv.getUint16(localOff + 28, true);
+                    const dataStart = localOff + 30 + lNameLen + lExtraLen;
+                    const dataEnd = Math.min(u8.length, dataStart + compSize);
+                    const rawSlice = u8.subarray(dataStart, dataEnd);
+                    if (method === 0) return rawSlice;
+                    if (method === 8) {
+                        try {
+                            return await inflateRawBytesInBrowser(rawSlice);
+                        } catch {
+                            return new Uint8Array(0);
+                        }
+                    }
+                    return new Uint8Array(0);
+                }
+            });
+        }
+        return entries;
+    }
+
+    function extractTrailingNum(s) {
+        const m = String(s || "").match(/(\d+)(?!.*\d)/);
+        return m ? parseInt(m[1], 10) : 999999;
+    }
+
+    function decodeUtf8Text(u8) {
+        try {
+            return new TextDecoder("utf-8", { fatal: false }).decode(u8);
+        } catch {
+            return "";
+        }
+    }
+
+    function extractParagraphsFromXml(xmlStr, paraLocalName, runTextLocalName) {
+        if (!xmlStr) return "";
+        if (typeof DOMParser !== "undefined") {
+            try {
+                const doc = new DOMParser().parseFromString(xmlStr, "application/xml");
+                if (doc && !doc.querySelector("parsererror")) {
+                    const paras = doc.getElementsByTagNameNS("*", paraLocalName);
+                    if (paras && paras.length > 0) {
+                        const lines = [];
+                        for (let i = 0; i < paras.length; i++) {
+                            const runs = paras[i].getElementsByTagNameNS("*", runTextLocalName);
+                            let line = "";
+                            if (runs && runs.length > 0) {
+                                for (let j = 0; j < runs.length; j++) {
+                                    line += runs[j].textContent || "";
+                                }
+                            } else {
+                                line = paras[i].textContent || "";
+                            }
+                            line = line.replace(/[ \t]+/g, " ").trim();
+                            if (line) lines.push(line);
+                        }
+                        if (lines.length > 0) return lines.join("\n");
+                    }
+                    const fallbackText = (doc.documentElement ? doc.documentElement.textContent : "") || "";
+                    const cleaned = fallbackText.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+                    if (cleaned) return cleaned;
+                }
+            } catch { }
+        }
+        return xmlStr
+            .replace(new RegExp(`</(?:[\\w-]+:)?${paraLocalName}\\b[^>]*>`, "gi"), "\n")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/[ \t]+/g, " ")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+    }
+
+    async function extractHwpxFromBytesInBrowser(u8) {
+        const entries = parseZipEntriesFromBytes(u8);
+        let sectionEntries = entries
+            .filter((e) => /^Contents\/section\d+\.xml$/i.test(e.name))
+            .sort((a, b) => extractTrailingNum(a.name) - extractTrailingNum(b.name));
+        if (sectionEntries.length === 0) {
+            sectionEntries = entries.filter((e) => /^Contents\/.+\.xml$/i.test(e.name) && !/header|settings|content\.hpf/i.test(e.name));
+        }
+        const parts = [];
+        for (const ent of sectionEntries) {
+            const raw = await ent.readBytes();
+            const xml = decodeUtf8Text(raw);
+            const txt = extractParagraphsFromXml(xml, "p", "t");
+            if (txt) parts.push(txt);
+        }
+        return parts.join("\n\n").trim().slice(0, 200000);
+    }
+
+    async function extractDocxFromBytesInBrowser(u8) {
+        const entries = parseZipEntriesFromBytes(u8);
+        const docEntry = entries.find((e) => /^word\/document\.xml$/i.test(e.name));
+        if (!docEntry) return "";
+        const xml = decodeUtf8Text(await docEntry.readBytes());
+        return extractParagraphsFromXml(xml, "p", "t").slice(0, 200000);
+    }
+
+    async function extractPptxFromBytesInBrowser(u8) {
+        const entries = parseZipEntriesFromBytes(u8);
+        const slides = entries
+            .filter((e) => /^ppt\/slides\/slide\d+\.xml$/i.test(e.name))
+            .sort((a, b) => extractTrailingNum(a.name) - extractTrailingNum(b.name));
+        const parts = [];
+        for (let i = 0; i < slides.length; i++) {
+            const xml = decodeUtf8Text(await slides[i].readBytes());
+            const txt = extractParagraphsFromXml(xml, "p", "t");
+            if (txt) parts.push(`[슬라이드 ${i + 1}]\n${txt}`);
+        }
+        return parts.join("\n\n").trim().slice(0, 200000);
+    }
+
+    async function extractXlsxFromBytesInBrowser(u8) {
+        const entries = parseZipEntriesFromBytes(u8);
+        const sharedStrings = [];
+        const ssEntry = entries.find((e) => /^xl\/sharedStrings\.xml$/i.test(e.name));
+        if (ssEntry) {
+            const ssXml = decodeUtf8Text(await ssEntry.readBytes());
+            if (typeof DOMParser !== "undefined") {
+                try {
+                    const doc = new DOMParser().parseFromString(ssXml, "application/xml");
+                    const sis = doc.getElementsByTagNameNS("*", "si");
+                    for (let i = 0; i < sis.length; i++) {
+                        sharedStrings.push((sis[i].textContent || "").trim());
+                    }
+                } catch { }
+            }
+        }
+        const sheets = entries
+            .filter((e) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(e.name))
+            .sort((a, b) => extractTrailingNum(a.name) - extractTrailingNum(b.name));
+        const parts = [];
+        for (let idx = 0; idx < sheets.length; idx++) {
+            const shXml = decodeUtf8Text(await sheets[idx].readBytes());
+            if (typeof DOMParser !== "undefined") {
+                try {
+                    const doc = new DOMParser().parseFromString(shXml, "application/xml");
+                    const rows = doc.getElementsByTagNameNS("*", "row");
+                    const rowLines = [];
+                    for (let r = 0; r < rows.length; r++) {
+                        const cells = rows[r].getElementsByTagNameNS("*", "c");
+                        const vals = [];
+                        for (let c = 0; c < cells.length; c++) {
+                            const cell = cells[c];
+                            const tAttr = cell.getAttribute("t") || "";
+                            let val = "";
+                            if (tAttr === "inlineStr") {
+                                val = (cell.textContent || "").trim();
+                            } else {
+                                const vEl = cell.getElementsByTagNameNS("*", "v")[0];
+                                const rawVal = vEl ? (vEl.textContent || "").trim() : "";
+                                if (tAttr === "s" && /^\d+$/.test(rawVal)) {
+                                    val = sharedStrings[parseInt(rawVal, 10)] || "";
+                                } else {
+                                    val = rawVal;
+                                }
+                            }
+                            if (val) vals.push(val);
+                        }
+                        if (vals.length > 0) rowLines.push(vals.join(" | "));
+                    }
+                    if (rowLines.length > 0) parts.push(`[시트 ${idx + 1}]\n${rowLines.join("\n")}`);
+                } catch { }
+            }
+        }
+        return parts.join("\n\n").trim().slice(0, 200000);
+    }
+
+    async function extractHwpTextFromBytesInBrowser(bytes) {
+        try {
+            if (!(bytes instanceof Uint8Array) || bytes.length < 512) return "";
+            const sig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+            for (let i = 0; i < 8; i++) {
+                if (bytes[i] !== sig[i]) return "";
+            }
+            const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            const sectorShift = dv.getUint16(30, true);
+            const miniShift = dv.getUint16(32, true);
+            const sectorSize = 1 << sectorShift;
+            const miniSectorSize = 1 << miniShift;
+            if (sectorSize < 512 || sectorSize > 65536 || miniSectorSize < 32 || miniSectorSize > sectorSize) return "";
+
+            const firstDirSector = dv.getUint32(48, true);
+            const miniCutoff = dv.getUint32(56, true);
+            const firstMiniFatSector = dv.getUint32(60, true);
+            const firstDifatSector = dv.getUint32(68, true);
+            const numDifatSectors = dv.getUint32(72, true);
+
+            const readSector = (sec) => {
+                const off = (sec + 1) * sectorSize;
+                if (off < 0 || off >= bytes.length) return new Uint8Array(0);
+                return bytes.subarray(off, Math.min(bytes.length, off + sectorSize));
+            };
+
+            const fatSectors = [];
+            for (let i = 0; i < 109; i++) {
+                const s = dv.getUint32(76 + i * 4, true);
+                if (s >= 0xFFFFFFFC) break;
+                fatSectors.push(s);
+            }
+
+            let difatSec = firstDifatSector;
+            let difatCount = 0;
+            const entriesPerSec = Math.floor(sectorSize / 4);
+            while (difatSec < 0xFFFFFFFC && difatCount < Math.min(numDifatSectors + 2, 1024)) {
+                const ds = readSector(difatSec);
+                if (ds.length < sectorSize) break;
+                const ddv = new DataView(ds.buffer, ds.byteOffset, ds.byteLength);
+                for (let i = 0; i < entriesPerSec - 1; i++) {
+                    const s = ddv.getUint32(i * 4, true);
+                    if (s < 0xFFFFFFFC) fatSectors.push(s);
+                }
+                difatSec = ddv.getUint32((entriesPerSec - 1) * 4, true);
+                difatCount++;
+            }
+
+            const fatList = [];
+            for (const fs of fatSectors) {
+                const sbBuf = readSector(fs);
+                const sdv = new DataView(sbBuf.buffer, sbBuf.byteOffset, sbBuf.byteLength);
+                for (let i = 0; i + 4 <= sbBuf.length; i += 4) {
+                    fatList.push(sdv.getUint32(i, true));
+                }
+            }
+            if (fatList.length === 0) return "";
+
+            const readFatStream = (startSec, maxLen) => {
+                const chunks = [];
+                let total = 0;
+                const seen = new Set();
+                let cur = startSec;
+                while (cur < 0xFFFFFFFC && total < maxLen && !seen.has(cur) && seen.size < 100000) {
+                    seen.add(cur);
+                    const chunk = readSector(cur);
+                    if (chunk.length === 0) break;
+                    chunks.push(chunk);
+                    total += chunk.length;
+                    cur = cur < fatList.length ? fatList[cur] : 0xFFFFFFFE;
+                }
+                const outLen = Math.min(total, maxLen);
+                const out = new Uint8Array(outLen);
+                let pos = 0;
+                for (const c of chunks) {
+                    const take = Math.min(c.length, outLen - pos);
+                    if (take <= 0) break;
+                    out.set(c.subarray(0, take), pos);
+                    pos += take;
+                }
+                return out;
+            };
+
+            const dirRaw = readFatStream(firstDirSector, 8 * 1024 * 1024);
+            const dirCount = Math.floor(dirRaw.length / 128);
+            if (dirCount === 0) return "";
+            const dirDv = new DataView(dirRaw.buffer, dirRaw.byteOffset, dirRaw.byteLength);
+
+            const rootStart = dirDv.getUint32(116, true);
+            const rootSize = dirDv.getUint32(120, true);
+            const miniContainer = (firstMiniFatSector < 0xFFFFFFFC && rootStart < 0xFFFFFFFC && rootSize > 0)
+                ? readFatStream(rootStart, rootSize)
+                : new Uint8Array(0);
+
+            const miniFatRaw = firstMiniFatSector < 0xFFFFFFFC
+                ? readFatStream(firstMiniFatSector, 4 * 1024 * 1024)
+                : new Uint8Array(0);
+            const miniFat = [];
+            if (miniFatRaw.length >= 4) {
+                const mdv = new DataView(miniFatRaw.buffer, miniFatRaw.byteOffset, miniFatRaw.byteLength);
+                for (let i = 0; i + 4 <= miniFatRaw.length; i += 4) {
+                    miniFat.push(mdv.getUint32(i, true));
+                }
+            }
+
+            const readMiniStream = (startMini, len) => {
+                const chunks = [];
+                let total = 0;
+                const seen = new Set();
+                let cur = startMini;
+                while (cur < 0xFFFFFFFC && total < len && !seen.has(cur) && seen.size < 200000) {
+                    seen.add(cur);
+                    const off = cur * miniSectorSize;
+                    if (off < 0 || off >= miniContainer.length) break;
+                    const take = Math.min(miniSectorSize, miniContainer.length - off);
+                    chunks.push(miniContainer.subarray(off, off + take));
+                    total += take;
+                    cur = cur < miniFat.length ? miniFat[cur] : 0xFFFFFFFE;
+                }
+                const outLen = Math.min(total, len);
+                const out = new Uint8Array(outLen);
+                let pos = 0;
+                for (const c of chunks) {
+                    const take = Math.min(c.length, outLen - pos);
+                    if (take <= 0) break;
+                    out.set(c.subarray(0, take), pos);
+                    pos += take;
+                }
+                return out;
+            };
+
+            const utf16Dec = new TextDecoder("utf-16le", { fatal: false });
+            const getDirName = (idx) => {
+                const bOff = idx * 128;
+                const nLen = dirDv.getUint16(bOff + 64, true);
+                const byteCount = Math.max(0, Math.min(64, nLen) - 2);
+                return byteCount > 0 ? utf16Dec.decode(dirRaw.subarray(bOff, bOff + byteCount)) : "";
+            };
+
+            const entryFullPath = new Map();
+            const walkTree = (nodeIdx, parentPath) => {
+                if (nodeIdx < 0 || nodeIdx >= dirCount || entryFullPath.has(nodeIdx)) return;
+                const name = getDirName(nodeIdx);
+                const full = parentPath ? `${parentPath}/${name}` : name;
+                entryFullPath.set(nodeIdx, full);
+
+                const bOff = nodeIdx * 128;
+                const left = dirDv.getInt32(bOff + 68, true);
+                const right = dirDv.getInt32(bOff + 72, true);
+                const child = dirDv.getInt32(bOff + 76, true);
+                if (left >= 0) walkTree(left, parentPath);
+                if (right >= 0) walkTree(right, parentPath);
+                if (child >= 0) walkTree(child, nodeIdx === 0 ? "" : full);
+            };
+            walkTree(0, "");
+
+            const readEntryBytes = (idx) => {
+                const bOff = idx * 128;
+                const startSec = dirDv.getUint32(bOff + 116, true);
+                const len = dirDv.getUint32(bOff + 120, true);
+                if (len === 0 || len > 32 * 1024 * 1024) return new Uint8Array(0);
+                return (len < miniCutoff && miniContainer.length > 0)
+                    ? readMiniStream(startSec, len)
+                    : readFatStream(startSec, len);
+            };
+
+            let isCompressed = true;
+            let isEncrypted = false;
+            for (const [idx, path] of entryFullPath.entries()) {
+                if (path.toLowerCase() === "fileheader") {
+                    const fhBytes = readEntryBytes(idx);
+                    if (fhBytes.length >= 40) {
+                        const flags = new DataView(fhBytes.buffer, fhBytes.byteOffset, fhBytes.byteLength).getUint32(36, true);
+                        isCompressed = (flags & 0x01) !== 0;
+                        isEncrypted = (flags & 0x02) !== 0;
+                    }
+                    break;
+                }
+            }
+            if (isEncrypted) return "";
+
+            const decompressHwpStream = async (compressed) => {
+                if (!isCompressed || compressed.length === 0) return compressed;
+                try {
+                    return await inflateRawBytesInBrowser(compressed);
+                } catch {
+                    try {
+                        if (compressed.length > 2 && compressed[0] === 0x78) {
+                            return await inflateRawBytesInBrowser(compressed.subarray(2));
+                        }
+                    } catch { }
+                    return new Uint8Array(0);
+                }
+            };
+
+            const sectionIndices = Array.from(entryFullPath.entries())
+                .filter(([, path]) => /^BodyText\/Section/i.test(path))
+                .sort((a, b) => extractTrailingNum(a[1]) - extractTrailingNum(b[1]))
+                .map(([idx]) => idx);
+
+            const bodyLines = [];
+            let totalBodyChars = 0;
+            for (const sIdx of sectionIndices) {
+                const secBytes = await decompressHwpStream(readEntryBytes(sIdx));
+                const secDv = new DataView(secBytes.buffer, secBytes.byteOffset, secBytes.byteLength);
+                let pos = 0;
+                while (pos + 4 <= secBytes.length) {
+                    const hdr = secDv.getUint32(pos, true);
+                    pos += 4;
+                    const tagId = hdr & 0x3FF;
+                    let recSize = (hdr >>> 20) & 0xFFF;
+                    if (recSize === 0xFFF) {
+                        if (pos + 4 > secBytes.length) break;
+                        recSize = secDv.getUint32(pos, true);
+                        pos += 4;
+                    }
+                    if (pos + recSize > secBytes.length) break;
+
+                    if (tagId === 67 && recSize >= 2) {
+                        let p = pos;
+                        const end = pos + recSize;
+                        let line = "";
+                        while (p + 2 <= end) {
+                            const ch = secDv.getUint16(p, true);
+                            if (ch === 0) {
+                                p += 2;
+                            } else if (ch === 10 || ch === 13) {
+                                line += "\n";
+                                p += 2;
+                            } else if (ch >= 1 && ch <= 23) {
+                                if (ch === 9) line += " ";
+                                p += 16;
+                            } else if (ch >= 24 && ch <= 31) {
+                                if (ch === 30 || ch === 31) line += " ";
+                                p += 2;
+                            } else {
+                                line += String.fromCharCode(ch);
+                                p += 2;
+                            }
+                        }
+                        const para = line.replace(/[ \t]+/g, " ").trim();
+                        if (para) {
+                            bodyLines.push(para);
+                            totalBodyChars += para.length + 1;
+                        }
+                    }
+                    pos += recSize;
+                    if (totalBodyChars > 200000) break;
+                }
+                if (totalBodyChars > 200000) break;
+            }
+
+            const bodyOut = bodyLines.join("\n").trim();
+            if (bodyOut.length >= 10) {
+                return bodyOut.slice(0, 200000);
+            }
+
+            for (const [idx, path] of entryFullPath.entries()) {
+                if (path.toLowerCase() === "prvtext") {
+                    const prvBytes = readEntryBytes(idx);
+                    if (prvBytes.length >= 2) {
+                        const prv = utf16Dec.decode(prvBytes).replace(/\0/g, "").trim();
+                        if (prv) return prv.slice(0, 200000);
+                    }
+                    break;
+                }
+            }
+            return "";
+        } catch {
+            return "";
+        }
+    }
+
+    async function extractBlackHoleFileTextInBrowser(fileName, u8) {
+        const lower = String(fileName || "").toLowerCase();
+        if (lower.endsWith(".hwpx")) {
+            return { text: await extractHwpxFromBytesInBrowser(u8), embeddedPdfBase64: "", embeddedImages: [] };
+        }
+        if (lower.endsWith(".docx")) {
+            return { text: await extractDocxFromBytesInBrowser(u8), embeddedPdfBase64: "", embeddedImages: [] };
+        }
+        if (lower.endsWith(".xlsx")) {
+            return { text: await extractXlsxFromBytesInBrowser(u8), embeddedPdfBase64: "", embeddedImages: [] };
+        }
+        if (lower.endsWith(".pptx")) {
+            return { text: await extractPptxFromBytesInBrowser(u8), embeddedPdfBase64: "", embeddedImages: [] };
+        }
+        if (lower.endsWith(".hwp")) {
+            return { text: await extractHwpTextFromBytesInBrowser(u8), embeddedPdfBase64: "", embeddedImages: [] };
+        }
+        if (lower.endsWith(".zip")) {
+            const entries = parseZipEntriesFromBytes(u8).filter((e) => !e.name.endsWith("/"));
+            entries.sort((a, b) => {
+                const pa = /(붙임|첨부|참고|서식)/i.test(a.name) ? 1 : 0;
+                const pb = /(붙임|첨부|참고|서식)/i.test(b.name) ? 1 : 0;
+                return pa - pb;
+            });
+            const textParts = [];
+            let embeddedPdfBase64 = "";
+            const embeddedImages = [];
+            for (const ent of entries) {
+                const elow = ent.name.toLowerCase();
+                if (/\.(txt|md|csv|json|html|htm|xml|log)$/i.test(elow)) {
+                    const t = decodeUtf8Text(await ent.readBytes()).trim();
+                    if (t) textParts.push(`[${ent.name}]\n${t}`);
+                } else if (/\.(hwpx|docx|xlsx|pptx|hwp)$/i.test(elow)) {
+                    const innerRes = await extractBlackHoleFileTextInBrowser(ent.name, await ent.readBytes());
+                    if (innerRes.text) textParts.push(`[${ent.name}]\n${innerRes.text}`);
+                } else if (elow.endsWith(".pdf") && !embeddedPdfBase64) {
+                    const pdfBytes = await ent.readBytes();
+                    if (pdfBytes.length > 0) embeddedPdfBase64 = arrayBufferToBase64(pdfBytes.buffer);
+                } else if (/\.(png|jpg|jpeg|webp|gif)$/i.test(elow) && embeddedImages.length < 20) {
+                    const imgBytes = await ent.readBytes();
+                    if (imgBytes.length > 0) {
+                        const mime = elow.endsWith(".png") ? "image/png" : elow.endsWith(".webp") ? "image/webp" : elow.endsWith(".gif") ? "image/gif" : "image/jpeg";
+                        embeddedImages.push({ mimeType: mime, base64: arrayBufferToBase64(imgBytes.buffer) });
+                    }
+                }
+            }
+            return {
+                text: textParts.join("\n\n").trim().slice(0, 200000),
+                embeddedPdfBase64,
+                embeddedImages
+            };
+        }
+        return { text: "", embeddedPdfBase64: "", embeddedImages: [] };
+    }
+
     async function extractDocumentTextForAi(firstItem) {
         if (!firstItem) return { text: "", embeddedPdfBase64: "", embeddedImages: [] };
         const rawFileName = String(firstItem.name || "").trim();
@@ -2491,6 +3115,17 @@
                 }
             } catch (err) {
                 console.warn("[BlackHole C# 추출 브릿지 실패]", err);
+            }
+        } else if (!isDesktopWebViewEnv() && /\.(docx|hwpx|xlsx|pptx|hwp|zip)$/i.test(lower) && typeof firstItem.arrayBuffer === "function") {
+            // 3b. [V1.9.3] 온라인 브라우저 순수 JS 문서 본문 추출
+            try {
+                const buf = await firstItem.arrayBuffer();
+                const browserRes = await extractBlackHoleFileTextInBrowser(rawFileName, new Uint8Array(buf));
+                if (browserRes && (browserRes.text || browserRes.embeddedPdfBase64 || (browserRes.embeddedImages && browserRes.embeddedImages.length > 0))) {
+                    return browserRes;
+                }
+            } catch (err) {
+                console.warn("[BlackHole 브라우저 문서 추출 실패]", err);
             }
         }
 
@@ -2671,9 +3306,9 @@
             }))
             : [];
         const hasImages = imageList.length > 0;
-        let chosenModel = normalizeMyAiModelId(preferredModelId || MYAI_DEFAULT_MODEL_ID);
+        let chosenModel = normalizeMyAiModelId(preferredModelId || getEffectiveDefaultModelId());
         if (hasImages && resolveMyAiProvider(chosenModel) === "upstage") {
-            chosenModel = "gemini-3.8-flash";
+            chosenModel = pickVisionPreferredModel(chosenModel).id;
         }
 
         if (isDesktopWebViewEnv()) {
@@ -2701,9 +3336,10 @@
         }
 
         const candidateModels = [chosenModel];
-        const fallbackPool = hasImages
-            ? ["gemini-3.8-flash", "gpt-5.6-sol", "claude-sonnet-5"]
-            : ["gemini-3.8-flash", "claude-sonnet-5", "gpt-5.6-sol", "solar-pro4"];
+        const fallbackPool = myAiActiveModels
+            .filter((m) => m && m.id && (!hasImages || isModelSupportingVision(m.id)))
+            .slice(0, 4)
+            .map((m) => m.id);
         for (const m of fallbackPool) {
             if (!candidateModels.includes(m)) candidateModels.push(m);
         }
@@ -2730,8 +3366,7 @@
 
                     if (provider === "anthropic") {
                         url = "https://hello.timelyai.io/api/v2/chat/direct/anthropic/v1/messages";
-                        headers["x-api-key"] = trimmedKey;
-                        headers["anthropic-version"] = "2023-06-01";
+                        headers["Authorization"] = `Bearer ${trimmedKey}`;
                         const userContent = hasImages
                             ? [
                                 ...imageList.map((img) => ({
@@ -2749,8 +3384,7 @@
                             messages: [{ role: "user", content: userContent }]
                         };
                     } else if (provider === "google") {
-                        url = `https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
-                        headers["x-goog-api-key"] = trimmedKey;
+                        url = `https://hello.timelyai.io/api/v2/chat/direct/google/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
                         const parts = hasImages
                             ? [
                                 ...imageList.map((img) => ({
@@ -2955,7 +3589,7 @@
     }
 
     function pickVisionPreferredModel(selectedModelId) {
-        const normSel = normalizeMyAiModelId(selectedModelId || MYAI_DEFAULT_MODEL_ID);
+        const normSel = normalizeMyAiModelId(selectedModelId || getEffectiveDefaultModelId());
         if (isModelSupportingVision(normSel)) {
             const m = myAiActiveModels.find((x) => x.id === normSel);
             return {
@@ -2964,21 +3598,18 @@
                 switchedFrom: ""
             };
         }
-        const preferredOrder = ["gemini-3.8-flash", "gpt-5.6-sol", "claude-sonnet-5", "gpt-5.5", "claude-sonnet-4-6"];
-        let chosen = null;
-        for (const pid of preferredOrder) {
-            const found = myAiActiveModels.find((m) => m.id === pid);
-            if (found) {
-                chosen = found;
-                break;
+        let chosen = myAiActiveModels.find((m) => isModelSupportingVision(m.id));
+        if (!chosen) {
+            const preferredOrder = ["gpt-5.6-sol", "claude-sonnet-5", "gpt-5.5", "claude-sonnet-4-6", "gemini-3.8-flash"];
+            for (const pid of preferredOrder) {
+                const found = MYAI_DEFAULT_MODELS.find((m) => m.id === pid);
+                if (found) {
+                    chosen = found;
+                    break;
+                }
             }
         }
-        if (!chosen) {
-            chosen = myAiActiveModels.find((m) => isModelSupportingVision(m.id)) || {
-                id: "gemini-3.8-flash",
-                name: "Gemini 3.8 Flash"
-            };
-        }
+        if (!chosen) chosen = myAiActiveModels[0] || MYAI_DEFAULT_MODELS[0];
         const prevMeta = myAiActiveModels.find((m) => m.id === normSel);
         return {
             id: chosen.id,
@@ -4698,6 +5329,7 @@
     }
 
     function bindBlackHoleEvents() {
+        if (isBlackHoleDisabledViewport()) return;
         bindDesktopBridgeResponseListener();
         const dropZone = document.getElementById("zen-bh-orb-dropzone");
         const fileInput = document.getElementById("zen-bh-file-input");
@@ -4774,6 +5406,7 @@
     window.syncMyAiApiKeySettingsUI = syncMyAiApiKeySettingsUI;
     window.toggleMyAiApiKeyVisibility = toggleMyAiApiKeyVisibility;
     window.saveMyAiApiKey = saveMyAiApiKey;
+    window.refreshMyAiPrefsFromExternal = refreshMyAiPrefsFromExternal;
 
     window.openSendToScheduleModal = openSendToScheduleModal;
     window.closeSendToScheduleModal = closeSendToScheduleModal;
@@ -4797,9 +5430,11 @@
     window.addEventListener("DOMContentLoaded", () => {
         bindBlackHoleEvents();
         initNotesAutoBackupScheduler();
+        initMyAiPrefsPersistence();
     });
     if (document.readyState === "interactive" || document.readyState === "complete") {
         bindBlackHoleEvents();
         initNotesAutoBackupScheduler();
+        initMyAiPrefsPersistence();
     }
 })();

@@ -36,16 +36,19 @@ function toggleRightPane() {
     rp.classList.remove("is-closed");
     gb.style.display = "none";
     // [수정된 부분] 모바일에서 우측 패널 열 때 투명 방어막(오버레이) 켜기
-    if (window.innerWidth <= 768) {
-      document.getElementById("mobile-overlay").classList.add("is-active");
+    if (!window.ZEN_DESKTOP_ONLY && window.innerWidth <= 768) {
+      const ov = document.getElementById("mobile-overlay");
+      if (ov) ov.classList.add("is-active");
     }
     history.pushState({ panel: "right" }, ""); // 🎯 PC 환경도 브라우저 뒤로가기 기록을 남깁니다!
   } else {
     rp.classList.add("is-closed");
     gb.style.display = "flex";
     // [수정된 부분] 모바일에서 우측 패널 닫을 때 방어막 끄기
-    if (window.innerWidth <= 768)
-      document.getElementById("mobile-overlay").classList.remove("is-active");
+    if (!window.ZEN_DESKTOP_ONLY && window.innerWidth <= 768) {
+      const ov = document.getElementById("mobile-overlay");
+      if (ov) ov.classList.remove("is-active");
+    }
   }
 }
 
@@ -56,17 +59,20 @@ function toggleTrashPane() {
     tp.classList.remove("is-open");
     // [수정된 부분] 휴지통만 닫았는데 우측 패널마저 닫혀있다면 방어막 끄기
     if (
+      !window.ZEN_DESKTOP_ONLY &&
       window.innerWidth <= 768 &&
       document.getElementById("col-right").classList.contains("is-closed")
     ) {
-      document.getElementById("mobile-overlay").classList.remove("is-active");
+      const ov = document.getElementById("mobile-overlay");
+      if (ov) ov.classList.remove("is-active");
     }
   } else {
     tp.classList.add("is-open");
     loadTrashList();
     // [수정된 부분] 모바일에서 휴지통 열 때 투명 방어막(오버레이) 켜기
-    if (window.innerWidth <= 768) {
-      document.getElementById("mobile-overlay").classList.add("is-active");
+    if (!window.ZEN_DESKTOP_ONLY && window.innerWidth <= 768) {
+      const ov = document.getElementById("mobile-overlay");
+      if (ov) ov.classList.add("is-active");
     }
     history.pushState({ panel: "trash" }, ""); // 🎯 PC 환경도 브라우저 뒤로가기 기록을 남깁니다!
   }
@@ -205,19 +211,21 @@ function closeSidebarSearchBar(clearQuery = true) {
 }
 
 function toggleLeftPaneMobile() {
+  if (window.ZEN_DESKTOP_ONLY) return;
   if (document.activeElement) document.activeElement.blur(); // 👈 브라우저의 포커스를 뺏어 키보드를 강제로 숨깁니다.
   closeLeftNoteMenu();
   const lp = document.getElementById("col-left");
   const ov = document.getElementById("mobile-overlay");
+  if (!lp) return;
   lp.classList.toggle("is-mobile-open");
   if (lp.classList.contains("is-mobile-open")) {
-    ov.classList.add("is-active");
+    if (ov) ov.classList.add("is-active");
     history.pushState({ panel: "left" }, ""); // 👈 이 줄을 추가하세요!
     document.getElementById("col-right").classList.add("is-closed");
     document.getElementById("trash-pane").classList.remove("is-open");
     document.getElementById("global-menu-btn").style.display = "flex";
   } else {
-    ov.classList.remove("is-active");
+    if (ov) ov.classList.remove("is-active");
   }
 }
 
@@ -226,22 +234,32 @@ function closeAllPanelsMobile() {
   closeLeftNoteMenu();
 
   // 🎯 PC와 모바일 환경 차별 없이, 열려있는 모든 패널을 깔끔하게 닫아줍니다!
-  document.getElementById("col-left").classList.remove("is-mobile-open");
-  document.getElementById("col-right").classList.add("is-closed");
-  document.getElementById("trash-pane").classList.remove("is-open");
-  document.getElementById("mobile-overlay").classList.remove("is-active");
-  document.getElementById("global-menu-btn").style.display = "flex";
+  const lp = document.getElementById("col-left");
+  const rp = document.getElementById("col-right");
+  const tp = document.getElementById("trash-pane");
+  const ov = document.getElementById("mobile-overlay");
+  const gb = document.getElementById("global-menu-btn");
+  if (lp) lp.classList.remove("is-mobile-open");
+  if (rp) rp.classList.add("is-closed");
+  if (tp) tp.classList.remove("is-open");
+  if (ov) ov.classList.remove("is-active");
+  if (gb) gb.style.display = "flex";
 }
 
 window.addEventListener("resize", () => {
-  if (window.innerWidth > 768) {
-    document.getElementById("col-left").classList.remove("is-mobile-open");
-    document.getElementById("mobile-overlay").classList.remove("is-active");
+  if (window.ZEN_DESKTOP_ONLY || window.innerWidth > 768) {
+    const lp = document.getElementById("col-left");
+    const ov = document.getElementById("mobile-overlay");
+    const rp = document.getElementById("col-right");
+    const tp = document.getElementById("trash-pane");
+    const gb = document.getElementById("global-menu-btn");
+    if (lp) lp.classList.remove("is-mobile-open");
+    if (ov) ov.classList.remove("is-active");
     if (
-      document.getElementById("col-right").classList.contains("is-closed") &&
-      !document.getElementById("trash-pane").classList.contains("is-open")
+      rp && rp.classList.contains("is-closed") &&
+      tp && !tp.classList.contains("is-open")
     ) {
-      document.getElementById("global-menu-btn").style.display = "flex";
+      if (gb) gb.style.display = "flex";
     }
   }
 });

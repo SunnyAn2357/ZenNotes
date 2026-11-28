@@ -3052,37 +3052,10 @@ function clearMainSearch(closeBar = false) {
 
 function createNewMemoSmart() {
   closeSidebarContextMenu();
-  const cache = window.__zenTreeDataCache;
-  let candidate = sidebarSelectedDrive ? globalDesktopFolderId : sidebarSelectedFolderId;
+  const targetFolderId =
+    typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null;
 
-  if ((candidate === null || candidate === undefined) && !sidebarSelectedDrive && currentMemoId && cache) {
-    const curMemo = cache.byId.get(currentMemoId);
-    if (curMemo && curMemo.parentId !== undefined) {
-      candidate = curMemo.parentId;
-    }
-  }
-
-  let targetFolderId = typeof globalDesktopFolderId !== "undefined" ? globalDesktopFolderId : null;
-  if (candidate !== null && candidate !== undefined && cache) {
-    const pf = cache.folderMap.get(candidate);
-    if (pf && !pf.isDeleted && !pf.isPermanentlyDeleted && !cache.isUnderTrashSync(candidate)) {
-      const isUnderSec = candidate === globalSecurityFolderId || cache.isUnderSecuritySync(candidate);
-      if (isUnderSec) {
-        if (isSecurityUnlocked && currentSecKey) {
-          targetFolderId = candidate;
-          expandSidebarFolderInMemory(candidate);
-        }
-      } else {
-        targetFolderId = candidate;
-        sidebarDriveCollapsed = false;
-        try {
-          localStorage.setItem(SIDEBAR_DRIVE_COLLAPSED_KEY, "false");
-        } catch {}
-        sidebarExpandedSet.add(candidate);
-        saveSidebarExpandedState();
-      }
-    }
-  } else if (targetFolderId !== null) {
+  if (targetFolderId !== null && targetFolderId !== undefined) {
     sidebarDriveCollapsed = false;
     try {
       localStorage.setItem(SIDEBAR_DRIVE_COLLAPSED_KEY, "false");
@@ -3622,9 +3595,11 @@ function openSidebarContextMenu(e, meta) {
     items.push({ label: "이름 바꾸기", icon: "fa-solid fa-pen", fn: () => fmRename(meta.id) });
     items.push({ label: "복사본 만들기", icon: "fa-solid fa-copy", fn: () => duplicateNoteFromSidebar(meta.id) });
     items.push({ label: "이동하기", icon: "fa-solid fa-arrows-up-down-left-right", fn: () => openMoveModal(meta.id) });
-    items.push({ label: "공유하기 (.myns)", icon: "fa-solid fa-share-nodes", fn: () => {
-      if (typeof exportMemoByIdAsMYNS === "function") exportMemoByIdAsMYNS(meta.id);
-    }});
+    if (window.ZEN_DESKTOP_ONLY || window.innerWidth > 768) {
+      items.push({ label: "공유하기 (.myns)", icon: "fa-solid fa-share-nodes", fn: () => {
+        if (typeof exportMemoByIdAsMYNS === "function") exportMemoByIdAsMYNS(meta.id);
+      }});
+    }
     items.push({ divider: true });
     items.push({ label: "휴지통으로", icon: "fa-solid fa-trash-can", danger: true, fn: () => deleteSidebarNoteWithConfirm(meta.id) });
   } else {

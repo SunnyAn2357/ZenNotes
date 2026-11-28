@@ -3576,7 +3576,8 @@ if (window.visualViewport) {
 
 
 
-// 🎯 [완벽본] 툴바 감옥 탈출! 모바일 전용 독립 팝업(Modal) 엔진
+// 🎯 [완벽본] 툴바 감옥 탈출! 모바일 전용 독립 팝업(Modal) 엔진 (데스크톱 전용 MY 노트 제외)
+if (!window.ZEN_DESKTOP_ONLY) {
 const zenOverlay = document.createElement('div');
 zenOverlay.id = 'zen-mobile-overlay';
 zenOverlay.innerHTML = '<div id="zen-mobile-popup"></div>';
@@ -3687,6 +3688,7 @@ function closeZenPopup(fromPopstate = false) {
     }
 }
 window.closeZenPopup = closeZenPopup;
+}
 
 /* ==========================================
    🎯 코드블록 전용: 스마트 복사 버튼 로직

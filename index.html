@@ -11,18 +11,18 @@
 
     <title>ZenNotes</title>
 
-    <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
+    <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)'; window.ZEN_DESKTOP_ONLY = false;</script>
 
     <!-- ADS 파비콘 및 iOS 홈 화면 아이콘 풀세트 (GitHub Pages ./ 상대경로) -->
-    <link rel="icon" href="./favicon.ico?v=1.9.2" sizes="48x48">
-    <link rel="icon" href="./favicon.svg?v=1.9.2" type="image/svg+xml">
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.9.2">
-    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.9.2">
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.9.2">
+    <link rel="icon" href="./favicon.ico?v=1.9.3" sizes="48x48">
+    <link rel="icon" href="./favicon.svg?v=1.9.3" type="image/svg+xml">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.9.3">
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.9.3">
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.9.3">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="ZenNotes">
-    <link rel="manifest" href="./manifest.json?v=1.9.2">
+    <link rel="manifest" href="./manifest.json?v=1.9.3">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -35,7 +35,8 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.9.2">
+    <link rel="stylesheet" href="css/main.css?v=1.9.3">
+    <link rel="stylesheet" href="css/mobile.css?v=1.9.3">
 
 </head>
 
@@ -369,6 +370,18 @@
             </button>
             <button class="toggle-btn auth-toggle-btn miryang-bi-btn" id="btn-auth" title="로그인(추후 지원)">
                 <img src="./miryang_bi.png" alt="밀양시 BI" class="miryang-bi-icon">
+            </button>
+            <button type="button" class="zen-mobile-auth-btn" id="btn-auth-mobile" title="클라우드 로그인" aria-label="클라우드 로그인">
+                <span class="zen-mobile-auth-gicon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14">
+                        <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.55-.2-2.27H12v4.3h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.26-2.08 3.56-5.15 3.56-8.65z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.91l-3.87-3c-1.07.72-2.45 1.15-4.06 1.15-3.12 0-5.77-2.11-6.72-4.95H1.28v3.1A12 12 0 0 0 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.29a7.21 7.21 0 0 1 0-4.58v-3.1H1.28a12 12 0 0 0 0 10.78l4-3.1z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.28 6.61l4 3.1C6.23 6.86 8.88 4.75 12 4.75z"/>
+                    </svg>
+                </span>
+                <span class="zen-mobile-auth-dot" aria-hidden="true"></span>
+                <span id="btn-auth-mobile-label">로그인</span>
             </button>
         </div>
 
@@ -983,30 +996,32 @@
                     <div class="zen-settings-item-desc">변경 사항이 있을 때만 1시간마다 조용히 전체 백업을 생성하며 30일 경과 파일은 자동 삭제합니다.</div>
                 </div>
 
-                <div class="zen-settings-divider"></div>
-                <div class="zen-settings-section-label">AI 연동</div>
+                <div class="zen-settings-ai-section">
+                    <div class="zen-settings-divider"></div>
+                    <div class="zen-settings-section-label">AI 연동</div>
 
-                <!-- 설정 8: [V1.6.0] MY AI (TimelyGPT) 개인 API 키 -->
-                <div class="zen-settings-item zen-settings-stack-item">
-                    <div class="zen-settings-inline-head">
-                        <div class="zen-settings-item-label">MY AI 개인 API 키</div>
-                        <span id="setting-myai-key-status" class="zen-settings-meta-badge">미입력</span>
+                    <!-- 설정 8: [V1.6.0] MY AI (TimelyGPT) 개인 API 키 -->
+                    <div class="zen-settings-item zen-settings-stack-item">
+                        <div class="zen-settings-inline-head">
+                            <div class="zen-settings-item-label">MY AI 개인 API 키</div>
+                            <span id="setting-myai-key-status" class="zen-settings-meta-badge">미입력</span>
+                        </div>
+                        <div class="zen-settings-key-row">
+                            <input type="password" id="setting-myai-api-key" class="zen-settings-key-input" placeholder="TimelyGPT 개인 API 키 입력" autocomplete="off">
+                            <button type="button" id="setting-myai-key-eye-btn" class="zen-settings-eye-btn" onclick="toggleMyAiApiKeyVisibility()" title="API 키 보기" aria-label="API 키 보기">
+                                <i class="fa-regular fa-eye"></i>
+                            </button>
+                            <button type="button" class="zen-settings-sub-btn" onclick="saveMyAiApiKey()">저장</button>
+                        </div>
+                        <div class="zen-settings-item-desc">공문 · 쪽지 · 문서 분석 시 TimelyGPT(MY AI) 호출에 사용할 개인 인증 키입니다.</div>
                     </div>
-                    <div class="zen-settings-key-row">
-                        <input type="password" id="setting-myai-api-key" class="zen-settings-key-input" placeholder="TimelyGPT 개인 API 키 입력" autocomplete="off">
-                        <button type="button" id="setting-myai-key-eye-btn" class="zen-settings-eye-btn" onclick="toggleMyAiApiKeyVisibility()" title="API 키 보기" aria-label="API 키 보기">
-                            <i class="fa-regular fa-eye"></i>
-                        </button>
-                        <button type="button" class="zen-settings-sub-btn" onclick="saveMyAiApiKey()">저장</button>
-                    </div>
-                    <div class="zen-settings-item-desc">공문 · 쪽지 · 문서 분석 시 TimelyGPT(MY AI) 호출에 사용할 개인 인증 키입니다.</div>
                 </div>
             </div>
 
             <div class="zen-settings-footer">
                 <div class="zen-settings-app-badge">
                     <i class="fa-solid fa-note-sticky"></i>
-                    <span>ZenNotes V1.9.2</span>
+                    <span>ZenNotes V1.9.3</span>
                 </div>
                 <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
                     닫기
@@ -1327,20 +1342,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.9.2"></script>
-    <script src="js/db.js?v=1.9.2"></script>
-    <script src="js/ui.js?v=1.9.2"></script>
-    <script src="js/editor.js?v=1.9.2"></script>
-    <script src="js/file_manager.js?v=1.9.2"></script>
-    <script src="js/io.js?v=1.9.2"></script>
-    <script src="js/auth.js?v=1.9.2"></script>
-    <script src="js/zen_bridge.js?v=1.9.2"></script>
+    <script src="js/globals.js?v=1.9.3"></script>
+    <script src="js/db.js?v=1.9.3"></script>
+    <script src="js/ui.js?v=1.9.3"></script>
+    <script src="js/editor.js?v=1.9.3"></script>
+    <script src="js/file_manager.js?v=1.9.3"></script>
+    <script src="js/io.js?v=1.9.3"></script>
+    <script src="js/auth.js?v=1.9.3"></script>
+    <script src="js/zen_bridge.js?v=1.9.3"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.9.2");
+            console.log("[ZenNotes] 현재 버전: V1.9.3");
             console.log("=========================================");
         });
     </script>

@@ -60,9 +60,30 @@ function handleAuthStateChanged(user) {
     console.log("🔑 [Firebase Auth] 로그인 상태:", fbUser.email);
     checkAuthState();
     smartSync();
+    loadZenCloudPreferences();
   } else {
     console.log("🔒 [Firebase Auth] 로그아웃 상태");
     checkAuthState();
+  }
+}
+
+function updateMobileAuthBtnUI(isOnline) {
+  const mobileBtn = document.getElementById("btn-auth-mobile");
+  const mobileLabel = document.getElementById("btn-auth-mobile-label");
+  if (!mobileBtn) return;
+
+  if (fbUser) {
+    mobileBtn.classList.add("is-logged-in");
+    if (mobileLabel) mobileLabel.textContent = "연동됨";
+    const emailPart = fbUser.email ? `${fbUser.email} 연동 중` : "클라우드 연동 중";
+    mobileBtn.setAttribute("title", `${emailPart} (탭하여 로그아웃)`);
+    mobileBtn.setAttribute("aria-label", `${emailPart} (탭하여 로그아웃)`);
+  } else {
+    mobileBtn.classList.remove("is-logged-in");
+    if (mobileLabel) mobileLabel.textContent = "로그인";
+    const tip = isOnline === false ? "클라우드 로그인" : "클라우드 로그인 (Google)";
+    mobileBtn.setAttribute("title", tip);
+    mobileBtn.setAttribute("aria-label", tip);
   }
 }
 
@@ -80,6 +101,7 @@ function checkAuthState() {
     // 🎯 [V4.4.7] 밀양시 BI 버튼: 툴팁을 "로그인(추후 지원)"으로 고정
     authBtn.setAttribute("title", "로그인(추후 지원)");
   }
+  updateMobileAuthBtnUI(isOnline);
 
   window.ZEN_IS_ONLINE = isOnline;
 
@@ -94,6 +116,76 @@ function checkAuthState() {
 window.addEventListener("DOMContentLoaded", () => {
   checkAuthState();
 });
+
+// [V1.9.3] 온라인 개인용 개인 설정(API 키 / 선택 AI 모델) Firestore 영구 동기화
+function fsPreferencesDoc() {
+  if (!fbStore || !fbUser) return null;
+  return fbStore.collection("users").doc(fbUser.uid).collection("meta").doc("preferences");
+}
+
+window.saveZenCloudPreferences = async function (patch) {
+  if (!window.isZenOnline()) return false;
+  const docRef = fsPreferencesDoc();
+  if (!docRef) return false;
+  try {
+    const payload = { ...(patch || {}), updatedAt: Date.now() };
+    await docRef.set(payload, { merge: true });
+    return true;
+  } catch (e) {
+    console.warn("⚠️ [Firestore] 개인 설정 저장 건너뜀:", e);
+    return false;
+  }
+};
+
+async function loadZenCloudPreferences() {
+  if (!window.isZenOnline()) return;
+  const docRef = fsPreferencesDoc();
+  if (!docRef) return;
+  try {
+    const snap = await docRef.get();
+    const localKey = (localStorage.getItem("zen_myai_api_key") || "").trim();
+    const localModel = (localStorage.getItem("zen_myai_selected_model") || "").trim();
+    const localUpdated = parseInt(localStorage.getItem("zen_myai_prefs_updated_at") || "0", 10);
+
+    if (!snap.exists) {
+      if (localKey || localModel) {
+        await window.saveZenCloudPreferences({
+          myAiApiKey: localKey,
+          myAiSelectedModel: localModel,
+        });
+      }
+      return;
+    }
+
+    const data = snap.data() || {};
+    const cloudKey = typeof data.myAiApiKey === "string" ? data.myAiApiKey.trim() : "";
+    const cloudModel = typeof data.myAiSelectedModel === "string" ? data.myAiSelectedModel.trim() : "";
+    const cloudUpdated = typeof data.updatedAt === "number" ? data.updatedAt : 0;
+
+    let changed = false;
+    if (cloudKey && (!localKey || cloudUpdated > localUpdated)) {
+      localStorage.setItem("zen_myai_api_key", cloudKey);
+      changed = true;
+    }
+    if (cloudModel && (!localModel || cloudUpdated > localUpdated)) {
+      localStorage.setItem("zen_myai_selected_model", cloudModel);
+      changed = true;
+    }
+    if (changed) {
+      localStorage.setItem("zen_myai_prefs_updated_at", String(cloudUpdated || Date.now()));
+      if (typeof window.refreshMyAiPrefsFromExternal === "function") {
+        window.refreshMyAiPrefsFromExternal();
+      }
+    } else if ((localKey && !cloudKey) || (localModel && !cloudModel)) {
+      await window.saveZenCloudPreferences({
+        myAiApiKey: localKey || cloudKey,
+        myAiSelectedModel: localModel || cloudModel,
+      });
+    }
+  } catch (e) {
+    console.warn("⚠️ [Firestore] 개인 설정 로드 건너뜀:", e);
+  }
+}
 
 // 🎯 [V4.7.5] 밀양시 BI 버튼: 1회 클릭 시 "로그인(추후 지원)", 2초 내 5연타(5-tap) 시 시크릿 구글 로그인/로그아웃 트리거
 let secretTapCount = 0;
@@ -124,6 +216,15 @@ if (authBtnEl) {
     }, 2000);
 
     showToast("로그인(추후 지원)");
+  });
+}
+
+// [V1.9.3] 모바일 전용 Zen 알약형 구글 로그인 버튼: 1회 탭 원클릭 로그인/로그아웃
+const mobileAuthBtnEl = document.getElementById("btn-auth-mobile");
+if (mobileAuthBtnEl) {
+  mobileAuthBtnEl.addEventListener("click", (e) => {
+    if (e) e.stopPropagation();
+    handleCloudAuthLegacy();
   });
 }
 
