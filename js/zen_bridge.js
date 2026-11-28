@@ -1210,18 +1210,18 @@
     // ========================================================================
     // 5. 좌측 상단 블랙홀 버튼 + NASA 골드 블랙홀 등장/꿀꺽/퇴장 껍데기
     // ========================================================================
-    const BH_DEFAULT_PROMPT = "다운 받은 공문(zip 파일)을 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).";
+    const BH_DEFAULT_PROMPT = "";
     const BH_MODE_META = {
         official: {
             label: "공문 분석",
             defaultFolding: true,
-            prompt: "다운 받은 공문(zip 파일)을 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
+            prompt: "",
             hint: "공문 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         memo: {
             label: "쪽지 분석",
             defaultFolding: true,
-            prompt: "받은 쪽지를 블랙홀에 던져 넣으세요(개인정보X, 비공개문서X).",
+            prompt: "쪽지 분석 중에는 '마우스·키보드'를 사용하지 마세요. AI가 사용하고 있습니다.",
             hint: "쪽지 본문만 AI 전송·분석합니다(첨부 제외)."
         },
         summary: {
@@ -1358,6 +1358,19 @@
         "당신의 수고와 진심을 기억하며, 언제나 한결같이 응원합니다."
     ];
 
+    function setBlackHoleStatusPillText(text) {
+        const pill = document.getElementById("zen-bh-status-pill");
+        if (!pill) return;
+        const s = String(text || "").trim();
+        if (!s) {
+            pill.textContent = "";
+            pill.style.display = "none";
+        } else {
+            pill.style.display = "";
+            pill.textContent = s;
+        }
+    }
+
     function stopBlackHoleCheerRotation() {
         clearTimeout(bhCheerDelayTimer);
         clearInterval(bhCheerIntervalTimer);
@@ -1373,13 +1386,14 @@
         const pill = document.getElementById("zen-bh-status-pill");
         if (!pill) return;
         clearTimeout(bhCheerFadeTimer);
+        pill.style.display = "";
         pill.classList.add("is-cheer-fading");
         bhCheerFadeTimer = setTimeout(() => {
             if (!bhIsOpen || !bhSwallowing) {
                 pill.classList.remove("is-cheer-fading");
                 return;
             }
-            pill.textContent = text;
+            setBlackHoleStatusPillText(text);
             pill.classList.remove("is-cheer-fading");
         }, 240);
     }
@@ -1389,7 +1403,7 @@
         const pill = document.getElementById("zen-bh-status-pill");
         if (pill && initialStatusText) {
             pill.classList.remove("is-cheer-fading");
-            pill.textContent = initialStatusText;
+            setBlackHoleStatusPillText(initialStatusText);
         }
         if (!Array.isArray(BH_CHEER_MESSAGES) || BH_CHEER_MESSAGES.length === 0) return;
 
@@ -1416,18 +1430,18 @@
 
     function initBlackHoleParticles() {
         bhOrbitDots = [];
-        for (let i = 0; i < 84; i++) {
+        for (let i = 0; i < 59; i++) {
             bhOrbitDots.push({
                 angle: Math.random() * Math.PI * 2,
                 radiusFactor: 0.36 + Math.random() * 0.72,
-                speed: (0.008 + Math.random() * 0.015) * (0.72 + (1 - i / 84) * 0.58),
+                speed: (0.008 + Math.random() * 0.015) * (0.72 + (1 - i / 59) * 0.58),
                 size: 1.0 + Math.random() * 2.0,
                 alpha: 0.32 + Math.random() * 0.65,
                 hueMix: Math.random()
             });
         }
         bhOuterStars = [];
-        for (let i = 0; i < 64; i++) {
+        for (let i = 0; i < 45; i++) {
             bhOuterStars.push({
                 angle: Math.random() * Math.PI * 2,
                 rxRatio: 0.42 + Math.random() * 0.62,
@@ -1845,8 +1859,7 @@
         if (hintEl) hintEl.textContent = meta.hint;
         if (!bhSwallowing) {
             stopBlackHoleCheerRotation();
-            const pill = document.getElementById("zen-bh-status-pill");
-            if (pill) pill.textContent = meta.prompt || BH_DEFAULT_PROMPT;
+            setBlackHoleStatusPillText(meta.prompt || BH_DEFAULT_PROMPT);
         }
         setBlackHoleSendingUi(bhSwallowing);
     }
@@ -4174,21 +4187,16 @@
             }
             bhTargetHover = 1;
             if (dropZone) dropZone.classList.add("is-drag-hover", "is-external-memo-hover");
-            if (pill) {
-                pill.textContent = "밀양 메신저 쪽지 감지 — 여기에 놓으면 블랙홀이 빨아들입니다!";
-            }
+            setBlackHoleStatusPillText("밀양 메신저 쪽지 감지 — 여기에 놓으면 블랙홀이 빨아들입니다!");
         } else {
             bhTargetHover = 0;
             if (dropZone) dropZone.classList.remove("is-drag-hover", "is-external-memo-hover");
-            if (pill) {
-                pill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.official).prompt;
-            }
+            setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.official).prompt);
         }
     }
 
     function handleMiryangMemoCaptureStartedEvent() {
         const dropZone = document.getElementById("zen-bh-orb-dropzone");
-        const pill = document.getElementById("zen-bh-status-pill");
         if (!bhIsOpen) return;
 
         closeBlackHoleModelDropdown();
@@ -4220,16 +4228,13 @@
             });
         }
 
-        if (pill) {
-            pill.textContent = "쪽지 본문 및 첨부파일을 자동 수집하고 있습니다...";
-        }
+        setBlackHoleStatusPillText("쪽지 본문 및 첨부파일을 자동 수집하고 있습니다...");
 
         bhExternalCaptureWatchdog = setTimeout(() => {
             if (bhSwallowing) {
                 bhSwallowing = false;
                 setBlackHoleSendingUi(false);
-                const curPill = document.getElementById("zen-bh-status-pill");
-                if (curPill) curPill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt;
+                setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt);
                 if (typeof showToast === "function") {
                     showToast("쪽지 수집 응답 시간이 초과되었습니다. 다시 시도해 주세요.");
                 }
@@ -4244,8 +4249,7 @@
         if (!payload || !payload.ok) {
             bhSwallowing = false;
             setBlackHoleSendingUi(false);
-            const curPill = document.getElementById("zen-bh-status-pill");
-            if (curPill) curPill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt;
+            setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt);
             if (typeof showToast === "function") {
                 showToast((payload && payload.errorMessage) || "쪽지 창에서 내용을 수집할 수 없습니다.");
             }
@@ -4256,8 +4260,7 @@
         if (!bodyTextClean) {
             bhSwallowing = false;
             setBlackHoleSendingUi(false);
-            const curPill = document.getElementById("zen-bh-status-pill");
-            if (curPill) curPill.textContent = (BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt;
+            setBlackHoleStatusPillText((BH_MODE_META[bhCurrentMode] || BH_MODE_META.memo).prompt);
             if (typeof showToast === "function") {
                 showToast("쪽지 본문이 비어 있어 AI 분석을 진행할 수 없습니다.");
             }
@@ -4363,9 +4366,7 @@
             });
         }
 
-        if (pill) {
-            pill.textContent = `${firstName}${extra} 투입 중 (${meta.label} · ${modelMeta.name})`;
-        }
+        setBlackHoleStatusPillText(`${firstName}${extra} 투입 중 (${meta.label} · ${modelMeta.name})`);
 
         const totalSwallowMs = duration + (count - 1) * stagger + 40;
         const minWaitMs = Math.max(2100, totalSwallowMs + 860);
@@ -4453,9 +4454,7 @@
             startR: 140
         });
 
-        if (pill) {
-            pill.textContent = `프롬프트 전송 중 (${modelMeta.name})`;
-        }
+        setBlackHoleStatusPillText(`프롬프트 전송 중 (${modelMeta.name})`);
 
         const minWaitMs = 1800;
         bhSwallowTimer1 = setTimeout(() => {
