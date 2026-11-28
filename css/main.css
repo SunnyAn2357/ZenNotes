@@ -2002,6 +2002,27 @@ body.light-theme #video-modal-submit-btn {
     align-items: center;
 }
 
+/* [V1.9.1] iOS Safari(WebKit) Flexbox 내 글자색/배경색 SVG 0px 축소 방어 */
+.ql-toolbar.ql-snow .ql-color-picker {
+    width: 26px !important;
+}
+
+.ql-toolbar.ql-snow .ql-color-picker .ql-picker-label {
+    justify-content: center;
+    padding: 0 !important;
+}
+
+.ql-toolbar.ql-snow .ql-color-picker .ql-picker-label svg {
+    width: 17px !important;
+    height: 17px !important;
+    min-width: 17px;
+    min-height: 17px;
+    flex-shrink: 0;
+    display: block;
+    position: static !important;
+    margin: 0 !important;
+}
+
 /* 1. 툴바에 보이는 정렬 드롭다운 본체 너비 */
 .ql-toolbar.ql-snow .ql-picker.ql-align {
     width: 28px !important;
