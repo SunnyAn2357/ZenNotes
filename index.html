@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.8.16">
-    <link rel="manifest" href="manifest.json?v=1.8.16">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.8.17">
+    <link rel="manifest" href="manifest.json?v=1.8.17">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.8.16">
+    <link rel="stylesheet" href="css/main.css?v=1.8.17">
 
 </head>
 
@@ -1112,12 +1112,16 @@
         </div>
     </div>
 
-    <!-- [V1.8.16] 좌측 블랙홀 미니멀 포털 (공문·쪽지·일반문서 자동 판별) -->
+    <!-- [V1.8.17] 좌측 블랙홀 인셋 다크 코스모스 뷰포트 포털 -->
     <div id="zen-blackhole-portal-layer" class="zen-bh-portal-layer" onclick="if(event.target===this) closeBlackHolePortal()">
         <div id="zen-blackhole-portal-shell" class="zen-bh-portal-shell is-origin" onclick="event.stopPropagation()">
             <div class="zen-bh-shell-head">
-                <div class="zen-bh-head-left">
-                    <span class="zen-bh-shell-title">ZenNotes 공문/쪽지/문서 분석</span>
+                <div class="zen-bh-title-group">
+                    <span class="zen-bh-shell-title">ZenNotes</span>
+                    <span class="zen-bh-title-sep" aria-hidden="true"></span>
+                    <span class="zen-bh-title-sub">공문 · 쪽지 · 문서 분석</span>
+                </div>
+                <div class="zen-bh-head-right">
                     <div class="zen-bh-model-picker-wrap">
                         <button type="button" id="zen-bh-model-btn" class="zen-bh-model-btn" onclick="toggleBlackHoleModelDropdown(event)" title="문서 분석·요약에 사용할 AI 모델 선택">
                             <span id="zen-bh-model-btn-icon" class="zen-bh-model-icon"></span>
@@ -1126,20 +1130,29 @@
                         </button>
                         <div id="zen-bh-model-dropdown" class="zen-bh-model-dropdown" style="display: none;" onclick="event.stopPropagation()"></div>
                     </div>
+                    <button type="button" class="zen-bh-close-btn" onclick="closeBlackHolePortal()" aria-label="닫기" title="닫기 (Esc)">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
-                <button type="button" class="zen-bh-close-btn" onclick="closeBlackHolePortal()" aria-label="닫기" title="닫기 (Esc)">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
             </div>
             <div id="zen-bh-orb-dropzone" class="zen-bh-orb-dropzone" onclick="triggerBlackHoleFilePick()" title="공문·쪽지 창이나 일반 문서를 끌어다 놓거나 클릭해 선택하세요">
                 <canvas id="zen-bh-canvas" class="zen-bh-canvas"></canvas>
                 <input type="file" id="zen-bh-file-input" multiple style="display: none;">
+                <div id="zen-bh-status-pill" class="zen-bh-status-pill">
+                    <span class="zen-bh-status-dot" aria-hidden="true"></span>
+                    <span id="zen-bh-status-text">공문·쪽지 창이나 (일반) 문서를 블랙홀에 던져 넣으세요.</span>
+                </div>
             </div>
-            <div id="zen-bh-status-pill" class="zen-bh-status-pill">공문·쪽지 창이나 (일반) 문서를 블랙홀에 던져 넣으세요.</div>
             <div class="zen-bh-minimal-footer">
-                <label class="zen-bh-summary-check">
-                    <input type="checkbox" id="zen-bh-concise-toggle">
-                    <span>문서 요약(일반 문서를 개조식·1장 보고서로 만들기)</span>
+                <label class="zen-bh-summary-toggle" for="zen-bh-concise-toggle">
+                    <span class="zen-bh-summary-copy">
+                        <span class="zen-bh-summary-main">문서 요약</span>
+                        <span class="zen-bh-summary-desc">일반 문서를 개조식 · 1장 보고서로 만들기</span>
+                    </span>
+                    <span class="zen-bh-switch-wrap">
+                        <input type="checkbox" id="zen-bh-concise-toggle" class="zen-bh-switch-input">
+                        <span class="zen-bh-switch-track" aria-hidden="true"></span>
+                    </span>
                 </label>
             </div>
         </div>
@@ -1173,20 +1186,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.8.16"></script>
-    <script src="js/db.js?v=1.8.16"></script>
-    <script src="js/ui.js?v=1.8.16"></script>
-    <script src="js/editor.js?v=1.8.16"></script>
-    <script src="js/file_manager.js?v=1.8.16"></script>
-    <script src="js/io.js?v=1.8.16"></script>
-    <script src="js/auth.js?v=1.8.16"></script>
-    <script src="js/zen_bridge.js?v=1.8.16"></script>
+    <script src="js/globals.js?v=1.8.17"></script>
+    <script src="js/db.js?v=1.8.17"></script>
+    <script src="js/ui.js?v=1.8.17"></script>
+    <script src="js/editor.js?v=1.8.17"></script>
+    <script src="js/file_manager.js?v=1.8.17"></script>
+    <script src="js/io.js?v=1.8.17"></script>
+    <script src="js/auth.js?v=1.8.17"></script>
+    <script src="js/zen_bridge.js?v=1.8.17"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.8.16");
+            console.log("[ZenNotes] 현재 버전: V1.8.17");
             console.log("=========================================");
         });
     </script>

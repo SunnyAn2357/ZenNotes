@@ -1366,13 +1366,17 @@
     function setBlackHoleStatusPillText(text) {
         const pill = document.getElementById("zen-bh-status-pill");
         if (!pill) return;
+        const textEl = document.getElementById("zen-bh-status-text");
         const s = String(text || "").trim();
+        pill.classList.toggle("is-active-pulse", !!bhSwallowing);
         if (!s) {
-            pill.textContent = "";
+            if (textEl) textEl.textContent = "";
+            else pill.textContent = "";
             pill.style.display = "none";
         } else {
             pill.style.display = "";
-            pill.textContent = s;
+            if (textEl) textEl.textContent = s;
+            else pill.textContent = s;
         }
     }
 
@@ -1535,8 +1539,8 @@
         const ts = typeof now === "number" ? now : performance.now();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = canvas.getBoundingClientRect();
-        const cw = Math.max(160, Math.round(rect.width || 400));
-        const ch = Math.max(160, Math.round(rect.height || 262));
+        const cw = Math.max(160, Math.round(rect.width || 412));
+        const ch = Math.max(180, Math.round(rect.height || 312));
         if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
             canvas.width = cw * dpr;
             canvas.height = ch * dpr;
@@ -1545,10 +1549,10 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         const cx = cw / 2;
-        const cy = ch / 2;
-        const maxR = Math.min(cw, ch) * 0.43;
+        const cy = ch * 0.43;
+        const maxR = Math.min(cw, ch) * 0.40;
         const coreR = maxR * 0.265;
-        const diskRx = Math.max(maxR * 1.72, Math.min(cw * 0.46, maxR * 2.02));
+        const diskRx = Math.max(maxR * 1.72, Math.min(cw * 0.44, maxR * 2.02));
         const diskScaleY = 0.27;
 
         bhHoverLevel += (bhTargetHover - bhHoverLevel) * 0.14;
@@ -1556,48 +1560,53 @@
         bhFlashLevel *= 0.91;
 
         ctx.clearRect(0, 0, cw, ch);
-        const isLightTheme = !!(document.body && document.body.classList.contains("light-theme"));
 
-        // 0. 캔버스 전역 외곽 배경 별무리 (넓은 우주 시야감)
+        // -1. 정밀 천문 궤도 동심원 & 4방 미세 눈금 (인셋 다크 뷰포트용 절제된 조형 라인)
+        ctx.save();
+        const orbitAlpha = 0.055 + bhHoverLevel * 0.065 + bhFlashLevel * 0.06;
+        ctx.strokeStyle = `rgba(254, 243, 199, ${orbitAlpha})`;
+        ctx.lineWidth = 1;
+        for (const rMul of [0.88, 1.32]) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, maxR * rMul, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        const tickInner = maxR * 1.32 - 3;
+        const tickOuter = maxR * 1.32 + 4;
+        ctx.strokeStyle = `rgba(254, 243, 199, ${orbitAlpha * 1.45})`;
+        for (const aTick of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(aTick) * tickInner, cy + Math.sin(aTick) * tickInner);
+            ctx.lineTo(cx + Math.cos(aTick) * tickOuter, cy + Math.sin(aTick) * tickOuter);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // 0. 캔버스 전역 외곽 배경 별무리 (깊은 우주 시야감)
         for (const st of bhOuterStars) {
             st.angle += st.speed * (1 + bhHoverLevel * 1.4 + (bhSwallowBoost - 1) * 1.1);
             const sx = cx + Math.cos(st.angle) * (cw * 0.48 * st.rxRatio);
-            const sy = cy + Math.sin(st.angle) * (ch * 0.47 * st.ryRatio);
+            const sy = cy + Math.sin(st.angle) * (ch * 0.44 * st.ryRatio);
             if (Math.hypot(sx - cx, sy - cy) < coreR * 1.15) continue;
             const tw = 0.72 + 0.28 * Math.sin(ts * 0.003 + st.twinklePhase);
-            const a = Math.min(0.9, st.alpha * tw * (bhSwallowing ? 1.18 : 1));
-            if (isLightTheme) {
-                ctx.fillStyle = st.hueType === 0
-                    ? `rgba(180, 128, 44, ${a * 0.72})`
-                    : st.hueType === 1
-                        ? `rgba(59, 130, 246, ${a * 0.46})`
-                        : `rgba(100, 116, 139, ${a * 0.45})`;
-            } else {
-                ctx.fillStyle = st.hueType === 0
-                    ? `rgba(254, 243, 199, ${a * 0.85})`
-                    : st.hueType === 1
-                        ? `rgba(147, 197, 253, ${a * 0.72})`
-                        : `rgba(226, 232, 240, ${a * 0.65})`;
-            }
+            const a = Math.min(0.92, st.alpha * tw * (bhSwallowing ? 1.18 : 1));
+            ctx.fillStyle = st.hueType === 0
+                ? `rgba(254, 243, 199, ${a * 0.88})`
+                : st.hueType === 1
+                    ? `rgba(186, 214, 248, ${a * 0.68})`
+                    : `rgba(226, 232, 240, ${a * 0.65})`;
             ctx.beginPath();
             ctx.arc(sx, sy, st.size, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // 1. 외곽 헤일로 (화이트 모드는 탁한 검은 안개를 걷어내고 맑은 샴페인 코로나 적용)
-        const haloR = maxR * 1.42;
+        // 1. 외곽 샴페인 코로나 헤일로 (심우주 다크 뷰포트 전용)
+        const haloR = maxR * 1.44;
         const halo = ctx.createRadialGradient(cx, cy, coreR * 0.7, cx, cy, haloR);
-        if (isLightTheme) {
-            halo.addColorStop(0, "rgba(15, 23, 42, 0.10)");
-            halo.addColorStop(0.42, `rgba(217, 165, 72, ${0.15 + bhHoverLevel * 0.08 + bhFlashLevel * 0.14})`);
-            halo.addColorStop(0.74, `rgba(226, 200, 145, ${0.08 + bhHoverLevel * 0.05})`);
-            halo.addColorStop(1, "rgba(255, 255, 255, 0)");
-        } else {
-            halo.addColorStop(0, "rgba(0, 0, 0, 0.94)");
-            halo.addColorStop(0.42, "rgba(16, 18, 26, 0.72)");
-            halo.addColorStop(0.74, `rgba(180, 130, 55, ${0.18 + bhHoverLevel * 0.1 + bhFlashLevel * 0.2})`);
-            halo.addColorStop(1, "rgba(15, 23, 42, 0)");
-        }
+        halo.addColorStop(0, "rgba(0, 0, 0, 0.96)");
+        halo.addColorStop(0.42, "rgba(14, 17, 26, 0.74)");
+        halo.addColorStop(0.74, `rgba(217, 165, 72, ${0.20 + bhHoverLevel * 0.12 + bhFlashLevel * 0.2})`);
+        halo.addColorStop(1, "rgba(10, 14, 24, 0)");
         ctx.fillStyle = halo;
         ctx.beginPath();
         ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
@@ -1609,17 +1618,11 @@
         ctx.rotate(-0.22);
         for (const side of [-1, 1]) {
             const lensGrad = ctx.createLinearGradient(-maxR * 0.56, 0, maxR * 0.56, 0);
-            if (isLightTheme) {
-                lensGrad.addColorStop(0, "rgba(180, 130, 50, 0)");
-                lensGrad.addColorStop(0.5, `rgba(180, 128, 42, ${0.42 + bhHoverLevel * 0.2})`);
-                lensGrad.addColorStop(1, "rgba(180, 130, 50, 0)");
-            } else {
-                lensGrad.addColorStop(0, "rgba(253, 230, 138, 0)");
-                lensGrad.addColorStop(0.5, `rgba(254, 240, 138, ${0.38 + bhHoverLevel * 0.22})`);
-                lensGrad.addColorStop(1, "rgba(253, 230, 138, 0)");
-            }
+            lensGrad.addColorStop(0, "rgba(253, 230, 138, 0)");
+            lensGrad.addColorStop(0.5, `rgba(254, 240, 138, ${0.44 + bhHoverLevel * 0.24})`);
+            lensGrad.addColorStop(1, "rgba(253, 230, 138, 0)");
             ctx.strokeStyle = lensGrad;
-            ctx.lineWidth = isLightTheme ? 2.5 : 2.9;
+            ctx.lineWidth = 2.8;
             ctx.beginPath();
             ctx.arc(0, side * 1.4, coreR * 1.32, side > 0 ? 0.16 : Math.PI + 0.16, side > 0 ? Math.PI - 0.16 : Math.PI * 2 - 0.16);
             ctx.stroke();
@@ -1640,15 +1643,9 @@
             const isFront = Math.sin(p.angle) >= 0;
             if (!isFront && Math.hypot(px, py) < coreR * 1.05) continue;
             const bright = Math.min(1, p.alpha + bhFlashLevel * 0.35);
-            if (isLightTheme) {
-                ctx.fillStyle = p.hueMix > 0.42
-                    ? `rgba(180, 128, 44, ${bright * 0.78})`
-                    : `rgba(120, 113, 108, ${bright * 0.50})`;
-            } else {
-                ctx.fillStyle = p.hueMix > 0.42
-                    ? `rgba(254, 243, 199, ${bright * 0.88})`
-                    : `rgba(217, 165, 72, ${bright * 0.78})`;
-            }
+            ctx.fillStyle = p.hueMix > 0.42
+                ? `rgba(254, 243, 199, ${bright * 0.90})`
+                : `rgba(217, 165, 72, ${bright * 0.80})`;
             ctx.beginPath();
             ctx.arc(px, py, p.size * (isFront ? 1.1 : 0.82), 0, Math.PI * 2);
             ctx.fill();
@@ -1657,19 +1654,11 @@
         // 강착원반 밝은 2중 링 레이어 (넓은 외곽 + 코어 인접 광자띠)
         ctx.scale(1, diskScaleY);
         const diskRing = ctx.createRadialGradient(0, 0, coreR * 1.1, 0, 0, diskRx);
-        if (isLightTheme) {
-            diskRing.addColorStop(0, "rgba(217, 175, 95, 0)");
-            diskRing.addColorStop(0.18, `rgba(217, 165, 72, ${0.46 + bhFlashLevel * 0.22})`);
-            diskRing.addColorStop(0.48, `rgba(180, 130, 55, ${0.26 + bhHoverLevel * 0.14})`);
-            diskRing.addColorStop(0.78, `rgba(217, 165, 72, ${0.11 + bhHoverLevel * 0.08})`);
-            diskRing.addColorStop(1, "rgba(180, 130, 55, 0)");
-        } else {
-            diskRing.addColorStop(0, "rgba(254, 249, 195, 0)");
-            diskRing.addColorStop(0.18, `rgba(254, 243, 199, ${0.58 + bhFlashLevel * 0.22})`);
-            diskRing.addColorStop(0.48, `rgba(217, 155, 58, ${0.36 + bhHoverLevel * 0.16})`);
-            diskRing.addColorStop(0.78, `rgba(180, 83, 9, ${0.14 + bhHoverLevel * 0.09})`);
-            diskRing.addColorStop(1, "rgba(180, 83, 9, 0)");
-        }
+        diskRing.addColorStop(0, "rgba(254, 249, 195, 0)");
+        diskRing.addColorStop(0.18, `rgba(254, 243, 199, ${0.62 + bhFlashLevel * 0.22})`);
+        diskRing.addColorStop(0.48, `rgba(217, 155, 58, ${0.38 + bhHoverLevel * 0.16})`);
+        diskRing.addColorStop(0.78, `rgba(180, 102, 24, ${0.15 + bhHoverLevel * 0.09})`);
+        diskRing.addColorStop(1, "rgba(180, 83, 9, 0)");
         ctx.fillStyle = diskRing;
         ctx.beginPath();
         ctx.arc(0, 0, diskRx, 0, Math.PI * 2);
@@ -1723,9 +1712,7 @@
                     const p0 = b.trail[tIdx - 1];
                     const p1 = b.trail[tIdx];
                     const frac = tIdx / b.trail.length;
-                    ctx.strokeStyle = isLightTheme
-                        ? `rgba(180, 128, 44, ${fadeAlpha * frac * 0.42})`
-                        : `rgba(254, 243, 199, ${fadeAlpha * frac * 0.52})`;
+                    ctx.strokeStyle = `rgba(254, 243, 199, ${fadeAlpha * frac * 0.52})`;
                     ctx.lineWidth = Math.max(0.8, b.size * scale * frac * 0.45);
                     ctx.beginPath();
                     ctx.moveTo(p0.x, p0.y);
@@ -1739,7 +1726,7 @@
             ctx.translate(bx, by);
             ctx.globalAlpha = fadeAlpha;
             if (b.type === "star") {
-                ctx.fillStyle = isLightTheme ? "#b45309" : "#fef3c7";
+                ctx.fillStyle = "#fef3c7";
                 ctx.beginPath();
                 ctx.moveTo(0, -drawR * 1.45);
                 ctx.lineTo(drawR * 0.42, -drawR * 0.42);
@@ -1765,7 +1752,7 @@
 
                 if (b.type === "ringed") {
                     ctx.rotate(b.tilt);
-                    ctx.strokeStyle = isLightTheme ? "rgba(180, 128, 44, 0.75)" : "rgba(254, 240, 138, 0.8)";
+                    ctx.strokeStyle = "rgba(254, 240, 138, 0.82)";
                     ctx.lineWidth = Math.max(1, drawR * 0.22);
                     ctx.beginPath();
                     ctx.ellipse(0, 0, drawR * 1.85, drawR * 0.52, 0, 0, Math.PI * 2);
@@ -1782,18 +1769,14 @@
 
         // 4. 사상의 지평선(중앙 블랙 코어) + 광자 링
         ctx.save();
-        ctx.fillStyle = isLightTheme ? "#111827" : "#04060c";
-        ctx.shadowColor = isLightTheme
-            ? `rgba(180, 130, 50, ${0.48 + bhFlashLevel * 0.2})`
-            : `rgba(254, 240, 138, ${0.65 + bhFlashLevel * 0.2})`;
-        ctx.shadowBlur = (isLightTheme ? 12 : 15) + bhHoverLevel * 8 + bhFlashLevel * 14;
+        ctx.fillStyle = "#04060c";
+        ctx.shadowColor = `rgba(254, 240, 138, ${0.68 + bhFlashLevel * 0.22})`;
+        ctx.shadowBlur = 16 + bhHoverLevel * 8 + bhFlashLevel * 14;
         ctx.beginPath();
         ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.strokeStyle = isLightTheme
-            ? `rgba(217, 165, 72, ${0.72 + bhFlashLevel * 0.2})`
-            : `rgba(254, 243, 199, ${0.75 + bhFlashLevel * 0.18})`;
+        ctx.strokeStyle = `rgba(254, 243, 199, ${0.78 + bhFlashLevel * 0.18})`;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(cx, cy, coreR + 0.6, 0, Math.PI * 2);
