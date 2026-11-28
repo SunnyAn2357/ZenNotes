@@ -297,7 +297,7 @@ function renderFmBreadcrumbs() {
     const isLast = index === steps.length - 1;
     const isSecurityCrumb = p.id === globalSecurityFolderId || p.title === "보안 폴더";
     const span = document.createElement("span");
-    span.className = `fm-crumb ${isLast ? "active" : ""}`;
+    span.className = `fm-crumb ${isLast ? "active" : ""} ${isSecurityCrumb ? "is-security-crumb" : ""}`;
     const crumbTitle =
       p.id === null
         ? driveLabel
@@ -305,7 +305,7 @@ function renderFmBreadcrumbs() {
     const iconHtml =
       p.id === null
         ? '<i class="fa-solid fa-hard-drive" style="margin-right:6px;"></i>'
-        : (isSecurityCrumb ? '<i class="fa-solid fa-lock-open" style="margin-right:6px; color:#f59e0b;"></i>' : '');
+        : (isSecurityCrumb ? '<i class="fa-solid fa-lock-open fm-crumb-sec-icon" style="margin-right:6px;"></i>' : '');
     span.innerHTML = `${iconHtml}${escapeTreeHtml(crumbTitle)}`;
 
     span.onclick = () => {
@@ -1213,9 +1213,10 @@ function openSecurityModal(mode) {
   securityMode = mode;
   secLiveCheckSeq++;
   const modal = document.getElementById("fm-security-modal");
-  const title = document
-    .getElementById("sec-modal-title")
-    .querySelector("span");
+  const titleTextEl =
+    document.getElementById("sec-modal-title-text") ||
+    document.getElementById("sec-modal-title").querySelector("span");
+  const iconEl = document.getElementById("sec-modal-icon");
   const desc = document.getElementById("sec-modal-desc");
   const input = document.getElementById("sec-password-input");
   const btn = document.getElementById("sec-confirm-btn");
@@ -1231,24 +1232,24 @@ function openSecurityModal(mode) {
   setTimeout(() => input.focus(), 100);
 
   if (mode === "setup") {
-    title.innerHTML =
-      '<i class="fa-solid fa-key" style="color: #f59e0b;"></i> 비번 설정';
+    if (iconEl) iconEl.className = "fa-solid fa-key";
+    if (titleTextEl) titleTextEl.textContent = "보안 폴더 비밀번호 설정";
     desc.innerHTML = "보안 폴더에 사용할 <b>새 비밀번호</b>를 입력하세요.";
     btn.innerText = "다음"; // 1차 입력이므로 '다음'으로 표기
   } else if (mode === "change") {
-    title.innerHTML =
-      '<i class="fa-solid fa-key" style="color: #f59e0b;"></i> 비번 변경';
+    if (iconEl) iconEl.className = "fa-solid fa-key";
+    if (titleTextEl) titleTextEl.textContent = "보안 폴더 비밀번호 변경";
     desc.innerHTML = "<b>현재 비밀번호</b>를 입력하세요.";
     btn.innerText = "다음";
   } else if (mode === "disableAutoLock") {
-    title.innerHTML =
-      '<i class="fa-solid fa-shield-halved" style="color: #f59e0b;"></i> 오토락 해제';
+    if (iconEl) iconEl.className = "fa-solid fa-shield-halved";
+    if (titleTextEl) titleTextEl.textContent = "오토락 해제";
     desc.innerHTML = "보안 폴더 오토락을 해제하려면 <b>비밀번호</b>를 입력하세요.";
     btn.innerText = "오토락 해제";
   } else {
     // enter
-    title.innerHTML =
-      '<i class="fa-solid fa-lock" style="color: #f59e0b;"></i> 보안 폴더';
+    if (iconEl) iconEl.className = "fa-solid fa-lock";
+    if (titleTextEl) titleTextEl.textContent = "보안 폴더";
     desc.innerHTML = "비밀번호를 입력하세요.";
     btn.innerText = "잠금 해제";
   }
@@ -1972,7 +1973,7 @@ function renderDestFolders(scrollToFolderId = undefined) {
     if (typeof globalBhOfficialFolderId !== "undefined" && globalBhOfficialFolderId !== null && isValidDestination(globalBhOfficialFolderId)) {
       const isCur = currentOriginFolderId !== undefined && globalBhOfficialFolderId === currentOriginFolderId && !isCurrentInTrash;
       container.appendChild(
-        createDestItem(globalBhOfficialFolderId, "공문 분석", "fa-file-signature", "#6366f1", 1, isCur),
+        createDestItem(globalBhOfficialFolderId, "공문 분석", "fa-file-signature", "#6d73c4", 1, isCur),
       );
       appendSubtree(globalBhOfficialFolderId, 2);
     }
@@ -1980,7 +1981,7 @@ function renderDestFolders(scrollToFolderId = undefined) {
     if (typeof globalBhMemoFolderId !== "undefined" && globalBhMemoFolderId !== null && isValidDestination(globalBhMemoFolderId)) {
       const isCur = currentOriginFolderId !== undefined && globalBhMemoFolderId === currentOriginFolderId && !isCurrentInTrash;
       container.appendChild(
-        createDestItem(globalBhMemoFolderId, "쪽지 분석", "fa-paper-plane", "#0284c7", 1, isCur),
+        createDestItem(globalBhMemoFolderId, "쪽지 분석", "fa-paper-plane", "#3b8db8", 1, isCur),
       );
       appendSubtree(globalBhMemoFolderId, 2);
     }
@@ -1988,7 +1989,7 @@ function renderDestFolders(scrollToFolderId = undefined) {
     if (typeof globalBhDocFolderId !== "undefined" && globalBhDocFolderId !== null && isValidDestination(globalBhDocFolderId)) {
       const isCur = currentOriginFolderId !== undefined && globalBhDocFolderId === currentOriginFolderId && !isCurrentInTrash;
       container.appendChild(
-        createDestItem(globalBhDocFolderId, "문서 분석", "fa-file-lines", "#059669", 1, isCur),
+        createDestItem(globalBhDocFolderId, "문서 분석", "fa-file-lines", "#3d9678", 1, isCur),
       );
       appendSubtree(globalBhDocFolderId, 2);
     }
@@ -2014,7 +2015,7 @@ function renderDestFolders(scrollToFolderId = undefined) {
         globalSecurityFolderId === currentOriginFolderId &&
         !isCurrentInTrash;
       container.appendChild(
-        createDestItem(globalSecurityFolderId, "보안 폴더", "fa-lock", "#f59e0b", 0, isSecCurrent),
+        createDestItem(globalSecurityFolderId, "보안 폴더", "fa-lock", "#c68a2b", 0, isSecCurrent),
       );
       appendSubtree(globalSecurityFolderId, 1);
     }

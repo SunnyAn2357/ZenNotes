@@ -223,12 +223,8 @@ icons['highlight'] = '<svg viewBox="0 0 18 18"><line class="ql-stroke" x1="5" x2
 icons['divider'] = '<i class="fa-solid fa-minus" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['markdown-help'] = '<i class="fa-brands fa-markdown" style="font-size: 15px; color: var(--text-muted);" title="마크다운 문법 (MD)"></i>';
 
-// 2. 표 확장 및 제어 아이콘 (Zen 철학: 글로벌 오피스 표준 직관적 SVG)
-icons['table'] = '<i class="fa-solid fa-table" style="font-size: 14px; color: var(--text-muted);" title="표 삽입 (3x3) (Ctrl+Alt+T)"></i>';
-icons['table-insert-row'] = '<svg viewBox="0 0 18 18"><title>아래에 행 추가 (Alt+↓)</title><rect class="ql-stroke" x="2" y="2" width="14" height="8.5" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="2" y1="6.25" x2="16" y2="6.25" stroke-width="1"/><line class="ql-stroke" x1="9" y1="2" x2="9" y2="10.5" stroke-width="1"/><path class="ql-stroke" d="M9 12.5v4M7 14.5h4" stroke-width="1.5" stroke-linecap="round"/></svg>';
-icons['table-delete-row'] = '<svg viewBox="0 0 18 18"><title>현재 행 삭제 (Alt+↑)</title><rect class="ql-stroke" x="2" y="2" width="14" height="8.5" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="2" y1="6.25" x2="16" y2="6.25" stroke-width="1"/><line class="ql-stroke" x1="9" y1="2" x2="9" y2="10.5" stroke-width="1"/><line class="ql-stroke" x1="7" y1="14.5" x2="11" y2="14.5" stroke-width="1.5" stroke-linecap="round"/></svg>';
-icons['table-insert-column'] = '<svg viewBox="0 0 18 18"><title>오른쪽에 열 추가 (Alt+→)</title><rect class="ql-stroke" x="2" y="2" width="8.5" height="14" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="6.25" y1="2" x2="6.25" y2="16" stroke-width="1"/><line class="ql-stroke" x1="2" y1="9" x2="10.5" y2="9" stroke-width="1"/><path class="ql-stroke" d="M14.5 7v4M12.5 9h4" stroke-width="1.5" stroke-linecap="round"/></svg>';
-icons['table-delete-column'] = '<svg viewBox="0 0 18 18"><title>현재 열 삭제 (Alt+←)</title><rect class="ql-stroke" x="2" y="2" width="8.5" height="14" rx="1" stroke-width="1.2" fill="none"/><line class="ql-stroke" x1="6.25" y1="2" x2="6.25" y2="16" stroke-width="1"/><line class="ql-stroke" x1="2" y1="9" x2="10.5" y2="9" stroke-width="1"/><line class="ql-stroke" x1="12.5" y1="9" x2="16.5" y2="9" stroke-width="1.5" stroke-linecap="round"/></svg>';
+// 2. 표 통합 드롭다운 아이콘 (Zen 철학: 단색 3x3 그리드 + 드롭다운 셰브론)
+icons['table'] = '<svg viewBox="0 0 18 18"><rect class="ql-stroke" x="1.5" y="2.5" width="11.5" height="12.5" rx="1.4" stroke-width="1.3" fill="none"/><line class="ql-stroke" x1="1.5" y1="6.7" x2="13" y2="6.7" stroke-width="1.1"/><line class="ql-stroke" x1="1.5" y1="10.9" x2="13" y2="10.9" stroke-width="1.1"/><line class="ql-stroke" x1="7.25" y1="2.5" x2="7.25" y2="15" stroke-width="1.1"/><polyline class="ql-stroke" points="14.2 7.8 15.6 9.5 17 7.8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>';
 
 icons['undo'] = '<i class="fa-solid fa-rotate-left" style="font-size: 14px; color: var(--text-muted);"></i>';
 icons['redo'] = '<i class="fa-solid fa-rotate-right" style="font-size: 14px; color: var(--text-muted);"></i>';
@@ -585,7 +581,7 @@ const quill = new Quill('#editor', {
                 ['bold', 'italic', 'underline', 'strike', 'strike-line', 'highlight', { 'color': [] }, { 'background': [] }],
                 [{ 'list': 'check' }, { 'list': 'ordered' }, { 'list': 'bullet' }],
                 [{ 'align': [] }],
-                ['table', 'table-insert-row', 'table-delete-row', 'table-insert-column', 'table-delete-column'],
+                ['table'],
                 ['special-char', 'blockquote', 'code-block', 'divider'],
                 ['link', 'image', 'video'],
                 ['clean'],
@@ -686,39 +682,7 @@ const quill = new Quill('#editor', {
                 'undo': function () { this.quill.history.undo(); },
                 'redo': function () { this.quill.history.redo(); },
                 'table': function () {
-                    if (typeof createDefaultTable === 'function') createDefaultTable();
-                    else {
-                        const tableModule = this.quill.getModule('table');
-                        if (tableModule) tableModule.insertTable(3, 3);
-                    }
-                },
-                'table-insert-row': function () {
-                    if (typeof tableInsertRowBelowSafe === 'function') tableInsertRowBelowSafe();
-                    else {
-                        const tableModule = this.quill.getModule('table');
-                        if (tableModule) tableModule.insertRowBelow();
-                    }
-                },
-                'table-delete-row': function () {
-                    if (typeof tableDeleteRowSafe === 'function') tableDeleteRowSafe();
-                    else {
-                        const tableModule = this.quill.getModule('table');
-                        if (tableModule) tableModule.deleteRow();
-                    }
-                },
-                'table-insert-column': function () {
-                    if (typeof tableInsertColumnRightSafe === 'function') tableInsertColumnRightSafe();
-                    else {
-                        const tableModule = this.quill.getModule('table');
-                        if (tableModule) tableModule.insertColumnRight();
-                    }
-                },
-                'table-delete-column': function () {
-                    if (typeof tableDeleteColumnSafe === 'function') tableDeleteColumnSafe();
-                    else {
-                        const tableModule = this.quill.getModule('table');
-                        if (tableModule) tableModule.deleteColumn();
-                    }
+                    toggleTableToolbarMenu();
                 },
                 'video': customVideoHandler,
 
@@ -896,12 +860,8 @@ function initToolbarTooltips() {
         // 정렬
         '.ql-toolbar .ql-align': '텍스트 정렬',
 
-        // 표 (Table)
-        '.ql-toolbar button.ql-table': '표 삽입 (3x3) (Ctrl+Alt+T / |3x3|)',
-        '.ql-toolbar button.ql-table-insert-row': '아래에 행 추가 (Alt+↓)',
-        '.ql-toolbar button.ql-table-delete-row': '현재 행 삭제 (Alt+↑)',
-        '.ql-toolbar button.ql-table-insert-column': '오른쪽에 열 추가 (Alt+→)',
-        '.ql-toolbar button.ql-table-delete-column': '현재 열 삭제 (Alt+←)',
+        // 표 (Table 통합 드롭다운)
+        '.ql-toolbar button.ql-table': '표 삽입 · 편집 (Ctrl+Alt+T)',
 
         // 특수 요소
         '.ql-toolbar button.ql-special-char': '특수문자 입력',
@@ -2595,6 +2555,8 @@ document.querySelector('.col-center').addEventListener('click', e => {
         e.target.closest('#fm-security-modal') || 
         e.target.closest('#fm-move-modal') || 
         e.target.closest('#reset-confirm-modal') || 
+        e.target.closest('#video-insert-modal') || 
+        e.target.closest('#zen-table-toolbar-menu') || 
         e.target.closest('#zen-image-resizer') || 
         e.target.closest('#zen-image-lightbox') || 
         e.target.closest('.editor-header') || 
@@ -2663,74 +2625,254 @@ if (fmSearchInput) {
     });
 }
 
-// 🎯 [완성본] 만능 동영상 핸들러 (제목 자동 추출 + 빈 노트 폭파 완벽 방어)
-function customVideoHandler() {
-    let input = prompt("동영상 주소(URL) 또는 소스 코드(iframe)를 붙여넣으세요:");
+// 🎯 [V1.9.0] 에디터 툴바 '표' 드롭다운 팝오버 제어
+let pendingTableToolbarRange = null;
 
-    // 취소를 누르거나 빈칸이면 종료
-    if (!input) return;
+function closeTableToolbarMenu() {
+    const menu = document.getElementById('zen-table-toolbar-menu');
+    const btn = document.querySelector('.ql-toolbar button.ql-table');
+    if (menu) menu.style.display = 'none';
+    if (btn) btn.classList.remove('ql-active');
+}
+
+function toggleTableToolbarMenu() {
+    const menu = document.getElementById('zen-table-toolbar-menu');
+    const btn = document.querySelector('.ql-toolbar button.ql-table');
+    if (!menu || !btn) {
+        if (typeof createDefaultTable === 'function') createDefaultTable();
+        return;
+    }
+
+    const isOpen = menu.style.display === 'block';
+    if (isOpen) {
+        closeTableToolbarMenu();
+        return;
+    }
+
+    const curSel = quill.getSelection()
+        || (quill.selection && quill.selection.savedRange)
+        || (typeof lastValidTextSelection !== 'undefined' ? lastValidTextSelection : null);
+    if (curSel) {
+        pendingTableToolbarRange = { index: curSel.index, length: curSel.length };
+    }
+
+    const rect = btn.getBoundingClientRect();
+    menu.style.display = 'block';
+    const menuWidth = menu.offsetWidth || 210;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+    const top = Math.min(rect.bottom + 6, window.innerHeight - (menu.offsetHeight || 220) - 8);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    btn.classList.add('ql-active');
+}
+
+(function bindTableToolbarMenuEvents() {
+    const menu = document.getElementById('zen-table-toolbar-menu');
+    if (!menu) return;
+
+    menu.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-table-action]');
+        if (!item) return;
+        const action = item.dataset.tableAction;
+        const savedRange = pendingTableToolbarRange;
+        closeTableToolbarMenu();
+
+        if (savedRange) {
+            try {
+                quill.setSelection(savedRange.index, savedRange.length, Quill.sources.SILENT);
+            } catch (_) {}
+        }
+
+        if (action === 'insert-table') {
+            if (typeof createDefaultTable === 'function') createDefaultTable();
+            else {
+                const tableModule = quill.getModule('table');
+                if (tableModule) tableModule.insertTable(3, 3);
+            }
+        } else if (action === 'insert-row') {
+            if (typeof tableInsertRowBelowSafe === 'function') tableInsertRowBelowSafe();
+            else {
+                const tableModule = quill.getModule('table');
+                if (tableModule) tableModule.insertRowBelow();
+            }
+        } else if (action === 'delete-row') {
+            if (typeof tableDeleteRowSafe === 'function') tableDeleteRowSafe();
+            else {
+                const tableModule = quill.getModule('table');
+                if (tableModule) tableModule.deleteRow();
+            }
+        } else if (action === 'insert-col') {
+            if (typeof tableInsertColumnRightSafe === 'function') tableInsertColumnRightSafe();
+            else {
+                const tableModule = quill.getModule('table');
+                if (tableModule) tableModule.insertColumnRight();
+            }
+        } else if (action === 'delete-col') {
+            if (typeof tableDeleteColumnSafe === 'function') tableDeleteColumnSafe();
+            else {
+                const tableModule = quill.getModule('table');
+                if (tableModule) tableModule.deleteColumn();
+            }
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (menu.style.display !== 'block') return;
+        if (e.target.closest('#zen-table-toolbar-menu') || e.target.closest('.ql-toolbar button.ql-table')) return;
+        closeTableToolbarMenu();
+    });
+    window.addEventListener('resize', closeTableToolbarMenu, { passive: true });
+})();
+
+window.toggleTableToolbarMenu = toggleTableToolbarMenu;
+window.closeTableToolbarMenu = closeTableToolbarMenu;
+
+// 🎯 [V1.9.0] 전용 Zen 동영상 삽입 모달 (브라우저 기본 prompt() 제거 + 이모지 없는 깔끔한 H3 제목)
+let pendingVideoModalRange = null;
+
+function openVideoInsertModal() {
+    const modal = document.getElementById('video-insert-modal');
+    if (!modal) return;
+
+    let range = quill.getSelection();
+    if (!range) {
+        range = (quill.selection && quill.selection.savedRange)
+            ? quill.selection.savedRange
+            : (typeof lastValidTextSelection !== 'undefined' ? lastValidTextSelection : null);
+    }
+    if (!range) {
+        range = { index: Math.max(0, quill.getLength() - 1), length: 0 };
+    }
+    pendingVideoModalRange = { index: range.index, length: range.length };
+
+    const urlInp = document.getElementById('video-modal-url-input');
+    const titleInp = document.getElementById('video-modal-title-input');
+    if (urlInp) urlInp.value = '';
+    if (titleInp) {
+        titleInp.value = '';
+        titleInp.dataset.autoFilled = '1';
+        if (!titleInp.dataset.boundAuto) {
+            titleInp.dataset.boundAuto = '1';
+            titleInp.addEventListener('input', () => {
+                titleInp.dataset.autoFilled = titleInp.value.trim() === '' ? '1' : '0';
+            });
+        }
+    }
+
+    modal.style.display = 'flex';
+    history.pushState({ modal: 'video-insert' }, '');
+    setTimeout(() => {
+        if (urlInp) urlInp.focus();
+    }, 40);
+}
+
+function handleVideoModalUrlInput() {
+    const urlInp = document.getElementById('video-modal-url-input');
+    const titleInp = document.getElementById('video-modal-title-input');
+    if (!urlInp || !titleInp) return;
+
+    const raw = urlInp.value || '';
+    if (raw.includes('<iframe')) {
+        const titleMatch = raw.match(/title=["'](.*?)["']/);
+        if (titleMatch && titleMatch[1]) {
+            const extracted = titleMatch[1].trim();
+            if (extracted && !extracted.toLowerCase().includes('youtube video player')) {
+                if (titleInp.value.trim() === '' || titleInp.dataset.autoFilled === '1') {
+                    titleInp.value = extracted;
+                    titleInp.dataset.autoFilled = '1';
+                }
+            }
+        }
+    }
+}
+
+function closeVideoInsertModal(fromPopstate = false) {
+    const modal = document.getElementById('video-insert-modal');
+    if (!modal || modal.style.display === 'none' || modal.style.display === '') return;
+    modal.style.display = 'none';
+
+    if (!fromPopstate && window.history.state && window.history.state.modal === 'video-insert') {
+        if (typeof programmaticBackCount !== 'undefined') programmaticBackCount++;
+        history.back();
+    }
+
+    if (pendingVideoModalRange) {
+        const r = pendingVideoModalRange;
+        pendingVideoModalRange = null;
+        setTimeout(() => {
+            try {
+                quill.setSelection(r.index, r.length, Quill.sources.USER);
+            } catch (_) {}
+        }, 20);
+    }
+}
+
+function submitVideoInsertModal() {
+    const urlInp = document.getElementById('video-modal-url-input');
+    const titleInp = document.getElementById('video-modal-title-input');
+    const input = urlInp ? urlInp.value.trim() : '';
+
+    if (!input) {
+        if (typeof showToast === 'function') showToast('동영상 주소 또는 iframe 코드를 입력하세요.');
+        if (urlInp) urlInp.focus();
+        return;
+    }
 
     let url = input;
-    let videoTitle = "";
+    let videoTitle = titleInp ? titleInp.value.trim() : '';
 
-    // 1. 소스 코드(iframe)인 경우: 주소(src)와 제목(title)을 똑똑하게 빼냅니다.
-    if (input.includes("<iframe")) {
+    if (input.includes('<iframe')) {
         const srcMatch = input.match(/src=["'](.*?)["']/);
         if (srcMatch && srcMatch[1]) {
             url = srcMatch[1];
         }
-
-        // 🎯 iframe 태그 안에 title 속성이 있다면 제목으로 쏙 빼냅니다!
-        const titleMatch = input.match(/title=["'](.*?)["']/);
-        if (titleMatch && titleMatch[1]) {
-            videoTitle = titleMatch[1];
-            // 유튜브의 무의미한 기본 타이틀("YouTube video player")은 걸러냅니다.
-            if (videoTitle.toLowerCase().includes("youtube video player")) {
-                videoTitle = "";
+        if (!videoTitle) {
+            const titleMatch = input.match(/title=["'](.*?)["']/);
+            if (titleMatch && titleMatch[1]) {
+                videoTitle = titleMatch[1].trim();
+                if (videoTitle.toLowerCase().includes('youtube video player')) {
+                    videoTitle = '';
+                }
             }
         }
     }
 
-    // 2. 일반 유튜브 및 쇼츠 주소인 경우 퍼가기 링크로 변환
-    if (url.includes("youtube.com/watch?v=")) {
-        url = url.replace("watch?v=", "embed/").split("&")[0];
-    } else if (url.includes("youtu.be/")) {
-        url = url.replace("youtu.be/", "youtube.com/embed/").split("?")[0];
-    } else if (url.includes("youtube.com/shorts/")) {
-        url = url.replace("youtube.com/shorts/", "youtube.com/embed/").split("?")[0];
+    if (url.includes('youtube.com/watch?v=')) {
+        url = url.replace('watch?v=', 'embed/').split('&')[0];
+    } else if (url.includes('youtu.be/')) {
+        url = url.replace('youtu.be/', 'youtube.com/embed/').split('?')[0];
+    } else if (url.includes('youtube.com/shorts/')) {
+        url = url.replace('youtube.com/shorts/', 'youtube.com/embed/').split('?')[0];
     }
 
-    // 3. 🎯 제목이 추출되지 않았거나 일반 URL만 복사해 온 경우
     if (!videoTitle) {
-        // 사용자에게 짧게 물어보되, 안 적으면 '첨부된 동영상'이라는 진짜 글자를 억지로 넣습니다.
-        videoTitle = prompt("동영상 제목을 입력해 주세요:\n(비워두면 기본 제목이 들어갑니다.)") || "첨부된 동영상";
+        videoTitle = '첨부된 동영상';
     }
 
-    // 예쁜 슬레이트 이모티콘 추가
-    videoTitle = "🎬 " + videoTitle;
+    const r = pendingVideoModalRange || quill.getSelection(true) || { index: Math.max(0, quill.getLength() - 1), length: 0 };
+    pendingVideoModalRange = null;
+    closeVideoInsertModal();
 
-    const range = quill.getSelection(true);
+    quill.insertText(r.index, videoTitle + '\n', Quill.sources.USER);
+    quill.formatLine(r.index, 1, 'header', 3, Quill.sources.USER);
 
-    // 4. [빈 노트 폭파 완벽 방어] 진짜 텍스트(제목)를 먼저 본문에 꽂아넣음
-    quill.insertText(range.index, videoTitle + "\n", Quill.sources.USER);
-
-    // 5. 🎯 삽입한 제목을 예쁘게 만들기 위해 소제목(H3) 서식 자동 적용
-    quill.formatLine(range.index, 1, 'header', 3, Quill.sources.USER);
-
-    // 6. 제목 다음 줄의 커서 위치 계산
-    const nextIndex = range.index + videoTitle.length + 1;
-
-    // 7. 동영상 본문 삽입
+    const nextIndex = r.index + videoTitle.length + 1;
     quill.insertEmbed(nextIndex, 'video', url, Quill.sources.USER);
-
-    // 8. 동영상 아래에 줄바꿈 추가 후 커서 이동
-    quill.insertText(nextIndex + 1, "\n", Quill.sources.USER);
+    quill.insertText(nextIndex + 1, '\n', Quill.sources.USER);
     quill.setSelection(nextIndex + 2, Quill.sources.SILENT);
 
-    // 9. '진짜 글자'가 생겼으므로 안전하게 자동 저장 통과!
     triggerAutoSave();
-    showToast("동영상이 삽입되었습니다.");
+    showToast('동영상이 삽입되었습니다.');
 }
+
+function customVideoHandler() {
+    openVideoInsertModal();
+}
+
+window.openVideoInsertModal = openVideoInsertModal;
+window.closeVideoInsertModal = closeVideoInsertModal;
+window.handleVideoModalUrlInput = handleVideoModalUrlInput;
+window.submitVideoInsertModal = submitVideoInsertModal;
 
 /* ==========================================
            1. 헬퍼 함수: 가상 클릭 및 스마트 탈출
@@ -2889,9 +3031,21 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        const tableToolbarMenu = document.getElementById("zen-table-toolbar-menu");
+        if (tableToolbarMenu && tableToolbarMenu.style.display === "block") {
+            closeTableToolbarMenu();
+            return;
+        }
+
         const linkInsertModal = document.getElementById("link-insert-modal");
         if (linkInsertModal && linkInsertModal.style.display === "flex") {
             closeLinkInsertModal();
+            return;
+        }
+
+        const videoInsertModal = document.getElementById("video-insert-modal");
+        if (videoInsertModal && videoInsertModal.style.display === "flex") {
+            closeVideoInsertModal();
             return;
         }
 
@@ -3113,6 +3267,12 @@ window.addEventListener("popstate", (e) => {
     const linkInsertModal = document.getElementById("link-insert-modal");
     if (linkInsertModal && linkInsertModal.style.display === "flex") {
         closeLinkInsertModal(true);
+        return;
+    }
+
+    const videoInsertModal = document.getElementById("video-insert-modal");
+    if (videoInsertModal && videoInsertModal.style.display === "flex") {
+        closeVideoInsertModal(true);
         return;
     }
 

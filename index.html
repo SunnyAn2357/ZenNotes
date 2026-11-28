@@ -13,8 +13,8 @@
 
     <script>window.ZEN_ROOT_DRIVE_LABEL = 'ZenNotes(Z:)';</script>
 
-    <link rel="icon" type="image/png" href="favicon.png?v=1.8.17">
-    <link rel="manifest" href="manifest.json?v=1.8.17">
+    <link rel="icon" type="image/png" href="favicon.png?v=1.9.0">
+    <link rel="manifest" href="manifest.json?v=1.9.0">
 
     <link rel="stylesheet" href="lib/pretendard/pretendard.css" />
     <link rel="stylesheet" href="lib/fontawesome/css/all.min.css">
@@ -27,7 +27,7 @@
     <script src="lib/html2pdf/html2pdf.bundle.min.js"></script>
     <script src="lib/filesaver/FileSaver.min.js"></script>
 
-    <link rel="stylesheet" href="css/main.css?v=1.8.17">
+    <link rel="stylesheet" href="css/main.css?v=1.9.0">
 
 </head>
 
@@ -253,27 +253,32 @@
             </div>
         </div>
 
-        <!-- 🎯 [V4.2.2] 메인 에디터와 FM 어디서든 호출 가능하도록 전역 배치된 보안/이동 모달 -->
+        <!-- 🎯 [V1.9.0] 보안 폴더 비밀번호 모달 (앱 잠금과 동일한 중앙 집중형 Zen Lock Card) -->
         <div id="fm-security-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeSecurityModal()">
-            <div class="fm-modal" style="max-width: 320px;" onclick="event.stopPropagation()">
-                <div class="fm-modal-header" id="sec-modal-title">
-                    <span><i class="fa-solid fa-lock" style="color: #f59e0b;"></i> 보안 폴더</span>
-                    <i class="fa-solid fa-xmark" style="cursor:pointer;" onclick="closeSecurityModal()"></i>
-                </div>
-                <div class="fm-modal-body" style="padding: 24px 24px 10px; text-align: center;" onclick="event.stopPropagation()">
-                    <div id="sec-modal-desc"
-                        style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
-                        비밀번호를 입력하세요.</div>
-                    <input type="password" id="sec-password-input" class="sec-input" placeholder="••••••••" autocomplete="off"
+            <div class="fm-modal zen-lock-modal-card" onclick="event.stopPropagation()">
+                <button type="button" class="zen-lock-close-btn" onclick="event.stopPropagation(); closeSecurityModal()" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <div class="zen-lock-modal-inner" onclick="event.stopPropagation()">
+                    <div class="zen-sec-icon-wrap" aria-hidden="true">
+                        <i id="sec-modal-icon" class="fa-solid fa-lock"></i>
+                    </div>
+                    <h3 class="zen-lock-modal-heading" id="sec-modal-title">
+                        <span id="sec-modal-title-text">보안 폴더</span>
+                    </h3>
+                    <div id="sec-modal-desc" class="zen-lock-modal-desc">
+                        비밀번호를 입력하세요.
+                    </div>
+                    <input type="password" id="sec-password-input" class="sec-input" placeholder="비밀번호 입력" autocomplete="off"
                         enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false"
                         oninput="handleSecurityPasswordInputLive()"
                         onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitSecurityPassword();}"
                         onclick="event.stopPropagation()">
-                </div>
-                <div class="fm-modal-footer" onclick="event.stopPropagation()">
-                    <button type="button" style="background: var(--surface-hover);" onclick="event.stopPropagation(); closeSecurityModal()">취소</button>
-                    <button type="button" id="sec-confirm-btn" style="background: #f59e0b; color: #000;"
-                        onclick="event.stopPropagation(); submitSecurityPassword()">확인</button>
+                    <div class="zen-lock-modal-actions" onclick="event.stopPropagation()">
+                        <button type="button" class="zen-lock-btn-cancel" onclick="event.stopPropagation(); closeSecurityModal()">취소</button>
+                        <button type="button" id="sec-confirm-btn" class="zen-lock-btn-confirm"
+                            onclick="event.stopPropagation(); submitSecurityPassword()">잠금 해제</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -346,54 +351,81 @@
     </div>
 
     <div class="col-right is-closed" id="col-right">
-        <div style="margin-bottom: -16px; display: flex; justify-content: space-between; align-items: center;">
-            <button class="toggle-btn" onclick="toggleRightPane()">
+        <div class="right-pane-header">
+            <button class="toggle-btn" onclick="toggleRightPane()" title="오른쪽 메뉴 닫기" aria-label="오른쪽 메뉴 닫기">
                 <i class="fa-solid fa-bars"></i>
             </button>
-            <button class="toggle-btn auth-toggle-btn miryang-bi-btn" id="btn-auth" title="로그인(추후 지원)" style="background: transparent !important; border: none !important; box-shadow: none !important; padding: 2px !important;">
+            <button class="toggle-btn auth-toggle-btn miryang-bi-btn" id="btn-auth" title="로그인(추후 지원)">
                 <img src="./miryang_bi.png" alt="밀양시 BI" class="miryang-bi-icon">
             </button>
         </div>
 
         <div class="util-section">
-            <div class="util-title">Export</div>
-            <button class="util-btn util-btn-share" onclick="exportMYNS();" title="공유용 노트 파일(.myns)로 내보내기">
-                <i class="fa-solid fa-share-nodes"></i> <span class="btn-text">공유하기</span>
+            <div class="util-title">내보내기</div>
+            <button class="util-btn util-btn-share" onclick="exportMYNS();">
+                <span class="util-btn-left">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    <span class="btn-text">공유하기</span>
+                </span>
+                <span class="util-ext-badge">.myns</span>
             </button>
-            <div class="util-divider"></div>
-            <button class="util-btn" onclick="exportTXT();">
-                <i class="fa-regular fa-file-lines"></i> <span class="btn-text">TXT 저장</span>
-            </button>
-            <button class="util-btn" onclick="exportPDF();">
-                <i class="fa-regular fa-file-pdf"></i> <span class="btn-text">PDF 저장</span>
-            </button>
-            <button class="util-btn" onclick="exportHTML();">
-                <i class="fa-brands fa-html5"></i> <span class="btn-text">HTML 저장</span>
-            </button>
-            <button class="util-btn" onclick="exportMD();">
-                <i class="fa-brands fa-markdown"></i> <span class="btn-text">MD 저장</span>
-            </button>
-            <button class="util-btn" onclick="exportJSON();">
-                <i class="fa-solid fa-code"></i> <span class="btn-text">JSON 저장</span>
-            </button>
-        </div>
-
-        <div class="util-section mt-auto">
-            <div class="util-title">Data Management</div>
-            <div style="display: flex; gap: 8px;">
-                <button class="util-btn" style="flex: 1;" onclick="if(typeof openFilePickerWithAutoLockPause==='function'){openFilePickerWithAutoLockPause(document.getElementById('import-file'));}else{document.getElementById('import-file').click();} closeAllPanelsMobile();">
-                    <i class="fa-solid fa-file-import"></i> <span class="btn-text">불러오기</span>
+            <div class="util-export-list">
+                <button class="util-btn util-btn-export" onclick="exportTXT();">
+                    <span class="util-btn-left">
+                        <i class="fa-regular fa-file-lines"></i>
+                        <span class="btn-text">TXT 저장</span>
+                    </span>
+                    <span class="util-ext-badge">TXT</span>
                 </button>
-                <button class="util-btn" style="flex: 1;" onclick="toggleTrashPane();">
-                    <i class="fa-solid fa-trash"></i> <span class="btn-text">휴지통</span>
+                <button class="util-btn util-btn-export" onclick="exportPDF();">
+                    <span class="util-btn-left">
+                        <i class="fa-regular fa-file-pdf"></i>
+                        <span class="btn-text">PDF 저장</span>
+                    </span>
+                    <span class="util-ext-badge">PDF</span>
+                </button>
+                <button class="util-btn util-btn-export" onclick="exportHTML();">
+                    <span class="util-btn-left">
+                        <i class="fa-brands fa-html5"></i>
+                        <span class="btn-text">HTML 저장</span>
+                    </span>
+                    <span class="util-ext-badge">HTML</span>
+                </button>
+                <button class="util-btn util-btn-export" onclick="exportMD();">
+                    <span class="util-btn-left">
+                        <i class="fa-brands fa-markdown"></i>
+                        <span class="btn-text">MD 저장</span>
+                    </span>
+                    <span class="util-ext-badge">MD</span>
+                </button>
+                <button class="util-btn util-btn-export" onclick="exportJSON();">
+                    <span class="util-btn-left">
+                        <i class="fa-solid fa-code"></i>
+                        <span class="btn-text">JSON 저장</span>
+                    </span>
+                    <span class="util-ext-badge">JSON</span>
                 </button>
             </div>
-            <div style="display: flex; gap: 8px;">
-                <button class="util-btn" style="flex: 1;" onclick="backupAllData();">
-                    <i class="fa-solid fa-database"></i> <span class="btn-text">로컬 백업</span>
+        </div>
+
+        <div class="util-section mt-auto util-mgmt-section">
+            <div class="util-title">데이터 관리</div>
+            <div class="util-mgmt-grid">
+                <button class="util-btn util-mgmt-card" onclick="if(typeof openFilePickerWithAutoLockPause==='function'){openFilePickerWithAutoLockPause(document.getElementById('import-file'));}else{document.getElementById('import-file').click();} closeAllPanelsMobile();">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span class="btn-text">불러오기</span>
                 </button>
-                <button class="util-btn" style="flex: 1;" onclick="resetAllData();">
-                    <i class="fa-solid fa-arrows-rotate"></i> <span class="btn-text">초기화</span>
+                <button class="util-btn util-mgmt-card" onclick="toggleTrashPane();">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span class="btn-text">휴지통</span>
+                </button>
+                <button class="util-btn util-mgmt-card" onclick="backupAllData();">
+                    <i class="fa-solid fa-database"></i>
+                    <span class="btn-text">로컬 백업</span>
+                </button>
+                <button class="util-btn util-mgmt-card util-btn-danger-soft" onclick="resetAllData();">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span class="btn-text">초기화</span>
                 </button>
             </div>
             <input type="file" id="import-file" accept=".myns, .json, .txt, .html, .md, image/*, .pdf" style="display: none;"
@@ -705,6 +737,40 @@
         </div>
     </div>
 
+    <!-- 🎯 [V1.9.0] 동영상 삽입 전용 Zen 모달 -->
+    <div id="video-insert-modal" class="fm-modal-overlay" onclick="if(event.target === this) closeVideoInsertModal();">
+        <div class="fm-modal" style="max-width: 420px; width: 92vw;" onclick="event.stopPropagation()">
+            <div class="fm-modal-header" style="padding: 15px 20px;">
+                <span style="font-size: 15.5px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-film" style="color: var(--accent);"></i> <span>동영상 삽입</span>
+                </span>
+                <button type="button" class="zen-modal-icon-close" onclick="closeVideoInsertModal()" aria-label="닫기" title="닫기 (Esc)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="fm-modal-body link-modal-body" onclick="event.stopPropagation()">
+                <div class="link-field-group">
+                    <label for="video-modal-url-input" class="link-field-label">동영상 주소 또는 코드</label>
+                    <input type="text" id="video-modal-url-input" class="link-field-input"
+                        placeholder="https://youtu.be/... 또는 <iframe> 코드" autocomplete="off"
+                        oninput="handleVideoModalUrlInput()"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitVideoInsertModal();}">
+                </div>
+                <div class="link-field-group">
+                    <label for="video-modal-title-input" class="link-field-label">제목 (선택)</label>
+                    <input type="text" id="video-modal-title-input" class="link-field-input"
+                        placeholder="비워두면 기본 제목 적용" autocomplete="off"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitVideoInsertModal();}">
+                </div>
+                <div class="link-field-hint">YouTube, Shorts, iframe 코드 지원</div>
+            </div>
+            <div class="fm-modal-footer" style="padding: 12px 18px;" onclick="event.stopPropagation()">
+                <button type="button" style="background: var(--surface-hover); color: var(--text-main);" onclick="closeVideoInsertModal()">취소</button>
+                <button type="button" id="video-modal-submit-btn" style="background: var(--accent); color: var(--accent-contrast);" onclick="submitVideoInsertModal()">삽입하기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 🎯 [V4.5.6] 모든 데이터 초기화 전 보안 폴더 검사 & Zen 경고 모달 -->
     <div id="reset-confirm-modal" class="fm-modal-overlay" onclick="if(event.target===this) closeResetConfirmModal()">
         <div class="fm-modal" style="max-width: 440px; width: 92vw; border-radius: 16px;">
@@ -766,6 +832,7 @@
                 </button>
             </div>
             <div class="zen-settings-body">
+                <div class="zen-settings-section-label">보안 및 잠금</div>
                 <!-- 설정 1: [V1.2.0] 비밀번호 입력 및 화면 자동 잠금 -->
                 <div class="zen-settings-item">
                     <div class="zen-settings-item-info">
@@ -796,6 +863,7 @@
                 </div>
 
                 <div class="zen-settings-divider"></div>
+                <div class="zen-settings-section-label">편집기</div>
 
                 <!-- 설정 2: 자동 글머리·목록 변환 -->
                 <div class="zen-settings-item">
@@ -822,6 +890,7 @@
                 </div>
 
                 <div class="zen-settings-divider"></div>
+                <div class="zen-settings-section-label">화면 표시</div>
 
                 <!-- 설정 4: 본문 기본 글자 크기 -->
                 <div class="zen-settings-item">
@@ -850,22 +919,23 @@
                 </div>
 
                 <div class="zen-settings-divider"></div>
+                <div class="zen-settings-section-label">내보내기 및 백업</div>
 
-                <!-- 설정 6: [V4.7.1] Export 기본 저장 폴더 -->
+                <!-- 설정 6: [V4.7.1] 내보내기 기본 폴더 -->
                 <div class="zen-settings-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div class="zen-settings-item-label">Export 기본 저장 폴더</div>
-                        <span id="setting-export-dir-current" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">기본(다운로드)</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <div class="zen-settings-item-label">내보내기 기본 폴더</div>
+                        <div style="display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                            <span id="setting-export-dir-current" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">기본(다운로드)</span>
+                            <button type="button" class="zen-settings-reset-link" onclick="resetExportDirectory()">초기화</button>
+                        </div>
                     </div>
                     <div class="zen-segmented" id="setting-export-segmented" style="display: flex; width: 100%;">
                         <button type="button" class="zen-segmented-btn active" data-value="download" onclick="setExportLocationMode('download')">기본(다운로드)</button>
                         <button type="button" class="zen-segmented-btn" data-value="desktop" onclick="setExportLocationMode('desktop')">바탕화면</button>
                         <button type="button" class="zen-segmented-btn" data-value="custom" onclick="chooseCustomExportDirectory()">사용자지정</button>
-                        <button type="button" class="zen-segmented-btn" data-value="reset" onclick="resetExportDirectory()">초기화</button>
                     </div>
                 </div>
-
-                <div class="zen-settings-divider"></div>
 
                 <!-- 설정 7: [V1.6.0] 1시간 주기 조용한 자동 전체 백업 -->
                 <div class="zen-settings-item zen-settings-stack-item">
@@ -894,6 +964,7 @@
                 </div>
 
                 <div class="zen-settings-divider"></div>
+                <div class="zen-settings-section-label">AI 연동</div>
 
                 <!-- 설정 8: [V1.6.0] MY AI (TimelyGPT) 개인 API 키 -->
                 <div class="zen-settings-item zen-settings-stack-item">
@@ -915,7 +986,7 @@
             <div class="zen-settings-footer">
                 <div class="zen-settings-app-badge">
                     <i class="fa-solid fa-note-sticky"></i>
-                    <span>ZenNotes</span>
+                    <span>ZenNotes V1.9.0</span>
                 </div>
                 <button type="button" class="zen-settings-done-btn" onclick="closeSettingsModal()">
                     닫기
@@ -986,6 +1057,31 @@
         <div class="table-menu-item text-danger" data-action="delete-col"><i class="fa-solid fa-minus"></i> 현재 열 삭제</div>
         <div class="table-menu-divider"></div>
         <div class="table-menu-item text-danger" data-action="delete-table"><i class="fa-solid fa-trash-can"></i> 표 전체 삭제</div>
+    </div>
+
+    <!-- 🎯 [V1.9.0] 에디터 툴바 '표' 드롭다운 팝오버 메뉴 -->
+    <div id="zen-table-toolbar-menu" class="table-context-menu zen-table-toolbar-menu" style="display: none;" onclick="event.stopPropagation()">
+        <div class="table-menu-item" data-table-action="insert-table">
+            <span class="zen-tm-label"><i class="fa-solid fa-table"></i> 표 삽입 (3×3)</span>
+            <span class="zen-tm-shortcut">Ctrl+Alt+T</span>
+        </div>
+        <div class="table-menu-divider"></div>
+        <div class="table-menu-item" data-table-action="insert-row">
+            <span class="zen-tm-label"><i class="fa-solid fa-arrow-down"></i> 아래에 행 추가</span>
+            <span class="zen-tm-shortcut">Alt+↓</span>
+        </div>
+        <div class="table-menu-item text-danger" data-table-action="delete-row">
+            <span class="zen-tm-label"><i class="fa-solid fa-minus"></i> 현재 행 삭제</span>
+            <span class="zen-tm-shortcut">Alt+↑</span>
+        </div>
+        <div class="table-menu-item" data-table-action="insert-col">
+            <span class="zen-tm-label"><i class="fa-solid fa-arrow-right"></i> 오른쪽에 열 추가</span>
+            <span class="zen-tm-shortcut">Alt+→</span>
+        </div>
+        <div class="table-menu-item text-danger" data-table-action="delete-col">
+            <span class="zen-tm-label"><i class="fa-solid fa-minus"></i> 현재 열 삭제</span>
+            <span class="zen-tm-shortcut">Alt+←</span>
+        </div>
     </div>
 
     <!-- 🖼️ [V1.1.0] 이미지 전용 Zen 우클릭 컨텍스트 메뉴 -->
@@ -1061,9 +1157,9 @@
                     <div class="zen-sts-field">
                         <label class="zen-sts-label" for="sts-priority-select">중요도</label>
                         <select id="sts-priority-select" class="zen-sts-input">
-                            <option value="High">High</option>
-                            <option value="Normal" selected>Normal</option>
-                            <option value="Low">Low</option>
+                            <option value="High">높음</option>
+                            <option value="Normal" selected>보통</option>
+                            <option value="Low">낮음</option>
                         </select>
                     </div>
                 </div>
@@ -1090,10 +1186,10 @@
                 <div class="zen-sts-field">
                     <span class="zen-sts-label">알림 주기</span>
                     <div class="zen-sts-rem-row">
-                        <label><input type="checkbox" name="sts-rem" value="3"> 3일 전</label>
-                        <label><input type="checkbox" name="sts-rem" value="5"> 5일 전</label>
-                        <label><input type="checkbox" name="sts-rem" value="h2" checked> 2시간 전</label>
-                        <label><input type="checkbox" name="sts-rem" value="h1" checked> 1시간 전</label>
+                        <label class="zen-sts-chip"><input type="checkbox" name="sts-rem" value="3"><span>3일 전</span></label>
+                        <label class="zen-sts-chip"><input type="checkbox" name="sts-rem" value="5"><span>5일 전</span></label>
+                        <label class="zen-sts-chip"><input type="checkbox" name="sts-rem" value="h2" checked><span>2시간 전</span></label>
+                        <label class="zen-sts-chip"><input type="checkbox" name="sts-rem" value="h1" checked><span>1시간 전</span></label>
                     </div>
                 </div>
                 <div class="zen-sts-field">
@@ -1186,20 +1282,20 @@
         </div>
     </div>
 
-    <script src="js/globals.js?v=1.8.17"></script>
-    <script src="js/db.js?v=1.8.17"></script>
-    <script src="js/ui.js?v=1.8.17"></script>
-    <script src="js/editor.js?v=1.8.17"></script>
-    <script src="js/file_manager.js?v=1.8.17"></script>
-    <script src="js/io.js?v=1.8.17"></script>
-    <script src="js/auth.js?v=1.8.17"></script>
-    <script src="js/zen_bridge.js?v=1.8.17"></script>
+    <script src="js/globals.js?v=1.9.0"></script>
+    <script src="js/db.js?v=1.9.0"></script>
+    <script src="js/ui.js?v=1.9.0"></script>
+    <script src="js/editor.js?v=1.9.0"></script>
+    <script src="js/file_manager.js?v=1.9.0"></script>
+    <script src="js/io.js?v=1.9.0"></script>
+    <script src="js/auth.js?v=1.9.0"></script>
+    <script src="js/zen_bridge.js?v=1.9.0"></script>
 
     <script>
         window.addEventListener('load', () => {
             console.log("=========================================");
             console.log("[ZenNotes] 앱 로딩 완료!");
-            console.log("[ZenNotes] 현재 버전: V1.8.17");
+            console.log("[ZenNotes] 현재 버전: V1.9.0");
             console.log("=========================================");
         });
     </script>

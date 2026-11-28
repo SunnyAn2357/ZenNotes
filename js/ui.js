@@ -509,6 +509,7 @@ if ("serviceWorker" in navigator) {
       "zen-memo-title-modal",
       "fm-name-prompt-modal",
       "link-insert-modal",
+      "video-insert-modal",
       "settings-modal",
     ];
     for (let i = 0; i < blockingModalIds.length; i++) {
@@ -2960,6 +2961,321 @@ function initCenterEditorScrollbar() {
   syncTrackAndThumb();
 }
 
+// ============================================================================
+// [V1.9.0] 좌측 사이드바(#memo-list) 전용 초슬림 자동 숨김 오버레이 스크롤바
+// - 가운데 에디터 스크롤바(.zen-center-scrollbar)와 100% 동일한 시각 언어 및 UX 적용
+// ============================================================================
+function initLeftSidebarScrollbar() {
+  if (window.__zenLeftScrollbarInitialized) {
+    if (typeof window.refreshLeftSidebarScrollbar === "function") {
+      window.refreshLeftSidebarScrollbar();
+    }
+    return;
+  }
+  window.__zenLeftScrollbarInitialized = true;
+
+  let track = document.getElementById("zen-left-scrollbar");
+  let thumb = track ? track.querySelector(".zen-center-scrollbar-thumb") : null;
+  if (!track) {
+    track = document.createElement("div");
+    track.id = "zen-left-scrollbar";
+    track.className = "zen-center-scrollbar zen-left-scrollbar";
+    track.setAttribute("aria-hidden", "true");
+
+    thumb = document.createElement("div");
+    thumb.className = "zen-center-scrollbar-thumb";
+    track.appendChild(thumb);
+    document.body.appendChild(track);
+  }
+
+  const MIN_OVERFLOW_PX = 2;
+  const MIN_THUMB_HEIGHT_PX = 32;
+  const HIDE_DELAY_SCROLL_MS = 1200;
+  const HIDE_DELAY_LEAVE_MS = 800;
+
+  let hideTimer = null;
+  let rafId = 0;
+  let isHovered = false;
+  let isDragging = false;
+  let currentTrackHeight = 0;
+  let currentThumbHeight = MIN_THUMB_HEIGHT_PX;
+
+  let resizeObserver = null;
+  let treeMutationObserver = null;
+  let stateMutationObserver = null;
+  const observedResizeTargets = new WeakSet();
+  const observedMutationTargets = new WeakSet();
+
+  function getElements() {
+    return {
+      colLeft: document.getElementById("col-left"),
+      memoList: document.getElementById("memo-list"),
+    };
+  }
+
+  function shouldSuppressLeftScrollbar() {
+    if (document.body.classList.contains("is-pdf-exporting")) return true;
+    if (window.__zenAppScreenLocked === true) return true;
+    const { colLeft, memoList } = getElements();
+    if (!colLeft || !memoList) return true;
+    if (colLeft.classList.contains("is-closed") || colLeft.classList.contains("collapsed")) return true;
+    const style = window.getComputedStyle(colLeft);
+    if (style.display === "none" || style.visibility === "hidden") return true;
+    return false;
+  }
+
+  function clearHideTimer() {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+
+  function resetScrollbarState() {
+    clearHideTimer();
+    currentTrackHeight = 0;
+    track.classList.remove("has-overflow", "is-active", "is-hovered", "is-dragging");
+  }
+
+  function syncTrackAndThumb() {
+    if (shouldSuppressLeftScrollbar()) {
+      resetScrollbarState();
+      return null;
+    }
+
+    const { colLeft, memoList } = getElements();
+    if (!colLeft || !memoList) {
+      resetScrollbarState();
+      return null;
+    }
+
+    const rect = memoList.getBoundingClientRect();
+    const colRect = colLeft.getBoundingClientRect();
+    if (rect.width < 20 || rect.height < 40 || colRect.width < 20 || colRect.right <= 0) {
+      resetScrollbarState();
+      return null;
+    }
+
+    const scrollHeight = memoList.scrollHeight;
+    const clientHeight = memoList.clientHeight;
+    const maxScroll = scrollHeight - clientHeight;
+    if (scrollHeight <= 0 || clientHeight <= 0 || maxScroll <= MIN_OVERFLOW_PX) {
+      resetScrollbarState();
+      return null;
+    }
+
+    const top = Math.max(0, Math.round(rect.top + 4));
+    const trackHeight = Math.max(40, Math.round(rect.height - 8));
+    const thumbHeight = Math.max(
+      MIN_THUMB_HEIGHT_PX,
+      Math.min(trackHeight, Math.round((clientHeight / scrollHeight) * trackHeight))
+    );
+    const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+    const ratio = Math.max(0, Math.min(1, memoList.scrollTop / maxScroll));
+    const thumbTop = Math.round(ratio * maxThumbTop);
+
+    currentTrackHeight = trackHeight;
+    currentThumbHeight = thumbHeight;
+
+    track.style.left = Math.max(0, Math.round(rect.right - 15)) + "px";
+    track.style.right = "auto";
+    track.style.top = top + "px";
+    track.style.height = trackHeight + "px";
+    thumb.style.height = thumbHeight + "px";
+    thumb.style.transform = "translateY(" + thumbTop + "px)";
+    track.classList.add("has-overflow");
+
+    return memoList;
+  }
+
+  function scheduleSync() {
+    if (rafId) return;
+    rafId = window.requestAnimationFrame(() => {
+      rafId = 0;
+      syncTrackAndThumb();
+    });
+  }
+
+  function revealTemporarily(delayMs = HIDE_DELAY_SCROLL_MS) {
+    if (!track.classList.contains("has-overflow")) return;
+    track.classList.add("is-active");
+    clearHideTimer();
+    if (!isHovered && !isDragging) {
+      hideTimer = setTimeout(() => {
+        hideTimer = null;
+        if (!isHovered && !isDragging) {
+          track.classList.remove("is-active");
+        }
+      }, delayMs);
+    }
+  }
+
+  function startDrag(e, targetEl) {
+    const el = targetEl || syncTrackAndThumb();
+    if (!el) return;
+
+    const initialMaxThumbTop = Math.max(0, currentTrackHeight - currentThumbHeight);
+    if (initialMaxThumbTop <= 0) return;
+
+    isDragging = true;
+    clearHideTimer();
+    track.classList.add("is-active", "is-dragging");
+    document.body.classList.add("zen-scrollbar-dragging");
+
+    const startClientY = e.clientY;
+    const startScrollTop = el.scrollTop;
+
+    function onPointerMove(moveEvent) {
+      if (!isDragging) return;
+      const latestMaxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
+      const latestMaxThumbTop = Math.max(1, currentTrackHeight - currentThumbHeight);
+      const deltaY = moveEvent.clientY - startClientY;
+      const nextScrollTop = startScrollTop + (deltaY / latestMaxThumbTop) * latestMaxScroll;
+      el.scrollTop = Math.max(0, Math.min(latestMaxScroll, nextScrollTop));
+      syncTrackAndThumb();
+    }
+
+    function stopDrag() {
+      if (!isDragging) return;
+      isDragging = false;
+      track.classList.remove("is-dragging");
+      document.body.classList.remove("zen-scrollbar-dragging");
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", stopDrag);
+      window.removeEventListener("pointercancel", stopDrag);
+      window.removeEventListener("blur", stopDrag);
+      if (!isHovered) {
+        revealTemporarily(HIDE_DELAY_SCROLL_MS);
+      }
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", stopDrag);
+    window.addEventListener("pointercancel", stopDrag);
+    window.addEventListener("blur", stopDrag);
+  }
+
+  function ensureObservers() {
+    const { colLeft, memoList } = getElements();
+
+    if (typeof ResizeObserver === "function") {
+      if (!resizeObserver) {
+        resizeObserver = new ResizeObserver(scheduleSync);
+      }
+      for (const el of [colLeft, memoList]) {
+        if (el && !observedResizeTargets.has(el)) {
+          observedResizeTargets.add(el);
+          resizeObserver.observe(el);
+        }
+      }
+    }
+
+    if (typeof MutationObserver === "function") {
+      if (!treeMutationObserver) {
+        treeMutationObserver = new MutationObserver(scheduleSync);
+      }
+      if (memoList && !observedMutationTargets.has(memoList)) {
+        observedMutationTargets.add(memoList);
+        treeMutationObserver.observe(memoList, {
+          childList: true,
+          subtree: true,
+        });
+      }
+
+      if (!stateMutationObserver) {
+        stateMutationObserver = new MutationObserver(scheduleSync);
+      }
+      if (colLeft && !observedMutationTargets.has(colLeft)) {
+        observedMutationTargets.add(colLeft);
+        stateMutationObserver.observe(colLeft, { attributes: true, attributeFilter: ["class", "style"] });
+      }
+      const appLockOverlay = document.getElementById("app-lock-overlay");
+      if (appLockOverlay && !observedMutationTargets.has(appLockOverlay)) {
+        observedMutationTargets.add(appLockOverlay);
+        stateMutationObserver.observe(appLockOverlay, { attributes: true, attributeFilter: ["style"] });
+      }
+      if (document.body && !observedMutationTargets.has(document.body)) {
+        observedMutationTargets.add(document.body);
+        stateMutationObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      }
+    }
+
+    if (memoList && !memoList.dataset.zenScrollBound) {
+      memoList.dataset.zenScrollBound = "1";
+      memoList.addEventListener("scroll", () => {
+        if (rafId) {
+          window.cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+        const activeEl = syncTrackAndThumb();
+        if (activeEl) {
+          revealTemporarily(HIDE_DELAY_SCROLL_MS);
+        }
+      }, { passive: true });
+    }
+  }
+
+  track.addEventListener("mouseenter", () => {
+    isHovered = true;
+    clearHideTimer();
+    const activeEl = syncTrackAndThumb();
+    if (activeEl) {
+      track.classList.add("is-hovered", "is-active");
+    }
+  });
+
+  track.addEventListener("mouseleave", () => {
+    isHovered = false;
+    track.classList.remove("is-hovered");
+    if (!isDragging) {
+      revealTemporarily(HIDE_DELAY_LEAVE_MS);
+    }
+  });
+
+  thumb.addEventListener("pointerdown", (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const activeEl = syncTrackAndThumb();
+    if (activeEl) {
+      startDrag(e, activeEl);
+    }
+  });
+
+  track.addEventListener("pointerdown", (e) => {
+    if (e.target !== track) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const activeEl = syncTrackAndThumb();
+    if (!activeEl) return;
+
+    const trackRect = track.getBoundingClientRect();
+    const clickY = e.clientY - trackRect.top;
+    const maxThumbTop = Math.max(0, currentTrackHeight - currentThumbHeight);
+    const targetThumbTop = Math.max(0, Math.min(maxThumbTop, clickY - currentThumbHeight / 2));
+    const jumpRatio = maxThumbTop > 0 ? (targetThumbTop / maxThumbTop) : 0;
+    const maxScroll = Math.max(0, activeEl.scrollHeight - activeEl.clientHeight);
+    activeEl.scrollTop = jumpRatio * maxScroll;
+    syncTrackAndThumb();
+    startDrag(e, activeEl);
+  });
+
+  track.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  window.addEventListener("resize", scheduleSync, { passive: true });
+
+  window.refreshLeftSidebarScrollbar = () => {
+    ensureObservers();
+    scheduleSync();
+  };
+
+  ensureObservers();
+  syncTrackAndThumb();
+}
+
 // 하위 호환성 글로벌 함수 노출
 window.toggleSidebarSearchBar = toggleSidebarSearchBar;
 window.closeSidebarSearchBar = closeSidebarSearchBar;
@@ -2972,7 +3288,10 @@ window.resetEditorZoom = resetEditorZoom;
 window.applyEditorZoom = applyEditorZoom;
 window.initSidebarResizer = initSidebarResizer;
 window.initCenterEditorScrollbar = initCenterEditorScrollbar;
+window.initLeftSidebarScrollbar = initLeftSidebarScrollbar;
 window.addEventListener("DOMContentLoaded", initEditorZoomEngine);
 window.addEventListener("DOMContentLoaded", initSidebarResizer);
 window.addEventListener("DOMContentLoaded", initCenterEditorScrollbar);
 window.addEventListener("load", initCenterEditorScrollbar);
+window.addEventListener("DOMContentLoaded", initLeftSidebarScrollbar);
+window.addEventListener("load", initLeftSidebarScrollbar);

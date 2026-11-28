@@ -22,6 +22,10 @@
     --toast-text: #e3e3e3;
     --toast-shadow: 0 8px 24px rgba(0,0,0,0.6);
     --font-family: 'Pretendard', -apple-system, sans-serif;
+    --zen-modal-radius: 18px;
+    --zen-modal-backdrop: rgba(8, 10, 14, 0.56);
+    --zen-modal-shadow: 0 24px 56px rgba(0, 0, 0, 0.56);
+    --zen-input-ring: 0 0 0 3px rgba(120, 169, 255, 0.16);
 }
 
 /* 🎯 [V4.0.1] 프리미엄 화이트 테마 (눈이 편안한 맥OS/노션 스타일 깊이감 팔레트) */
@@ -38,6 +42,9 @@ body.light-theme {
     --toast-bg: rgba(255,255,255,0.98);
     --toast-text: #191c20;
     --toast-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    --zen-modal-backdrop: rgba(15, 23, 42, 0.34);
+    --zen-modal-shadow: 0 22px 52px rgba(15, 23, 42, 0.16), 0 4px 12px rgba(15, 23, 42, 0.06);
+    --zen-input-ring: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 * {
@@ -1281,16 +1288,34 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     height: 100vh;
     height: 100svh;
     z-index: 1001;
-    border-left: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
     width: 285px;
     min-width: 285px;
     background: var(--surface);
-    padding: 24px 20px calc(30px + env(safe-area-inset-bottom)) 20px;
+    padding: 20px 16px calc(22px + env(safe-area-inset-bottom)) 16px;
     display: flex;
     flex-direction: column;
-    gap: 36px;
+    gap: 20px;
     overflow-y: auto;
     transition: transform 0.25s ease-in-out;
+}
+
+body.light-theme .col-right {
+    border-left: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.right-pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 4px;
+}
+
+.miryang-bi-btn {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 2px !important;
 }
 
 .col-right.is-closed {
@@ -1325,41 +1350,178 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 }
 
 .util-title {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
     color: var(--text-muted);
-    font-weight: 800;
-    margin-bottom: 4px;
+    font-weight: 700;
+    padding: 0 4px;
+    margin-bottom: 2px;
 }
 
 .util-btn {
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: 9px 12px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 13.5px;
     font-weight: 500;
+    color: var(--text-main);
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.12s ease;
 }
 
 .util-btn:hover {
     background: var(--surface-hover);
 }
 
-/* 🎯 [디테일 교정] 우측 패널 메뉴 아이콘 칼각 정렬 (삐뚤어짐 완벽 해결) */
-.util-btn i {
-    width: 20px;
-    /* 넉넉한 고정 상자 크기 */
-    display: flex;
-    justify-content: center;
-    /* 상자 안에서 가로 중앙 정렬 */
+.util-btn-left {
+    display: inline-flex;
     align-items: center;
-    /* 상자 안에서 세로 중앙 정렬 */
+    gap: 10px;
+    min-width: 0;
 }
 
-.util-btn-share i {
+/* 🎯 [디테일 교정] 우측 패널 메뉴 아이콘 칼각 정렬 */
+.util-btn i {
+    width: 18px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 13.5px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.util-btn:hover i {
+    color: var(--text-main);
+}
+
+.util-ext-badge {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(148, 163, 184, 0.12);
+    flex-shrink: 0;
+}
+
+.util-btn-share {
+    padding: 11px 12px;
+    background: rgba(120, 169, 255, 0.12);
+    border: 1px solid rgba(120, 169, 255, 0.24);
+    font-weight: 600;
+}
+
+.util-btn-share:hover {
+    background: rgba(120, 169, 255, 0.2);
+    border-color: rgba(120, 169, 255, 0.4);
+}
+
+.util-btn-share i,
+.util-btn-share:hover i {
     color: var(--accent);
+}
+
+.util-btn-share .util-ext-badge {
+    background: rgba(120, 169, 255, 0.18);
+    color: var(--accent);
+}
+
+body.light-theme .util-btn-share {
+    background: rgba(37, 99, 235, 0.07);
+    border: 1px solid rgba(37, 99, 235, 0.16);
+}
+
+body.light-theme .util-btn-share:hover {
+    background: rgba(37, 99, 235, 0.12);
+    border-color: rgba(37, 99, 235, 0.28);
+}
+
+body.light-theme .util-btn-share .util-ext-badge {
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--accent);
+}
+
+.util-export-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.light-theme .util-export-list {
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.util-btn-export {
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.util-mgmt-section {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+body.light-theme .util-mgmt-section {
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.util-mgmt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.util-mgmt-card {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 8px;
+    border-radius: 11px;
+    font-size: 12.5px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    text-align: center;
+}
+
+.util-mgmt-card i {
+    font-size: 14.5px;
+}
+
+.util-mgmt-card:hover {
+    background: var(--surface-hover);
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+body.light-theme .util-mgmt-card {
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+body.light-theme .util-mgmt-card:hover {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.14);
+}
+
+.util-btn-danger-soft:hover,
+.util-btn-danger-soft:hover i {
+    color: var(--danger);
+}
+
+.util-btn-danger-soft:hover {
+    background: rgba(220, 38, 38, 0.08) !important;
+    border-color: rgba(220, 38, 38, 0.22) !important;
 }
 
 .util-divider {
@@ -1384,11 +1546,10 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 }
 
 #memo-title-input {
-    font-size: 28px;
-    font-weight: 600;
-    /* 🎯 [제미나이 핏] 700에서 600으로 수정 */
+    font-size: 29px;
+    font-weight: 700;
     width: 75%;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.6px;
 }
 
 .quill-wrapper {
@@ -1410,7 +1571,7 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 
 .ql-toolbar.ql-snow {
     border: none !important;
-    padding: 8px 12px !important;
+    padding: 7px 12px !important;
     margin: 0 auto !important;
     border-bottom: 1px solid var(--border) !important;
     flex-wrap: wrap !important;
@@ -1418,7 +1579,7 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     width: 100%;
     display: flex !important;
     align-items: center;
-    gap: 2px !important;
+    gap: 1px !important;
     justify-content: flex-start !important;
 }
 
@@ -1427,7 +1588,7 @@ body.light-theme .auth-toggle-btn.is-logged-in {
     position: relative;
     display: flex;
     align-items: center;
-    margin: 0 8px 0 0;
+    margin: 0 7px 0 0;
     gap: 0px;
     flex-wrap: nowrap !important;
     /* 화면이 좁아져도 한 그룹이 두 줄로 쪼개지지 않게 방어 */
@@ -1445,22 +1606,15 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 .ql-toolbar.ql-snow .ql-formats:nth-child(7)::after,
 .ql-toolbar.ql-snow .ql-formats:nth-child(8)::after,
 .ql-toolbar.ql-snow .ql-formats:nth-child(9)::after {
-    /* 🎯 핵심: 반드시 content를 넣어야 나타납니다 */
     content: "";
-
-    /* 위치 및 크기 설정 */
     position: absolute;
     right: -4px;
-    /* 부모 그룹의 오른쪽 끝에서 8px 떨어진 곳 */
     top: 50%;
     transform: translateY(-50%);
     width: 1px;
-    height: 16px;
-
-    /* 디자인 */
+    height: 14px;
     background-color: var(--border);
-
-    /* 불필요한 속성 제거 (가상 요소에는 padding/border-left가 필요 없음) */
+    opacity: 0.55;
 }
 
 .ql-toolbar.ql-snow .ql-formats:last-child {
@@ -1469,10 +1623,10 @@ body.light-theme .auth-toggle-btn.is-logged-in {
 
 /* 1. 버튼 및 SVG 아이콘 기본 설정 */
 .ql-toolbar.ql-snow button {
-    width: 26px !important;
-    height: 26px !important;
+    width: 24px !important;
+    height: 24px !important;
     padding: 0px !important;
-    border-radius: 4px !important;
+    border-radius: 6px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -1602,7 +1756,7 @@ body:not(.light-theme) .ql-editor span[style*="#fef08a"] {
 
 /* 제목(H1, H2) 드롭다운 너비 확 줄이기 (공간 확보) */
 .ql-snow .ql-picker.ql-header {
-    width: 85px !important;
+    width: 76px !important;
 }
 
 .ql-snow .ql-picker-label {
@@ -1696,9 +1850,31 @@ body:not(.light-theme) .ql-editor span[style*="#fef08a"] {
     display: none !important;
 }
 
-/* 🎯 [V1.0.4] 스마트 하이퍼링크 연결 모달 스타일 */
-#link-insert-modal {
+/* 🎯 [V1.0.4] 스마트 하이퍼링크 연결 · 동영상 삽입 Zen 모달 스타일 */
+#link-insert-modal,
+#video-insert-modal {
     z-index: 10008;
+}
+
+.zen-modal-icon-close {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.zen-modal-icon-close:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
 }
 
 .link-modal-body {
@@ -1796,14 +1972,21 @@ body:not(.light-theme) .ql-editor span[style*="#fef08a"] {
     line-height: 1.4;
 }
 
-#link-modal-submit-btn {
+#link-modal-submit-btn,
+#video-modal-submit-btn {
     background: var(--accent) !important;
     color: var(--accent-contrast) !important;
     font-weight: 700 !important;
 }
 
-body.light-theme #link-modal-submit-btn {
+body.light-theme #link-modal-submit-btn,
+body.light-theme #video-modal-submit-btn {
     color: #ffffff !important;
+}
+
+.link-field-input:focus {
+    border-color: var(--accent);
+    box-shadow: var(--zen-input-ring);
 }
 
 /* 헤더 선택창 높이 반듯하게 맞춤 */
@@ -2071,6 +2254,33 @@ body.light-theme .ql-editor li[data-list="checked"] {
     height: 1px;
     background: var(--border);
     margin: 4px 0;
+}
+
+/* [V1.9.0] 에디터 툴바 '표' 통합 드롭다운 팝오버 */
+.zen-table-toolbar-menu {
+    min-width: 214px;
+    border-radius: 12px;
+    padding: 6px;
+}
+
+.zen-table-toolbar-menu .table-menu-item {
+    border-radius: 8px;
+    padding: 8px 10px;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.zen-tm-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.zen-tm-shortcut {
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 /* 🖼️ [V1.1.0] 이미지 전용 Zen 우클릭 컨텍스트 메뉴 확장 스타일 */
@@ -3047,7 +3257,27 @@ body.light-theme .fm-quick-btn.is-active {
 
 .fm-crumb {
     cursor: pointer;
-    transition: color 0.2s;
+    transition: color 0.2s, background-color 0.16s, border-color 0.16s;
+}
+
+.fm-crumb.is-security-crumb {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 8px;
+    background: rgba(198, 138, 43, 0.1);
+    border: 1px solid rgba(198, 138, 43, 0.28);
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.fm-crumb.is-security-crumb .fm-crumb-sec-icon {
+    color: #c68a2b;
+}
+
+.fm-crumb.is-security-crumb:hover {
+    background: rgba(198, 138, 43, 0.16);
+    border-color: rgba(198, 138, 43, 0.45);
 }
 
 .fm-crumb:hover i {
@@ -3241,19 +3471,20 @@ body.light-theme .fm-quick-btn.is-active {
     background: rgba(255, 107, 107, 0.1);
 }
 
-/* 🎯 [No.013] 이동 목적지 선택 팝업 스타일 */
+/* 🎯 [V1.9.0] 통합 Zen 모달 시스템 & 보안 폴더 Lock Card */
 .fm-modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--zen-modal-backdrop);
     display: none;
     align-items: center;
     justify-content: center;
     z-index: 3000;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
 .fm-modal {
@@ -3261,55 +3492,80 @@ body.light-theme .fm-quick-btn.is-active {
     border: 1px solid var(--border);
     width: 90%;
     max-width: 400px;
-    border-radius: 16px;
+    border-radius: var(--zen-modal-radius);
     display: flex;
     flex-direction: column;
-    max-height: 80vh;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    max-height: 82vh;
+    overflow: hidden;
+    box-shadow: var(--zen-modal-shadow);
+    animation: zenSettingsPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.light-theme .fm-modal {
+    background: #ffffff;
+    border-color: #e2e8f0;
 }
 
 .fm-modal-header {
-    padding: 20px;
+    padding: 15px 20px;
     border-bottom: 1px solid var(--border);
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 15px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+body.light-theme .fm-modal-header {
+    background: #f8fafc;
 }
 
 /* 🎯 1. 폴더 목록이 버튼 구역을 침범하지 못하게 가두기 (min-height: 0 추가) */
 .fm-modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 14px 16px;
     min-height: 0;
-    /* 👈 이것이 핵심! 투명 유령 레이어가 삐져나오는 것을 완벽 차단합니다 */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.fm-modal-body::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+}
+
+.fm-modal-body::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 999px;
 }
 
 /* 🎯 2. 하단 버튼 구역을 무조건 맨 위로 끌어올리고 배경색으로 방어막 치기 */
 .fm-modal-footer {
-    padding: 16px;
+    padding: 12px 18px;
     border-top: 1px solid var(--border);
     display: flex;
-    gap: 12px;
+    gap: 10px;
     background: var(--surface);
-    /* 👈 투명해서 클릭이 새어나가는 걸 방지 */
     position: relative;
     z-index: 999;
-    /* 👈 압도적인 높이로 설정해서 그 어떤 것도 덮지 못하게 함 */
+}
+
+body.light-theme .fm-modal-footer {
+    background: #f8fafc;
 }
 
 .fm-modal-footer button {
     flex: 1;
-    height: 48px;
+    height: 40px;
     display: flex;
     justify-content: center;
     align-items: center;
-    border-radius: 8px;
+    border-radius: 10px;
+    font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
     border: none;
-    /* 🎯 핵심: 버튼 자체가 클릭을 모두 흡수하도록 강제 설정 */
     pointer-events: auto !important;
     user-select: none;
     position: relative;
@@ -3336,30 +3592,160 @@ body.light-theme #markdown-help-modal .fm-modal-footer button {
     color: #ffffff !important;
 }
 
-/* 🎯 [No.020] 보안 폴더 비밀번호 팝업 전용 스타일 */
+/* 🎯 [V1.9.0] 보안 폴더 비밀번호 중앙 집중형 Zen Lock Card (앱 잠금과 동일 규격) */
+.zen-lock-modal-card {
+    position: relative;
+    max-width: 360px !important;
+    width: calc(100% - 32px) !important;
+    padding: 28px 24px 24px !important;
+    border-radius: var(--zen-modal-radius) !important;
+}
+
+.zen-lock-close-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.zen-lock-close-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-main);
+}
+
+.zen-lock-modal-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.zen-sec-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(198, 138, 43, 0.14);
+    color: #c68a2b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-bottom: 14px;
+}
+
+body:not(.light-theme) .zen-sec-icon-wrap {
+    background: rgba(217, 155, 56, 0.16);
+    color: #e0a94f;
+}
+
+.zen-lock-modal-heading {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.zen-lock-modal-desc {
+    margin: 0 0 18px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.45;
+    word-break: keep-all;
+}
+
+/* 🎯 [No.020 / V1.9.0] 보안 폴더 비밀번호 입력 필드 */
 .sec-input {
     width: 100%;
+    height: 44px;
     background: var(--bg);
     border: 1px solid var(--border);
-    padding: 14px;
-    border-radius: 8px;
+    padding: 0 14px;
+    border-radius: 10px;
     color: var(--text-main);
-    font-size: 20px;
-    font-weight: 700;
-    margin-bottom: 16px;
+    font-size: 14.5px;
+    font-weight: 500;
+    margin-bottom: 14px;
     text-align: center;
-    letter-spacing: 4px;
-    font-family: monospace;
-    transition: border-color 0.2s;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
     user-select: text !important;
     -webkit-user-select: text !important;
     caret-color: auto !important;
 }
 
+.sec-input::placeholder {
+    font-size: 13.5px;
+    letter-spacing: normal;
+}
+
 .sec-input:focus {
-    border-color: #f59e0b;
+    border-color: #c68a2b;
     outline: none;
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    box-shadow: 0 0 0 3px rgba(198, 138, 43, 0.16);
+}
+
+.zen-lock-modal-actions {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.zen-lock-btn-cancel,
+.zen-lock-btn-confirm {
+    flex: 1;
+    height: 42px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+}
+
+.zen-lock-btn-cancel {
+    background: var(--surface-hover);
+    color: var(--text-main);
+}
+
+body.light-theme .zen-lock-btn-cancel {
+    background: #eef2f6;
+    color: #475569;
+}
+
+body.light-theme .zen-lock-btn-cancel:hover {
+    background: #e2e8f0;
+}
+
+.zen-lock-btn-confirm {
+    background: #b97716;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.zen-lock-btn-confirm:hover {
+    background: #a1650f;
+}
+
+body:not(.light-theme) .zen-lock-btn-confirm {
+    background: #d99b38;
+    color: #131314;
+}
+
+body:not(.light-theme) .zen-lock-btn-confirm:hover {
+    background: #e3ab50;
 }
 
 /* 🎯 [V4.2.3] 이동 모달 헤더 '+ 새 폴더' 버튼 및 트리 계층 들여쓰기 스타일 */
@@ -5212,8 +5598,8 @@ body.light-theme .miryang-bi-btn:hover {
     background: #ffffff !important;
     color: var(--text-main) !important;
     border: 1px solid var(--border);
-    border-radius: 14px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-radius: var(--zen-modal-radius, 18px);
+    box-shadow: var(--zen-modal-shadow);
     width: 92vw;
     max-width: 460px;
     max-height: 88vh;
@@ -5372,6 +5758,35 @@ body:not(.light-theme) .zen-settings-divider {
     background: rgba(255, 255, 255, 0.08);
 }
 
+.zen-settings-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    padding: 4px 8px 2px;
+    opacity: 0.85;
+}
+
+.zen-settings-reset-link {
+    background: transparent;
+    border: none;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.zen-settings-reset-link:hover {
+    background: rgba(120, 169, 255, 0.14);
+}
+
+body.light-theme .zen-settings-reset-link:hover {
+    background: rgba(37, 99, 235, 0.08);
+}
+
 /* Zen 토글 스위치 */
 .zen-switch {
     position: relative;
@@ -5481,6 +5896,7 @@ body:not(.light-theme) .zen-segmented-btn.active {
 
 #setting-export-segmented .zen-segmented-btn {
     flex: 1;
+    justify-content: center;
     text-align: center;
     padding: 6px 4px;
 }
@@ -6023,8 +6439,8 @@ body:not(.light-theme) .app-lock-overlay {
     max-width: 360px;
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12), 0 2px 10px rgba(15, 23, 42, 0.05);
+    border-radius: var(--zen-modal-radius, 18px);
+    box-shadow: var(--zen-modal-shadow);
     padding: 28px 24px 24px;
     display: flex;
     flex-direction: column;
@@ -6332,8 +6748,8 @@ body.light-theme .zen-codeblock-tooltip {
 ============================================================================ */
 #memo-list.sidebar-tree {
     padding: 0 8px 24px 8px;
-    scrollbar-width: thin !important;
-    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
 }
 
 #memo-list.sidebar-tree:focus {
@@ -6341,21 +6757,9 @@ body.light-theme .zen-codeblock-tooltip {
 }
 
 #memo-list.sidebar-tree::-webkit-scrollbar {
-    display: block !important;
-    width: 5px;
-}
-
-#memo-list.sidebar-tree::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-#memo-list.sidebar-tree::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.35);
-    border-radius: 4px;
-}
-
-#memo-list.sidebar-tree::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.6);
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 #memo-list.sidebar-tree,
@@ -6518,41 +6922,46 @@ body.light-theme .zen-codeblock-tooltip {
 }
 
 .tree-folder-icon.is-bh-official {
-    color: #818cf8;
-    opacity: 0.92;
+    color: #8b92db;
+    opacity: 0.9;
 }
 
 .tree-folder-icon.is-bh-memo {
-    color: #38bdf8;
-    opacity: 0.92;
+    color: #5eaad6;
+    opacity: 0.9;
 }
 
 .tree-folder-icon.is-bh-doc {
-    color: #34d399;
-    opacity: 0.92;
+    color: #54b292;
+    opacity: 0.9;
 }
 
 body.light-theme .tree-folder-icon.is-bh-official {
-    color: #6366f1;
+    color: #6d73c4;
     opacity: 0.88;
 }
 
 body.light-theme .tree-folder-icon.is-bh-memo {
-    color: #0284c7;
+    color: #3b8db8;
     opacity: 0.88;
 }
 
 body.light-theme .tree-folder-icon.is-bh-doc {
-    color: #059669;
+    color: #3d9678;
     opacity: 0.88;
 }
 
 .tree-folder-icon.is-security {
-    color: #f59e0b;
+    color: #d99b38;
 }
 
 .tree-folder-icon.is-security-open {
-    color: #34d399;
+    color: #d99b38;
+}
+
+body.light-theme .tree-folder-icon.is-security,
+body.light-theme .tree-folder-icon.is-security-open {
+    color: #c68a2b;
 }
 
 .tree-pin-toggle-btn {
@@ -6864,6 +7273,11 @@ body.light-theme .tree-folder-icon.is-trash {
 .fm-list.fm-tree .tree-row {
     padding-left: 10px;
     padding-right: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+}
+
+body.light-theme .fm-list.fm-tree .tree-row {
+    border-bottom-color: rgba(15, 23, 42, 0.045);
 }
 
 .fm-tree-checkbox {
@@ -7235,8 +7649,8 @@ body.light-theme .tree-folder-icon.is-trash {
 #sts-due-date::placeholder,
 #sts-time-input::placeholder {
     color: #94a3b8;
-    font-style: italic;
-    opacity: 0.9;
+    font-style: normal;
+    opacity: 0.82;
 }
 
 .zen-sts-textarea {
@@ -7289,20 +7703,55 @@ body.light-theme .tree-folder-icon.is-trash {
 .zen-sts-rem-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
-    padding: 7px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg);
+    gap: 8px;
 }
 
-.zen-sts-rem-row label {
+.zen-sts-chip {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    color: var(--text-main);
     cursor: pointer;
+}
+
+.zen-sts-chip input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.zen-sts-chip span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    user-select: none;
+}
+
+.zen-sts-chip:hover span {
+    border-color: rgba(148, 163, 184, 0.6);
+    color: var(--text-main);
+}
+
+.zen-sts-chip input:checked + span {
+    background: rgba(120, 169, 255, 0.16);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+body.light-theme .zen-sts-chip input:checked + span {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .zen-sts-links-preview {
@@ -8308,8 +8757,8 @@ body.light-theme .zen-bh-model-opt-icon {
     width: min(500px, calc(100vw - 32px));
     background: rgba(24, 27, 32, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 14px;
-    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.45);
+    border-radius: var(--zen-modal-radius, 18px);
+    box-shadow: var(--zen-modal-shadow);
     color: #f3f4f6;
     overflow: hidden;
     display: flex;
@@ -8535,6 +8984,10 @@ body.light-theme .zen-mt-btn-cancel:hover {
     user-select: none !important;
     -webkit-user-select: none !important;
     caret-color: transparent !important;
+}
+
+.zen-left-scrollbar {
+    z-index: 955;
 }
 
 .zen-center-scrollbar.has-overflow {
