@@ -982,3 +982,24 @@
         pointer-events: none;
     }
 }
+
+@media (max-width: 768px) {
+    .ql-editor .ql-code-block {
+        font-size: 13px !important;
+        line-height: 1.65 !important;
+    }
+
+    #zen-code-lang-popover {
+        width: min(270px, calc(100vw - 24px));
+        max-height: min(340px, 60vh);
+    }
+
+    .zen-clp-search-input {
+        font-size: 14px;
+    }
+
+    .zen-clp-item {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+}

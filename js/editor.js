@@ -1,7 +1,67 @@
 // 🎯 [V4.6.3] 스마트 백스페이스 추적 전역 상태 변수
 let lastAutoConvertedList = null;
 
-hljs.configure({ languages: ['javascript', 'python', 'html', 'css', 'typescript', 'bash'] });
+// 🎯 [V1.9.6] 코드 블록 확장 언어 카탈로그 (총 41종: 웹 · 백엔드 · 웹서버/WAS · 인프라 · 쉘)
+const ZEN_CODE_LANGUAGE_CATALOG = [
+    // 기본 / 문서
+    { key: 'plain', label: 'Plain Text', category: '기본 / 문서', keywords: 'txt text none raw 일반' },
+    { key: 'markdown', label: 'Markdown', category: '기본 / 문서', keywords: 'md mdx 마크다운' },
+    { key: 'diff', label: 'Diff (Git)', category: '기본 / 문서', keywords: 'patch git diff' },
+
+    // 웹 / 프론트엔드
+    { key: 'html', label: 'HTML', category: '웹 / 프론트엔드', keywords: 'htm html5 svg xhtml 웹' },
+    { key: 'css', label: 'CSS', category: '웹 / 프론트엔드', keywords: 'style stylesheet 스타일' },
+    { key: 'scss', label: 'SCSS / SASS', category: '웹 / 프론트엔드', keywords: 'scss sass less' },
+    { key: 'javascript', label: 'JavaScript', category: '웹 / 프론트엔드', keywords: 'js jsx mjs cjs node es6' },
+    { key: 'typescript', label: 'TypeScript', category: '웹 / 프론트엔드', keywords: 'ts tsx 타입스크립트' },
+    { key: 'json', label: 'JSON', category: '웹 / 프론트엔드', keywords: 'jsonc json5 package tsconfig' },
+    { key: 'graphql', label: 'GraphQL', category: '웹 / 프론트엔드', keywords: 'gql schema query' },
+
+    // 서버 · 백엔드
+    { key: 'java', label: 'Java', category: '서버 · 백엔드', keywords: 'jdk spring jsp servlet' },
+    { key: 'kotlin', label: 'Kotlin', category: '서버 · 백엔드', keywords: 'kt kts android 코틀린' },
+    { key: 'python', label: 'Python', category: '서버 · 백엔드', keywords: 'py py3 fastapi django flask 파이썬' },
+    { key: 'php', label: 'PHP', category: '서버 · 백엔드', keywords: 'php8 laravel wordpress' },
+    { key: 'go', label: 'Go', category: '서버 · 백엔드', keywords: 'golang 고' },
+    { key: 'rust', label: 'Rust', category: '서버 · 백엔드', keywords: 'rs cargo 러스트' },
+    { key: 'csharp', label: 'C#', category: '서버 · 백엔드', keywords: 'cs dotnet net8 wpf csharp' },
+    { key: 'cpp', label: 'C / C++', category: '서버 · 백엔드', keywords: 'c cc cxx h hpp' },
+    { key: 'ruby', label: 'Ruby', category: '서버 · 백엔드', keywords: 'rb rails gemfile' },
+    { key: 'swift', label: 'Swift', category: '서버 · 백엔드', keywords: 'ios macos 스위프트' },
+    { key: 'dart', label: 'Dart', category: '서버 · 백엔드', keywords: 'flutter 다트 플러터' },
+    { key: 'scala', label: 'Scala', category: '서버 · 백엔드', keywords: 'spark play 스칼라' },
+    { key: 'groovy', label: 'Groovy / Gradle', category: '서버 · 백엔드', keywords: 'gradle build gvy jenkins' },
+    { key: 'lua', label: 'Lua', category: '서버 · 백엔드', keywords: 'openresty nginx lua' },
+    { key: 'perl', label: 'Perl', category: '서버 · 백엔드', keywords: 'pl cgi 펄' },
+    { key: 'r', label: 'R', category: '서버 · 백엔드', keywords: 'stats data 통계' },
+
+    // 데이터베이스
+    { key: 'sql', label: 'SQL', category: '데이터베이스', keywords: 'mysql postgresql postgres oracle mariadb sqlite query' },
+
+    // 웹서버 · WAS · 인프라 · 설정
+    { key: 'nginx', label: 'Nginx', category: '웹서버 · 인프라 · 설정', keywords: 'nginx.conf proxy reverse server location conf' },
+    { key: 'apache', label: 'Apache', category: '웹서버 · 인프라 · 설정', keywords: 'httpd httpd.conf htaccess apacheconf virtualhost rewrite' },
+    { key: 'accesslog', label: 'Access Log', category: '웹서버 · 인프라 · 설정', keywords: 'log logs apache nginx errorlog 접속로그' },
+    { key: 'xml', label: 'XML (Tomcat / Spring)', category: '웹서버 · 인프라 · 설정', keywords: 'tomcat server.xml web.xml mybatis pom.xml jsp spring' },
+    { key: 'properties', label: 'Properties (Tomcat / Spring)', category: '웹서버 · 인프라 · 설정', keywords: 'catalina.properties application.properties env dotenv 설정' },
+    { key: 'ini', label: 'INI / TOML', category: '웹서버 · 인프라 · 설정', keywords: 'php.ini my.cnf toml conf cfg systemd' },
+    { key: 'yaml', label: 'YAML', category: '웹서버 · 인프라 · 설정', keywords: 'yml docker-compose kubernetes k8s helm github actions' },
+    { key: 'dockerfile', label: 'Dockerfile', category: '웹서버 · 인프라 · 설정', keywords: 'docker container 도커' },
+    { key: 'http', label: 'HTTP', category: '웹서버 · 인프라 · 설정', keywords: 'rest api request response header curl' },
+    { key: 'makefile', label: 'Makefile', category: '웹서버 · 인프라 · 설정', keywords: 'make build cmake' },
+
+    // 쉘 / 스크립트
+    { key: 'bash', label: 'Bash / Shell', category: '쉘 / 스크립트', keywords: 'sh zsh linux ubuntu centos catalina.sh terminal console' },
+    { key: 'powershell', label: 'PowerShell', category: '쉘 / 스크립트', keywords: 'ps1 pwsh windows script 파워쉘' },
+    { key: 'dos', label: 'Batch / CMD', category: '쉘 / 스크립트', keywords: 'bat cmd dos windows catalina.bat 배치' }
+];
+window.ZEN_CODE_LANGUAGE_CATALOG = ZEN_CODE_LANGUAGE_CATALOG;
+
+if (typeof hljs !== 'undefined' && hljs && typeof hljs.configure === 'function') {
+    hljs.configure({
+        languages: ZEN_CODE_LANGUAGE_CATALOG.filter((item) => item.key !== 'plain').map((item) => item.key)
+    });
+}
 
 function isLocalFileOrFolderPath(val) {
     if (!val || typeof val !== 'string') return false;
@@ -249,27 +309,7 @@ const quill = new Quill('#editor', {
     modules: {
         syntax: {
             hljs: window.hljs,
-            languages: [
-                { key: 'plain', label: 'Plain Text' },
-                { key: 'javascript', label: 'JavaScript' },
-                { key: 'typescript', label: 'TypeScript' },
-                { key: 'html', label: 'HTML / XML' },
-                { key: 'css', label: 'CSS' },
-                { key: 'json', label: 'JSON' },
-                { key: 'python', label: 'Python' },
-                { key: 'java', label: 'Java' },
-                { key: 'cpp', label: 'C / C++' },
-                { key: 'csharp', label: 'C#' },
-                { key: 'sql', label: 'SQL' },
-                { key: 'bash', label: 'Bash / Shell' },
-                { key: 'markdown', label: 'Markdown' },
-                { key: 'yaml', label: 'YAML' },
-                { key: 'rust', label: 'Rust' },
-                { key: 'go', label: 'Go' },
-                { key: 'php', label: 'PHP' },
-                { key: 'kotlin', label: 'Kotlin' },
-                { key: 'swift', label: 'Swift' }
-            ]
+            languages: ZEN_CODE_LANGUAGE_CATALOG.map(({ key, label }) => ({ key, label }))
         },
         table: true,
         history: { delay: 1000, maxStack: 100, userOnly: true },
@@ -1479,23 +1519,22 @@ function dataUrlToImageFile(dataUrl, index = 0) {
     }
 }
 
-// 🎯 [V1.8.11] AI 웹/마크다운 붙여넣기 정규화 및 Ctrl+Shift+V 원문 유지 엔진
-const ZEN_QUILL_CODE_LANGUAGES = new Set([
-    'plain', 'javascript', 'typescript', 'html', 'css', 'json',
-    'python', 'java', 'cpp', 'csharp', 'sql', 'bash', 'markdown',
-    'yaml', 'rust', 'go', 'php', 'kotlin', 'swift'
-]);
+// 🎯 [V1.8.11 / V1.9.6] AI 웹/마크다운 붙여넣기 정규화 및 확장 언어 별칭 매핑
+const ZEN_QUILL_CODE_LANGUAGES = new Set(ZEN_CODE_LANGUAGE_CATALOG.map((item) => item.key));
 
 const ZEN_CODE_LANG_ALIASES = {
     js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', node: 'javascript',
     ts: 'typescript', tsx: 'typescript',
     py: 'python', py3: 'python', python3: 'python',
     sh: 'bash', shell: 'bash', zsh: 'bash', console: 'bash', terminal: 'bash', shellsession: 'bash',
-    cmd: 'bash', bat: 'bash', batch: 'bash', dos: 'bash', powershell: 'bash', ps1: 'bash', pwsh: 'bash',
-    htm: 'html', xml: 'html', svg: 'html', xhtml: 'html',
-    scss: 'css', sass: 'css', less: 'css',
+    'bash / shell': 'bash', 'shell script': 'bash',
+    cmd: 'dos', bat: 'dos', batch: 'dos', dos: 'dos', 'batch / cmd': 'dos',
+    powershell: 'powershell', ps1: 'powershell', pwsh: 'powershell',
+    htm: 'html', 'html / xml': 'html',
+    xml: 'xml', svg: 'xml', xhtml: 'xml', tomcat: 'xml', jsp: 'xml', 'xml (tomcat / spring)': 'xml',
+    scss: 'scss', sass: 'scss', less: 'scss', 'scss / sass': 'scss',
     jsonc: 'json', json5: 'json',
-    c: 'cpp', 'c++': 'cpp', cc: 'cpp', cxx: 'cpp', h: 'cpp', hpp: 'cpp',
+    c: 'cpp', 'c++': 'cpp', cc: 'cpp', cxx: 'cpp', h: 'cpp', hpp: 'cpp', 'c / c++': 'cpp',
     'c#': 'csharp', cs: 'csharp', dotnet: 'csharp',
     mysql: 'sql', postgresql: 'sql', postgres: 'sql', pgsql: 'sql', sqlite: 'sql', tsql: 'sql', plsql: 'sql',
     yml: 'yaml',
@@ -1503,9 +1542,20 @@ const ZEN_CODE_LANG_ALIASES = {
     rs: 'rust',
     golang: 'go',
     kt: 'kotlin', kts: 'kotlin',
-    txt: 'plain', text: 'plain', plaintext: 'plain', 'plain text': 'plain', nohighlight: 'plain', none: 'plain',
-    'bash / shell': 'bash', 'shell script': 'bash', 'c / c++': 'cpp', 'html / xml': 'html',
-    dockerfile: 'bash', makefile: 'bash', toml: 'yaml', dotenv: 'bash', env: 'bash'
+    rb: 'ruby',
+    pl: 'perl',
+    gvy: 'groovy', gradle: 'groovy', 'groovy / gradle': 'groovy',
+    nginx: 'nginx', nginxconf: 'nginx', 'nginx.conf': 'nginx',
+    apache: 'apache', apacheconf: 'apache', httpd: 'apache', 'httpd.conf': 'apache', htaccess: 'apache', '.htaccess': 'apache',
+    accesslog: 'accesslog', 'access log': 'accesslog', log: 'accesslog', logs: 'accesslog',
+    properties: 'properties', prop: 'properties', dotenv: 'properties', env: 'properties', 'properties (tomcat / spring)': 'properties',
+    ini: 'ini', toml: 'ini', conf: 'ini', cfg: 'ini', cnf: 'ini', 'ini / toml': 'ini',
+    dockerfile: 'dockerfile', docker: 'dockerfile',
+    makefile: 'makefile', make: 'makefile', mk: 'makefile',
+    http: 'http', https: 'http',
+    gql: 'graphql',
+    patch: 'diff', 'diff (git)': 'diff',
+    txt: 'plain', text: 'plain', plaintext: 'plain', 'plain text': 'plain', nohighlight: 'plain', none: 'plain'
 };
 
 function normalizePastedCodeLanguage(raw) {
@@ -2368,16 +2418,8 @@ quill.on('text-change', function (delta, oldDelta, source) {
                 quill.setSelection(formatIndex + 1, 0, Quill.sources.USER);
             }
             else if (/^`{3}/.test(prefix)) {
-                let lang = prefix.replace(/^`{3}/, '').toLowerCase().trim();
-                if (lang === "js") lang = "javascript";
-                else if (lang === "ts") lang = "typescript";
-                else if (lang === "py") lang = "python";
-                else if (lang === "sh" || lang === "shell" || lang === "zsh") lang = "bash";
-                else if (lang === "c++") lang = "cpp";
-                else if (lang === "c#") lang = "csharp";
-                else if (lang === "yml") lang = "yaml";
-                else if (lang === "md") lang = "markdown";
-                else if (lang === "htm") lang = "html";
+                const rawLang = prefix.replace(/^`{3}/, '').trim();
+                const lang = normalizePastedCodeLanguage(rawLang);
                 quill.formatLine(formatIndex, 1, 'code-block', lang || true, Quill.sources.USER);
             }
 
@@ -2974,6 +3016,11 @@ document.addEventListener("keydown", (e) => {
             return;
         }
 
+        // [V1.9.6] 코드블록 언어 선택 Zen 팝오버 닫기
+        if (typeof window.closeZenCodeLanguagePopover === "function" && window.closeZenCodeLanguagePopover()) {
+            return;
+        }
+
         // [V1.3.0] 좌측 사이드바 폴더 트리 컨텍스트 메뉴 닫기
         const sidebarMenuEl = document.getElementById("sidebar-context-menu");
         if (sidebarMenuEl && sidebarMenuEl.style.display === "block") {
@@ -3239,6 +3286,12 @@ window.addEventListener("popstate", (e) => {
     const lbModal = document.getElementById("zen-image-lightbox");
     if (lbModal && lbModal.classList.contains("is-open")) {
         if (typeof closeZenImageLightbox === "function") closeZenImageLightbox(true);
+        return;
+    }
+
+    // [V1.9.6] 코드블록 언어 선택 Zen 팝오버 닫기
+    if (typeof window.closeZenCodeLanguagePopover === "function" && window.closeZenCodeLanguagePopover()) {
+        history.pushState({ page: "main" }, "");
         return;
     }
 
@@ -3942,6 +3995,281 @@ function initCodeBlockFloatingTooltips() {
 }
 
 initCodeBlockFloatingTooltips();
+
+// 🎯 [V1.9.6] 코드블록 언어 선택 Zen 검색형 팝오버
+function initZenCodeLanguagePopover() {
+    if (window.__zenCodeLangPopoverBound) return;
+    window.__zenCodeLangPopoverBound = true;
+
+    const editorEl = (typeof quill !== 'undefined' && quill && quill.root) ? quill.root : document.querySelector('.ql-editor');
+    if (!editorEl || !document.body) return;
+
+    let popoverEl = document.getElementById('zen-code-lang-popover');
+    if (!popoverEl) {
+        popoverEl = document.createElement('div');
+        popoverEl.id = 'zen-code-lang-popover';
+        popoverEl.className = 'zen-code-lang-popover';
+        popoverEl.setAttribute('role', 'dialog');
+        popoverEl.setAttribute('aria-label', '코드 언어 선택');
+        popoverEl.style.display = 'none';
+        popoverEl.innerHTML = `
+            <div class="zen-clp-search-wrap">
+                <i class="fa-solid fa-magnifying-glass zen-clp-search-icon" aria-hidden="true"></i>
+                <input type="text" id="zen-code-lang-search" class="zen-clp-search-input" placeholder="언어 검색 (예: nginx, php, tomcat...)" autocomplete="off" spellcheck="false" />
+            </div>
+            <div id="zen-code-lang-list" class="zen-clp-list" role="listbox"></div>
+        `;
+        document.body.appendChild(popoverEl);
+    }
+
+    const searchInput = popoverEl.querySelector('#zen-code-lang-search');
+    const listEl = popoverEl.querySelector('#zen-code-lang-list');
+    let activeSelect = null;
+    let focusedIndex = -1;
+    let lastMousedownHandledAt = 0;
+
+    function isOpen() {
+        return popoverEl.style.display === 'flex';
+    }
+
+    function closePopover() {
+        if (!isOpen()) return false;
+        popoverEl.style.display = 'none';
+        activeSelect = null;
+        focusedIndex = -1;
+        return true;
+    }
+
+    window.closeZenCodeLanguagePopover = closePopover;
+
+    function selectLanguage(key) {
+        if (!activeSelect) {
+            closePopover();
+            return;
+        }
+        const targetSelect = activeSelect;
+        closePopover();
+        if (targetSelect.value !== key) {
+            targetSelect.value = key;
+            targetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function updateFocusedItem(nextIdx) {
+        const items = Array.from(listEl.querySelectorAll('.zen-clp-item'));
+        if (items.length === 0) {
+            focusedIndex = -1;
+            return;
+        }
+        focusedIndex = ((nextIdx % items.length) + items.length) % items.length;
+        items.forEach((btn, idx) => {
+            btn.classList.toggle('is-focused', idx === focusedIndex);
+        });
+        items[focusedIndex].scrollIntoView({ block: 'nearest' });
+    }
+
+    function renderLanguageList(queryText) {
+        const q = (queryText || '').trim().toLowerCase();
+        const currentVal = activeSelect ? (activeSelect.value || 'plain') : 'plain';
+        listEl.innerHTML = '';
+        focusedIndex = -1;
+
+        const filtered = ZEN_CODE_LANGUAGE_CATALOG.filter((item) => {
+            if (!q) return true;
+            return (
+                item.label.toLowerCase().includes(q) ||
+                item.key.toLowerCase().includes(q) ||
+                (item.keywords && item.keywords.toLowerCase().includes(q)) ||
+                item.category.toLowerCase().includes(q)
+            );
+        });
+
+        if (filtered.length === 0) {
+            const emptyEl = document.createElement('div');
+            emptyEl.className = 'zen-clp-empty';
+            emptyEl.textContent = '일치하는 언어가 없습니다.';
+            listEl.appendChild(emptyEl);
+            return;
+        }
+
+        let lastCat = null;
+        filtered.forEach((item) => {
+            if (!q && item.category !== lastCat) {
+                lastCat = item.category;
+                const catEl = document.createElement('div');
+                catEl.className = 'zen-clp-category';
+                catEl.textContent = item.category;
+                listEl.appendChild(catEl);
+            }
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'zen-clp-item';
+            btn.setAttribute('role', 'option');
+            btn.dataset.lang = item.key;
+            const isSelected = item.key === currentVal;
+            if (isSelected) {
+                btn.classList.add('is-selected');
+                btn.setAttribute('aria-selected', 'true');
+            }
+
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'zen-clp-item-label';
+            labelSpan.textContent = item.label;
+            btn.appendChild(labelSpan);
+
+            const checkEl = document.createElement('i');
+            checkEl.className = 'fa-solid fa-check zen-clp-check';
+            checkEl.setAttribute('aria-hidden', 'true');
+            btn.appendChild(checkEl);
+
+            btn.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                selectLanguage(item.key);
+            });
+
+            listEl.appendChild(btn);
+        });
+
+        if (q) {
+            updateFocusedItem(0);
+        } else {
+            const selectedBtn = listEl.querySelector('.zen-clp-item.is-selected');
+            if (selectedBtn) {
+                requestAnimationFrame(() => {
+                    selectedBtn.scrollIntoView({ block: 'center' });
+                });
+            }
+        }
+    }
+
+    function positionPopover(anchorEl) {
+        const anchorRect = anchorEl.getBoundingClientRect();
+        const vw = window.innerWidth || 1024;
+        const vh = window.innerHeight || 768;
+        const margin = 8;
+
+        popoverEl.style.display = 'flex';
+        popoverEl.style.visibility = 'hidden';
+
+        const popW = popoverEl.offsetWidth || 256;
+        const popH = popoverEl.offsetHeight || 340;
+
+        let left = anchorRect.left;
+        if (left + popW > vw - margin) {
+            left = vw - popW - margin;
+        }
+        left = Math.max(margin, left);
+
+        let top = anchorRect.bottom + 6;
+        if (top + popH > vh - margin && anchorRect.top - popH - 6 >= margin) {
+            top = anchorRect.top - popH - 6;
+        } else if (top + popH > vh - margin) {
+            top = Math.max(margin, vh - popH - margin);
+        }
+
+        popoverEl.style.left = `${Math.round(left)}px`;
+        popoverEl.style.top = `${Math.round(top)}px`;
+        popoverEl.style.visibility = 'visible';
+    }
+
+    function openPopoverForSelect(selectEl) {
+        if (!selectEl) return;
+        if (isOpen() && activeSelect === selectEl) {
+            closePopover();
+            return;
+        }
+        const tip = document.getElementById('zen-codeblock-tooltip');
+        if (tip) tip.classList.remove('is-visible');
+
+        activeSelect = selectEl;
+        searchInput.value = '';
+        renderLanguageList('');
+        positionPopover(selectEl);
+
+        if ((window.innerWidth || 1024) > 768) {
+            requestAnimationFrame(() => {
+                if (isOpen()) searchInput.focus({ preventScroll: true });
+            });
+        }
+    }
+
+    editorEl.addEventListener('mousedown', (e) => {
+        const selectEl = e.target && e.target.closest ? e.target.closest('.ql-code-block-container select.ql-ui') : null;
+        if (!selectEl) return;
+        e.preventDefault();
+        e.stopPropagation();
+        lastMousedownHandledAt = Date.now();
+        openPopoverForSelect(selectEl);
+    }, true);
+
+    editorEl.addEventListener('click', (e) => {
+        const selectEl = e.target && e.target.closest ? e.target.closest('.ql-code-block-container select.ql-ui') : null;
+        if (!selectEl) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (Date.now() - lastMousedownHandledAt < 350) return;
+        openPopoverForSelect(selectEl);
+    }, true);
+
+    editorEl.addEventListener('keydown', (e) => {
+        const selectEl = e.target && e.target.closest ? e.target.closest('.ql-code-block-container select.ql-ui') : null;
+        if (!selectEl) return;
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopPropagation();
+            openPopoverForSelect(selectEl);
+        }
+    }, true);
+
+    popoverEl.addEventListener('mousedown', (e) => e.stopPropagation());
+    popoverEl.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+
+    searchInput.addEventListener('input', () => {
+        renderLanguageList(searchInput.value);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            updateFocusedItem(focusedIndex + 1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            updateFocusedItem(focusedIndex <= 0 ? listEl.querySelectorAll('.zen-clp-item').length - 1 : focusedIndex - 1);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const items = listEl.querySelectorAll('.zen-clp-item');
+            const target = (focusedIndex >= 0 && items[focusedIndex]) ? items[focusedIndex] : items[0];
+            if (target && target.dataset.lang) {
+                selectLanguage(target.dataset.lang);
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            closePopover();
+        }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (!isOpen()) return;
+        if (e.target.closest('#zen-code-lang-popover') || e.target.closest('.ql-code-block-container select.ql-ui')) return;
+        closePopover();
+    });
+
+    document.addEventListener('touchstart', (e) => {
+        if (!isOpen()) return;
+        if (e.target.closest('#zen-code-lang-popover') || e.target.closest('.ql-code-block-container select.ql-ui')) return;
+        closePopover();
+    }, { passive: true });
+
+    editorEl.addEventListener('scroll', closePopover, { passive: true });
+    const centerEl = document.querySelector('.col-center');
+    if (centerEl) centerEl.addEventListener('scroll', closePopover, { passive: true });
+    window.addEventListener('resize', closePopover, { passive: true });
+}
+
+initZenCodeLanguagePopover();
 
 // ============================================================================
 // 🎯 [V3.3.1] 표 셀 내부 줄바꿈(Shift+Enter) 엔진 (방향키/탈출/삭제는 100% Quill 순정 보장)
@@ -4810,7 +5138,49 @@ window.addEventListener('keydown', function (e) {
         return clone.outerHTML;
     }
 
-    // 리사이저 위치 및 클리핑 동기화
+    // [V1.9.6] 에디터 가시 영역 + 뷰포트 교집합 클리핑 좌표 계산 헬퍼
+    function computeClippedResizerBox(imgRect, boundsRect, viewportW, viewportH) {
+        const clipTop = Math.max(boundsRect.top, 0);
+        const clipBottom = Math.min(boundsRect.bottom, viewportH);
+        const clipLeft = Math.max(boundsRect.left, 0);
+        const clipRight = Math.min(boundsRect.right, viewportW);
+
+        const visTop = Math.max(imgRect.top, clipTop);
+        const visBottom = Math.min(imgRect.bottom, clipBottom);
+        const visLeft = Math.max(imgRect.left, clipLeft);
+        const visRight = Math.min(imgRect.right, clipRight);
+
+        const visWidth = visRight - visLeft;
+        const visHeight = visBottom - visTop;
+        const tol = 1.5;
+
+        const clippedTop = imgRect.top < clipTop - tol;
+        const clippedBottom = imgRect.bottom > clipBottom + tol;
+        const clippedLeft = imgRect.left < clipLeft - tol;
+        const clippedRight = imgRect.right > clipRight + tol;
+
+        return {
+            visible: imgRect.width > 0 && imgRect.height > 0 && visWidth >= 8 && visHeight >= 8,
+            top: visTop,
+            left: visLeft,
+            width: visWidth,
+            height: visHeight,
+            clipTop,
+            clipBottom,
+            clipLeft,
+            clipRight,
+            clippedTop,
+            clippedBottom,
+            clippedLeft,
+            clippedRight,
+            isClipped: clippedTop || clippedBottom || clippedLeft || clippedRight,
+            spaceAbove: visTop - clipTop,
+            spaceBelow: clipBottom - visBottom
+        };
+    }
+    window.__zenComputeClippedResizerBox = computeClippedResizerBox;
+
+    // 리사이저 위치 및 에디터 가시 영역 클리핑 동기화
     function syncZenImageResizerPosition() {
         if (selectedImages.size > 1) {
             resizerEl.style.display = 'none';
@@ -4830,14 +5200,13 @@ window.addEventListener('keydown', function (e) {
         const imgRect = activeResizingImg.getBoundingClientRect();
         const editorContainer = document.querySelector('#editor') || quill.root;
         const boundsRect = editorContainer.getBoundingClientRect();
+        const viewportW = window.innerWidth || document.documentElement.clientWidth || 1024;
+        const viewportH = window.innerHeight || document.documentElement.clientHeight || 768;
 
-        // 이미지가 크기가 0이거나 에디터 가시 영역 밖으로 완전히 벗어난 경우 숨김 (허공 둥둥 떠다님 원천 차단!)
-        if (
-            imgRect.width <= 0 ||
-            imgRect.height <= 0 ||
-            imgRect.bottom < boundsRect.top + 8 ||
-            imgRect.top > boundsRect.bottom - 8
-        ) {
+        const box = computeClippedResizerBox(imgRect, boundsRect, viewportW, viewportH);
+
+        // 이미지가 가시 영역 밖으로 완전히 벗어난 경우 숨김 (상단 제목·툴바·하단 밖 돌출 원천 차단)
+        if (!box.visible) {
             resizerEl.style.visibility = 'hidden';
             resizerEl.style.opacity = '0';
             return;
@@ -4845,30 +5214,42 @@ window.addEventListener('keydown', function (e) {
 
         resizerEl.style.visibility = 'visible';
         resizerEl.style.opacity = '1';
-        resizerEl.style.top = `${imgRect.top}px`;
-        resizerEl.style.left = `${imgRect.left}px`;
-        resizerEl.style.width = `${imgRect.width}px`;
-        resizerEl.style.height = `${imgRect.height}px`;
+        resizerEl.style.top = `${box.top}px`;
+        resizerEl.style.left = `${box.left}px`;
+        resizerEl.style.width = `${box.width}px`;
+        resizerEl.style.height = `${box.height}px`;
 
-        // 미니 툴바 상/하단 스마트 배치 (상단 서식 툴바와 겹치지 않도록 자동 회피)
+        resizerEl.classList.toggle('is-clipped', box.isClipped);
+        resizerEl.classList.toggle('clipped-top', box.clippedTop);
+        resizerEl.classList.toggle('clipped-bottom', box.clippedBottom);
+        resizerEl.classList.toggle('clipped-left', box.clippedLeft);
+        resizerEl.classList.toggle('clipped-right', box.clippedRight);
+
+        // 미니 툴바 상/하단 스마트 배치 (상단 제목·서식 툴바·화면 밖 침범 원천 방지)
         toolbarEl.classList.remove('pos-bottom', 'pos-inside-top');
-        const spaceAbove = imgRect.top - boundsRect.top;
-        const spaceBelow = boundsRect.bottom - imgRect.bottom;
-
-        if (spaceAbove < 48) {
-            if (spaceBelow >= 48) {
-                toolbarEl.classList.add('pos-bottom');
-            } else {
-                toolbarEl.classList.add('pos-inside-top');
-            }
+        if (!box.clippedTop && box.spaceAbove >= 50) {
+            // 상단 바깥 여유가 충분할 때 기본 상단 배치
+        } else if (!box.clippedBottom && box.spaceBelow >= 50) {
+            toolbarEl.classList.add('pos-bottom');
+        } else {
+            toolbarEl.classList.add('pos-inside-top');
         }
 
-        // 미니 툴바가 화면 좌우 밖으로 잘리지 않도록 X축 오프셋 자동 보정
+        // 미니 툴바가 화면 및 에디터 좌우 밖으로 잘리지 않도록 X축 오프셋 자동 보정
         toolbarEl.style.left = '50%';
         toolbarEl.style.transform = 'translateX(-50%)';
         const tbRect = toolbarEl.getBoundingClientRect();
-        const viewportW = window.innerWidth;
-        if (tbRect.left < 8) {
+        const minSafeLeft = Math.max(8, box.clipLeft + 8);
+        const maxSafeRight = Math.min(viewportW - 8, box.clipRight - 8);
+        if (tbRect.width <= (maxSafeRight - minSafeLeft)) {
+            if (tbRect.left < minSafeLeft) {
+                const shiftRight = minSafeLeft - tbRect.left;
+                toolbarEl.style.transform = `translateX(calc(-50% + ${shiftRight}px))`;
+            } else if (tbRect.right > maxSafeRight) {
+                const shiftLeft = tbRect.right - maxSafeRight;
+                toolbarEl.style.transform = `translateX(calc(-50% - ${shiftLeft}px))`;
+            }
+        } else if (tbRect.left < 8) {
             const shiftRight = 8 - tbRect.left;
             toolbarEl.style.transform = `translateX(calc(-50% + ${shiftRight}px))`;
         } else if (tbRect.right > viewportW - 8) {

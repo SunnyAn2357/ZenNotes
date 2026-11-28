@@ -1,0 +1,60 @@
+/*
+ * Coding Fonts Bundle (SIL Open Font License 1.1)
+ * - JetBrains Mono: https://github.com/JetBrains/JetBrainsMono
+ * - D2Coding: https://github.com/naver/d2codingfont
+ * See OFL_LICENSES.txt in this directory for full license text.
+ */
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('JetBrains Mono'), local('JetBrainsMono-Regular'),
+         url(./jetbrains-mono/JetBrainsMono-Regular.woff2) format('woff2');
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: local('JetBrains Mono Medium'), local('JetBrainsMono-Medium'),
+         url(./jetbrains-mono/JetBrainsMono-Medium.woff2) format('woff2');
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: local('JetBrains Mono SemiBold'), local('JetBrainsMono-SemiBold'),
+         url(./jetbrains-mono/JetBrainsMono-SemiBold.woff2) format('woff2');
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: local('JetBrains Mono Bold'), local('JetBrainsMono-Bold'),
+         url(./jetbrains-mono/JetBrainsMono-Bold.woff2) format('woff2');
+}
+
+@font-face {
+    font-family: 'D2Coding';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('D2Coding'), local('D2Coding Regular'),
+         url(./d2coding/D2Coding-Regular.woff2) format('woff2');
+}
+
+@font-face {
+    font-family: 'D2Coding';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: local('D2Coding Bold'), local('D2Coding-Bold'),
+         url(./d2coding/D2Coding-Bold.woff2) format('woff2');
+}

@@ -275,16 +275,16 @@ const exportThemeCSS_Light = `
         color: #0f172a !important;
         padding: 2px 6px !important;
         border-radius: 4px !important;
-        font-family: 'D2Coding', 'Consolas', monospace !important;
+        font-family: 'JetBrains Mono', 'D2Coding', 'Pretendard', 'Nanum Gothic', monospace !important;
     }
     
     /* 🎯 PDF 다크 침범 방어 & 라벨 세팅 */
     .zen-export-wrapper .ql-code-block-container { position: relative !important; background-color: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 8px !important; padding: 40px 16px 14px 16px !important; margin: 12px 0 !important; }
-    .zen-export-wrapper .ql-code-block-container select.ql-ui { display: block !important; position: absolute !important; top: 10px !important; left: 16px !important; background: transparent !important; color: #64748b !important; border: none !important; font-size: 11.5px !important; font-weight: 600 !important; text-transform: uppercase; appearance: none !important; -webkit-appearance: none !important; pointer-events: none !important; }
+    .zen-export-wrapper .ql-code-block-container select.ql-ui { display: block !important; position: absolute !important; top: 10px !important; left: 16px !important; background: transparent !important; color: #64748b !important; border: none !important; font-size: 11.5px !important; font-weight: 600 !important; text-transform: none; appearance: none !important; -webkit-appearance: none !important; pointer-events: none !important; }
     .zen-export-wrapper .ql-code-block-container::before { content: '' !important; position: absolute !important; top: 34px !important; left: 0 !important; right: 0 !important; height: 1px !important; background-color: #e2e8f0 !important; display: block !important; }
     
     /* 🎯 폰트 및 구문 강조 팔레트 (인쇄용 명암비 적용) */
-    .zen-export-wrapper .ql-code-block { background-color: transparent !important; color: #1e293b !important; font-family: 'D2Coding', 'Consolas', monospace !important; font-size: 13px !important; line-height: 1.6 !important; white-space: pre-wrap !important; }
+    .zen-export-wrapper .ql-code-block { background-color: transparent !important; color: #1e293b !important; font-family: 'JetBrains Mono', 'D2Coding', 'Pretendard', 'Nanum Gothic', monospace !important; font-size: 13px !important; line-height: 1.6 !important; white-space: pre-wrap !important; }
     .zen-export-wrapper .hljs-comment, .zen-export-wrapper .hljs-quote { color: #6a737d !important; font-style: italic !important; }
     .zen-export-wrapper .hljs-keyword, .zen-export-wrapper .hljs-selector-tag, .zen-export-wrapper .hljs-type { color: #d73a49 !important; font-weight: 600 !important; }
     .zen-export-wrapper .hljs-title, .zen-export-wrapper .hljs-title.function_, .zen-export-wrapper .hljs-function { color: #005cc5 !important; }
@@ -474,7 +474,7 @@ const exportThemeCSS_Dual = `
     }
     .ql-editor .ql-code-block {
         background-color: transparent !important;
-        font-family: 'D2Coding', 'Consolas', monospace !important;
+        font-family: 'JetBrains Mono', 'D2Coding', 'Pretendard', 'Nanum Gothic', monospace !important;
         font-size: 13.5px !important;
         line-height: 1.6 !important;
         white-space: pre-wrap !important;

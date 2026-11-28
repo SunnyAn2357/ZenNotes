@@ -2717,79 +2717,88 @@ body.dark-theme .image-context-menu {
 }
 
 /* ============================================================================
-    🎯 [V3.4.7] 프로페셔널 IDE 스타일 코드 블록 (Mac 3-Dots + High-Contrast Vibrant)
+    🎯 [V1.9.6] Zen 모던 코드 블록 (전용 38px 헤더 바 + JetBrains Mono / D2Coding + 검색 팝오버)
 ============================================================================ */
 
-/* 1. 컨테이너: 상단 툴바 공간 확보 및 모던 에디터 감성 */
+/* 1. 컨테이너: 카드형 다크 코드 에디터 */
 .ql-editor .ql-code-block-container {
     position: relative !important;
-    background-color: #1a1d24 !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    border-radius: 10px !important;
-    padding: 44px 18px 18px 18px !important;
-    margin: 1.5rem 0 !important;
+    background-color: #161920 !important;
+    border: 1px solid rgba(255, 255, 255, 0.09) !important;
+    border-radius: 12px !important;
+    padding: 50px 18px 16px 18px !important;
+    margin: 1.25rem 0 !important;
     display: block !important;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24) !important;
+    overflow: hidden !important;
 }
 
-/* 2. 상단 툴바 구분선 */
+/* 2. 상단 38px 전용 헤더 바 (배경 톤 분리 + 하단 1px 구분선) */
 .ql-editor .ql-code-block-container::before {
     content: "" !important;
     position: absolute !important;
-    top: 38px !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    height: 1px !important;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.05) 100%) !important;
+    height: 38px !important;
+    background: #1e222b !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 11px 11px 0 0 !important;
     display: block !important;
     pointer-events: none !important;
+    z-index: 1 !important;
 }
 
-/* 3. 상단 언어 라벨 (현대적인 드롭다운 배지) */
+/* 3. 상단 언어 선택 배지 (네이티브 option 유지 + 클릭 시 Zen 검색 팝오버로 대체) */
 .ql-editor .ql-code-block-container select.ql-ui {
     display: block !important;
     position: absolute !important;
-    top: 8px !important;
-    left: 14px !important;
+    top: 7px !important;
+    left: 12px !important;
+    right: auto !important;
+    height: 24px !important;
+    line-height: 22px !important;
 
     width: max-content !important;
-    max-width: 65% !important;
-    min-width: 90px !important;
+    max-width: 68% !important;
+    min-width: 88px !important;
 
     background-color: rgba(255, 255, 255, 0.06) !important;
-    color: #abb2bf !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 6px !important;
-    padding: 3px 22px 3px 10px !important;
-    font-family: 'D2Coding', 'Fira Code', 'Consolas', monospace !important;
-    font-size: 11.5px !important;
+    color: #cbd5e1 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 7px !important;
+    padding: 0 24px 0 10px !important;
+    font-family: 'Pretendard', 'JetBrains Mono', 'Nanum Gothic', sans-serif !important;
+    font-size: 12px !important;
     font-weight: 600 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
+    text-transform: none !important;
+    letter-spacing: -0.1px !important;
     cursor: pointer !important;
     appearance: none !important;
     -webkit-appearance: none !important;
     z-index: 10 !important;
     color-scheme: dark !important;
     outline: none !important;
-    transition: all 0.2s ease !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    caret-color: transparent !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
 
-    /* 드롭다운 화살표 (SVG) */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239da5b4' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239da5b4' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important;
-    background-position: right 6px center !important;
+    background-position: right 7px center !important;
     background-size: 11px !important;
 }
 
 .ql-editor .ql-code-block-container select.ql-ui:hover {
     background-color: rgba(255, 255, 255, 0.12) !important;
     color: #ffffff !important;
-    border-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
 }
 
 .ql-editor .ql-code-block-container select.ql-ui:focus {
     outline: none !important;
-    box-shadow: 0 0 0 2px rgba(97, 175, 239, 0.3) !important;
+    box-shadow: 0 0 0 2px rgba(97, 175, 239, 0.32) !important;
 }
 
 .ql-editor .ql-code-block-container select.ql-ui option {
@@ -2798,25 +2807,25 @@ body.dark-theme .image-context-menu {
     font-size: 13px !important;
 }
 
-/* 4. 우측 상단 복사 아이콘 (가상 요소) */
+/* 4. 우측 상단 복사 버튼 (단색 FA 벡터 아이콘) */
 .ql-editor .ql-code-block-container::after {
     content: '\f0c5';
     font-family: 'Font Awesome 6 Free';
     font-weight: 400;
     position: absolute !important;
-    top: 8px !important;
-    right: 14px !important;
-    color: #8c92a4 !important;
-    font-size: 14px !important;
-    line-height: 24px !important;
-    width: 26px !important;
+    top: 7px !important;
+    right: 12px !important;
+    color: #94a3b8 !important;
+    font-size: 12.5px !important;
+    line-height: 22px !important;
+    width: 28px !important;
     height: 24px !important;
     text-align: center !important;
-    border-radius: 5px !important;
-    background-color: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 7px !important;
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
     cursor: pointer !important;
-    transition: all 0.2s ease !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
     z-index: 10 !important;
     pointer-events: auto !important;
 }
@@ -2824,44 +2833,45 @@ body.dark-theme .image-context-menu {
 .ql-editor .ql-code-block-container:hover::after {
     color: #ffffff !important;
     background-color: rgba(255, 255, 255, 0.12) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
 }
 
 .ql-editor .ql-code-block-container.is-copied::after {
     content: '\f00c' !important;
     font-weight: 900 !important;
-    color: #98c379 !important;
-    background-color: rgba(152, 195, 121, 0.18) !important;
-    border-color: rgba(152, 195, 121, 0.35) !important;
+    color: #86efac !important;
+    background-color: rgba(34, 197, 94, 0.18) !important;
+    border-color: rgba(134, 239, 172, 0.35) !important;
 }
 
-/* 5. 코드 본문 기본 설정 */
+/* 5. 코드 본문 기본 설정 (영문 JetBrains Mono + 한글 D2Coding OFL 1.1 고정폭) */
 .ql-editor .ql-code-block {
     background-color: transparent !important;
-    color: #d7dae0 !important;
-    font-family: 'D2Coding', 'Fira Code', 'Consolas', monospace !important;
-    font-size: 14px !important;
-    line-height: 1.65 !important;
-    white-space: pre !important;
+    color: #dbe2ee !important;
+    font-family: 'JetBrains Mono', 'D2Coding', 'Pretendard', 'Nanum Gothic', ui-monospace, monospace !important;
+    font-size: 13.5px !important;
+    line-height: 1.7 !important;
+    letter-spacing: 0 !important;
+    font-variant-ligatures: none !important;
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
 }
 
 /* ----------------------------------------------------------------------------
-    🎨 [V3.4.7 고화질 네온/선명 신택스 팔레트] One Dark Pro / VS Code Vivid
+    🎨 [고화질 다크 신택스 팔레트]
 ---------------------------------------------------------------------------- */
 
-/* [1] 주석 및 블록 인용 */
 .ql-editor .hljs-comment,
 .ql-editor .hljs-quote {
     color: #6d7688 !important;
     font-style: italic !important;
 }
 
-/* [2] 연산자, 구분자, 구두점 */
 .ql-editor .hljs-operator,
 .ql-editor .hljs-punctuation {
     color: #abb2bf !important;
 }
 
-/* [3] 제어문, 키워드 (선명한 바이올렛 핑크) */
 .ql-editor .hljs-keyword,
 .ql-editor .hljs-selector-tag,
 .ql-editor .hljs-doctag {
@@ -2869,7 +2879,6 @@ body.dark-theme .image-context-menu {
     font-weight: 600 !important;
 }
 
-/* [4] 메타 태그, 전처리기 디렉티브 */
 .ql-editor .hljs-meta,
 .ql-editor .hljs-meta .hljs-keyword,
 .ql-editor .hljs-preprocess {
@@ -2877,7 +2886,6 @@ body.dark-theme .image-context-menu {
     font-weight: 600 !important;
 }
 
-/* [5] 함수, 메서드, 호출부 (청량하고 선명한 스카이 블루) */
 .ql-editor .hljs-function,
 .ql-editor .hljs-title,
 .ql-editor .hljs-title.class_,
@@ -2888,7 +2896,6 @@ body.dark-theme .image-context-menu {
     color: #61afef !important;
 }
 
-/* [6] 클래스명, 타입, 빌트인 생성자 (화사한 골드 옐로우) */
 .ql-editor .hljs-type,
 .ql-editor .hljs-built_in,
 .ql-editor .hljs-class .hljs-title {
@@ -2896,7 +2903,6 @@ body.dark-theme .image-context-menu {
     font-weight: 600 !important;
 }
 
-/* [7] 문자열, 텍스트 데이터, 정규표현식 (생생한 라임 그린) */
 .ql-editor .hljs-string,
 .ql-editor .hljs-regexp,
 .ql-editor .hljs-meta .hljs-string,
@@ -2904,14 +2910,12 @@ body.dark-theme .image-context-menu {
     color: #98c379 !important;
 }
 
-/* [8] 숫자, 불리언, 상수 (따뜻하고 진한 네온 오렌지) */
 .ql-editor .hljs-number,
 .ql-editor .hljs-literal,
 .ql-editor .hljs-constant {
     color: #ff9e64 !important;
 }
 
-/* [9] HTML/XML 태그명, ID, Class (눈에 확 띄는 코랄 로즈) */
 .ql-editor .hljs-name,
 .ql-editor .hljs-tag,
 .ql-editor .hljs-selector-id,
@@ -2920,7 +2924,6 @@ body.dark-theme .image-context-menu {
     color: #f7768e !important;
 }
 
-/* [10] 객체 속성, 매개변수, 변수 (산뜻한 시안 블루) */
 .ql-editor .hljs-attr,
 .ql-editor .hljs-attribute,
 .ql-editor .hljs-params,
@@ -2929,7 +2932,6 @@ body.dark-theme .image-context-menu {
     color: #56b6c2 !important;
 }
 
-/* [11] 특수 스타일 (Git Diff 및 강조) */
 .ql-editor .hljs-strong {
     font-weight: bold !important;
 }
@@ -2948,99 +2950,266 @@ body.dark-theme .image-context-menu {
     color: #98c379 !important;
 }
 
-/* 🎯 [V4.0.0] 화이트 모드 코드 블록 전용 스타일 (GitHub Light Palette) */
+/* 🎯 [V1.9.6] 화이트 모드 코드 블록 전용 스타일 (Zen Editorial Light + 전용 38px 헤더 바) */
 body.light-theme .ql-editor .ql-code-block-container {
-    background-color: #f6f8fa !important;
-    border: 1px solid #d0d7de !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+    background-color: #f8f9fb !important;
+    border: 1px solid #e2e6ec !important;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04) !important;
 }
 
 body.light-theme .ql-editor .ql-code-block-container::before {
-    background: #e1e4e8 !important;
+    background: #f0f2f6 !important;
+    border-bottom: 1px solid #e2e6ec !important;
 }
 
 body.light-theme .ql-editor .ql-code-block-container select.ql-ui {
     background-color: #ffffff !important;
-    color: #57606a !important;
-    border: 1px solid #d0d7de !important;
+    color: #334155 !important;
+    border: 1px solid #d8dee6 !important;
     color-scheme: light !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+}
+
+body.light-theme .ql-editor .ql-code-block-container select.ql-ui:hover {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
 }
 
 body.light-theme .ql-editor .ql-code-block-container select.ql-ui option {
     background-color: #ffffff !important;
-    color: #24292f !important;
+    color: #1e293b !important;
 }
 
 body.light-theme .ql-editor .ql-code-block-container::after {
-    color: #57606a !important;
+    color: #475569 !important;
     background-color: #ffffff !important;
-    border: 1px solid #d0d7de !important;
+    border: 1px solid #d8dee6 !important;
 }
 
 body.light-theme .ql-editor .ql-code-block-container:hover::after {
-    color: #24292f !important;
-    background-color: #f3f4f6 !important;
+    color: #0f172a !important;
+    background-color: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+}
+
+body.light-theme .ql-editor .ql-code-block-container.is-copied::after {
+    color: #15803d !important;
+    background-color: #dcfce7 !important;
+    border-color: #86efac !important;
 }
 
 body.light-theme .ql-editor .ql-code-block {
-    color: #24292f !important;
+    color: #1e293b !important;
 }
 
 body.light-theme .ql-editor .hljs-comment,
 body.light-theme .ql-editor .hljs-quote {
-    color: #6e7781 !important;
+    color: #6b7280 !important;
 }
 
 body.light-theme .ql-editor .hljs-operator,
 body.light-theme .ql-editor .hljs-punctuation {
-    color: #24292f !important;
+    color: #334155 !important;
 }
 
 body.light-theme .ql-editor .hljs-keyword,
 body.light-theme .ql-editor .hljs-selector-tag,
 body.light-theme .ql-editor .hljs-doctag {
-    color: #cf222e !important;
+    color: #c81e3a !important;
 }
 
 body.light-theme .ql-editor .hljs-meta,
 body.light-theme .ql-editor .hljs-preprocess {
-    color: #8250df !important;
+    color: #7c3aed !important;
 }
 
 body.light-theme .ql-editor .hljs-function,
 body.light-theme .ql-editor .hljs-title,
 body.light-theme .ql-editor .hljs-title.class_,
 body.light-theme .ql-editor .hljs-title.function_ {
-    color: #0550ae !important;
+    color: #1d4ed8 !important;
 }
 
 body.light-theme .ql-editor .hljs-type,
 body.light-theme .ql-editor .hljs-built_in {
-    color: #953800 !important;
+    color: #9a3412 !important;
 }
 
 body.light-theme .ql-editor .hljs-string,
 body.light-theme .ql-editor .hljs-regexp {
-    color: #0a3069 !important;
+    color: #0b5394 !important;
 }
 
 body.light-theme .ql-editor .hljs-number,
 body.light-theme .ql-editor .hljs-literal,
 body.light-theme .ql-editor .hljs-constant {
-    color: #0550ae !important;
+    color: #0369a1 !important;
 }
 
 body.light-theme .ql-editor .hljs-name,
 body.light-theme .ql-editor .hljs-tag,
 body.light-theme .ql-editor .hljs-section {
-    color: #116329 !important;
+    color: #166534 !important;
 }
 
 body.light-theme .ql-editor .hljs-attr,
 body.light-theme .ql-editor .hljs-attribute,
 body.light-theme .ql-editor .hljs-params,
 body.light-theme .ql-editor .hljs-variable {
-    color: #953800 !important;
+    color: #9a3412 !important;
+}
+
+/* 🎯 [V1.9.6] 코드블록 Zen 검색형 언어 선택 팝오버 */
+#zen-code-lang-popover {
+    position: fixed;
+    z-index: 10500;
+    width: 260px;
+    max-height: min(360px, calc(100vh - 24px));
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16), 0 4px 12px rgba(15, 23, 42, 0.06);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    caret-color: transparent;
+}
+
+body:not(.light-theme) #zen-code-lang-popover {
+    background: #1e222b;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.zen-clp-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #eef2f6;
+    background: #f8fafc;
+}
+
+body:not(.light-theme) .zen-clp-search-wrap {
+    background: #171a21;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.zen-clp-search-icon {
+    font-size: 12px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.zen-clp-search-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-family: var(--font-family);
+    font-size: 13px;
+    color: #0f172a;
+    user-select: text;
+    -webkit-user-select: text;
+    caret-color: auto;
+}
+
+body:not(.light-theme) .zen-clp-search-input {
+    color: #e2e8f0;
+}
+
+.zen-clp-search-input::placeholder {
+    color: #94a3b8;
+}
+
+.zen-clp-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.zen-clp-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.zen-clp-list::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.35);
+    border-radius: 999px;
+}
+
+.zen-clp-category {
+    padding: 6px 8px 3px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.2px;
+}
+
+.zen-clp-item {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: #334155;
+    font-family: var(--font-family);
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 6px 9px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+body:not(.light-theme) .zen-clp-item {
+    color: #cbd5e1;
+}
+
+.zen-clp-item:hover,
+.zen-clp-item.is-focused {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+body:not(.light-theme) .zen-clp-item:hover,
+body:not(.light-theme) .zen-clp-item.is-focused {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.zen-clp-item.is-selected {
+    background: rgba(37, 99, 235, 0.09);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+body:not(.light-theme) .zen-clp-item.is-selected {
+    background: rgba(96, 165, 250, 0.15);
+    color: #93c5fd;
+}
+
+.zen-clp-check {
+    font-size: 11px;
+    opacity: 0;
+    flex-shrink: 0;
+}
+
+.zen-clp-item.is-selected .zen-clp-check {
+    opacity: 1;
+}
+
+.zen-clp-empty {
+    padding: 18px 10px;
+    text-align: center;
+    font-size: 12.5px;
+    color: #94a3b8;
 }
 
 
@@ -5533,6 +5702,47 @@ body:not(.light-theme) .zen-settings-done-btn:hover {
 
 body:not(.light-theme) #zen-image-resizer {
     box-shadow: 0 0 0 3px rgba(120, 169, 255, 0.16);
+}
+
+/* [V1.9.6] 에디터 스크롤 영역 밖으로 잘린 변의 테두리·핸들·헤일로 숨김 */
+#zen-image-resizer.is-clipped {
+    box-shadow: none !important;
+}
+
+#zen-image-resizer.clipped-top {
+    border-top-color: transparent;
+}
+
+#zen-image-resizer.clipped-bottom {
+    border-bottom-color: transparent;
+}
+
+#zen-image-resizer.clipped-left {
+    border-left-color: transparent;
+}
+
+#zen-image-resizer.clipped-right {
+    border-right-color: transparent;
+}
+
+#zen-image-resizer.clipped-top .zen-resize-handle.nw,
+#zen-image-resizer.clipped-top .zen-resize-handle.ne {
+    display: none;
+}
+
+#zen-image-resizer.clipped-bottom .zen-resize-handle.sw,
+#zen-image-resizer.clipped-bottom .zen-resize-handle.se {
+    display: none;
+}
+
+#zen-image-resizer.clipped-left .zen-resize-handle.nw,
+#zen-image-resizer.clipped-left .zen-resize-handle.sw {
+    display: none;
+}
+
+#zen-image-resizer.clipped-right .zen-resize-handle.ne,
+#zen-image-resizer.clipped-right .zen-resize-handle.se {
+    display: none;
 }
 
 /* 다중 선택(Ctrl+클릭) 이미지 시각 표시 */
